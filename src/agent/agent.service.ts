@@ -1,73 +1,58 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Agent, run, MCPServerStdio, getAllMcpTools, withTrace, setDefaultOpenAIClient, setOpenAIAPI } from '@openai/agents';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { OpenAI } from 'openai';
+import Anthropic from '@anthropic-ai/sdk';
 import { AgentContext, AgentResult } from './agent.types';
 import { SYSTEM_PROMPT, buildUserContext } from './agent.prompt';
+import { buildExecutionPrompt } from './execution.prompt';
+import { buildAnalysisPrompt } from './analysis.prompt';
 
 @Injectable()
 export class AgentService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(AgentService.name);
-  private mcpServer: MCPServerStdio;
-  private mcpClient: Client; // Direct MCP client for accessing prompts
+  private mcpClient: Client;
+  private anthropicClient: Anthropic;
   private model: string;
   private allTools: any[] = [];
+  private lastRequestTime: number = 0;
+  private minRequestInterval: number = 5000; // Minimum 5 seconds between requests
 
   constructor(private configService: ConfigService) {}
 
+  /**
+   * Throttle API requests to avoid rate limits
+   */
+  private async throttleRequest(): Promise<void> {
+    const now = Date.now();
+    const timeSinceLastRequest = now - this.lastRequestTime;
+
+    if (timeSinceLastRequest < this.minRequestInterval) {
+      const waitTime = this.minRequestInterval - timeSinceLastRequest;
+      this.logger.log(`Throttling request: waiting ${waitTime}ms`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+
+    this.lastRequestTime = Date.now();
+  }
+
   async onModuleInit() {
-    // Check if using Anthropic (Claude) or OpenAI
-    const useAnthropic = this.configService.get('USE_ANTHROPIC') === 'true';
-    const apiKey = useAnthropic
-      ? this.configService.get('ANTHROPIC_API_KEY')
-      : this.configService.get('OPENAI_API_KEY');
-
+    const apiKey = this.configService.get('ANTHROPIC_API_KEY');
     if (!apiKey) {
-      throw new Error(`${useAnthropic ? 'ANTHROPIC_API_KEY' : 'OPENAI_API_KEY'} is required but not set in environment variables`);
+      throw new Error('ANTHROPIC_API_KEY is required but not set in environment variables');
     }
 
-    // Configure the OpenAI client
-    if (useAnthropic) {
-      // Anthropic only supports chat_completions API, not responses API
-      setOpenAIAPI('chat_completions');
+    // Initialize Anthropic client
+    this.anthropicClient = new Anthropic({ apiKey });
+    this.model = this.configService.get('MODEL') || 'claude-3-5-sonnet-20241022';
+    this.logger.log(`Using Anthropic model: ${this.model}`);
 
-      // Use Anthropic's OpenAI SDK compatibility layer
-      const anthropicClient = new OpenAI({
-        apiKey: apiKey,
-        baseURL: 'https://api.anthropic.com/v1/',
-      });
-      setDefaultOpenAIClient(anthropicClient);
-      this.logger.log('Anthropic API configured (OpenAI SDK compatibility mode with chat_completions)');
-    } else {
-      // Standard OpenAI client
-      const openaiClient = new OpenAI({
-        apiKey: apiKey,
-      });
-      setDefaultOpenAIClient(openaiClient);
-      this.logger.log('OpenAI API key configured');
-    }
-
-    const model = this.configService.get('MODEL') ||
-                  (useAnthropic ? 'claude-sonnet-4-5' : 'gpt-4o');
+    // Initialize MCP client
     const mcpServerCommand = this.configService.get('MCP_SERVER_COMMAND') || 'npx';
     const mcpServerArgs = this.configService.get('MCP_SERVER_ARGS') || '-y,@modelcontextprotocol/server-defi';
-
-    this.model = model;
-    this.logger.log(`Using model: ${model} (${useAnthropic ? 'Anthropic' : 'OpenAI'})`);
-
-    // Build full MCP server command
     const fullCommand = `${mcpServerCommand} ${mcpServerArgs.split(',').join(' ')}`;
     const [command, ...commandArgs] = fullCommand.split(' ');
 
-    // Initialize MCP Server connection (only once - this is expensive)
-    this.mcpServer = new MCPServerStdio({
-      name: 'DeFi MCP Server',
-      fullCommand,
-    });
-
-    // Also initialize direct MCP client for accessing prompts
     this.mcpClient = new Client(
       {
         name: 'owlia-agent-backend',
@@ -82,303 +67,551 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
     );
 
     try {
-      await this.mcpServer.connect();
-      this.logger.log(`MCP Server connected: ${fullCommand}`);
-
-      // Connect MCP client for prompts
       const transport = new StdioClientTransport({
         command,
         args: commandArgs,
       });
       await this.mcpClient.connect(transport);
-      this.logger.log('MCP Client connected for prompts access');
+      this.logger.log('MCP Client connected');
 
-      // Fetch all available tools from MCP servers (must be within a trace context)
-      await withTrace('Initialize MCP Tools', async () => {
-        this.allTools = await getAllMcpTools([this.mcpServer]);
-        this.logger.log(`Loaded ${this.allTools.length} tools from MCP servers`);
+      // List available tools
+      const toolsResponse = await this.mcpClient.listTools();
+      this.allTools = toolsResponse.tools || [];
+      this.logger.log(`Loaded ${this.allTools.length} tools from MCP server`);
+      this.allTools.forEach(tool => {
+        this.logger.log(`  - ${tool.name}`);
       });
-
-      this.logger.log(`Agent will use model ${model} with fresh context per run`);
     } catch (error) {
       this.logger.error(`Failed to connect to MCP Server: ${error.message}`);
       throw error;
     }
   }
 
-  /**
-   * Create a fresh agent instance with clean context
-   * This ensures no context pollution between different user requests
-   */
-  private createAgent(forceToolUse?: boolean): Agent {
-    const agentConfig: any = {
-      name: 'DeFi Rebalance Agent',
-      model: this.model,
-      instructions: SYSTEM_PROMPT,
-      tools: this.allTools, // Use pre-fetched tools
-    };
-
-    // Force tool usage for Anthropic models (use Claude's "any" type)
-    if (forceToolUse) {
-      agentConfig.modelSettings = {
-        tool_choice: { type: 'any' },
-      };
-    }
-
-    return new Agent(agentConfig);
-  }
-
   async onModuleDestroy() {
-    if (this.mcpServer) {
-      await this.mcpServer.close();
-      this.logger.log('MCP Server connection closed');
-    }
     if (this.mcpClient) {
       await this.mcpClient.close();
       this.logger.log('MCP Client connection closed');
     }
   }
 
+  /**
+   * Convert MCP tools to Anthropic tool format
+   */
+  private convertMcpToolsToAnthropic(): any[] {
+    return this.allTools.map(tool => ({
+      name: tool.name,
+      description: tool.description || '',
+      input_schema: tool.inputSchema || { type: 'object', properties: {}, required: [] },
+    }));
+  }
+
+  /**
+   * Map chain names to chain IDs
+   */
+  private getChainId(chainName: string): string {
+    const chainMap: Record<string, string> = {
+      'base': '8453',
+      'ethereum': '1',
+      'eth': '1',
+      'mainnet': '1',
+      'arbitrum': '42161',
+      'optimism': '10',
+      'polygon': '137',
+      'bsc': '56',
+      'avalanche': '43114',
+    };
+    return chainMap[chainName.toLowerCase()] || chainName;
+  }
+
+  /**
+   * Normalize protocol names to match execution tool requirements
+   */
+  private normalizeProtocolName(protocol: string): string {
+    const protocolMap: Record<string, string> = {
+      'aerodromecl': 'aerodromeSlipstream',
+      'aerodrome': 'aerodromeSlipstream',
+      'uniswapv3': 'uniswapV3',
+      'aave': 'aave',
+      'euler': 'euler',
+      'venus': 'venus',
+    };
+    return protocolMap[protocol.toLowerCase()] || protocol;
+  }
+
+  /**
+   * Convert chains array to chain_ids string
+   */
+  private convertChainsToIds(chains: string[]): string {
+    return chains.map(chain => this.getChainId(chain)).join(',');
+  }
+
+  /**
+   * Filter tools based on context to reduce token usage
+   */
+  private filterToolsForContext(trigger: string): any[] {
+    // Essential tools for position fetching
+    if (trigger === 'fetch_positions') {
+      const allowedTools = [
+        'get_idle_assets',
+        'get_active_investments',
+      ];
+      return this.allTools.filter(tool => allowedTools.includes(tool.name));
+    }
+
+    // Essential tools for rebalancing
+    if (trigger === 'trigger_rebalance' || trigger === 'manual_trigger' || trigger === 'manual_preview') {
+      const allowedTools = [
+        // Position data
+        'get_idle_assets',
+        'get_active_investments',
+        // Market data
+        'get_dex_pools',
+        'get_binance_depth',
+        // Simulation
+        'get_lp_simulate_batch',
+        'get_supply_opportunities',
+        // Analysis
+        'analyze_strategy',
+        'calculate_rebalance_cost_batch',
+      ];
+      return this.allTools.filter(tool => allowedTools.includes(tool.name));
+    }
+
+    // For execution, only include execution tools
+    if (trigger === 'execute_rebalance') {
+      const allowedTools = [
+        'rebalance_position',
+      ];
+      return this.allTools.filter(tool => allowedTools.includes(tool.name));
+    }
+
+    // Default: return all tools (fallback)
+    return this.allTools;
+  }
+
+  /**
+   * Wrapper with automatic retry and checkpoint resume for entire agent run
+   */
+  private async runAnthropicAgentWithRetry(
+    userMessage: string,
+    forceToolUse: boolean = false,
+    trigger: string = ''
+  ): Promise<any> {
+    const maxGlobalRetries = 2;
+    let globalRetry = 0;
+    let lastCheckpoint: { messages: any[], toolResults: any[], currentTurn: number } | undefined;
+
+    while (globalRetry <= maxGlobalRetries) {
+      try {
+        return await this.runAnthropicAgent(userMessage, forceToolUse, trigger, lastCheckpoint);
+      } catch (error) {
+        if (error.status === 429 && globalRetry < maxGlobalRetries) {
+          globalRetry++;
+          const delay = 60000 * globalRetry; // 60s, 120s
+          this.logger.error(`Agent run failed with rate limit (global retry ${globalRetry}/${maxGlobalRetries})`);
+          this.logger.log(`Waiting ${delay/1000}s before retrying entire run...`);
+
+          // Try to extract checkpoint from error context if available
+          // (In practice, the checkpoint is maintained within runAnthropicAgent)
+
+          await new Promise(resolve => setTimeout(resolve, delay));
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    throw new Error('Failed to complete agent run after max global retries');
+  }
+
+  /**
+   * Run agent with Anthropic SDK (with checkpoint resume capability)
+   */
+  private async runAnthropicAgent(
+    userMessage: string,
+    forceToolUse: boolean = false,
+    trigger: string = '',
+    resumeState?: { messages: any[], toolResults: any[], currentTurn: number }
+  ): Promise<any> {
+    // Filter tools based on context to reduce token usage
+    const filteredTools = trigger ? this.filterToolsForContext(trigger) : this.allTools;
+    this.logger.log(`Using ${filteredTools.length} tools (filtered from ${this.allTools.length})`);
+
+    const tools = filteredTools.map(tool => ({
+      name: tool.name,
+      description: tool.description || '',
+      input_schema: tool.inputSchema || { type: 'object', properties: {}, required: [] },
+    }));
+
+    // Resume from checkpoint or start fresh
+    let messages: any[];
+    let toolResults: any[];
+    let currentTurn: number;
+
+    if (resumeState) {
+      this.logger.log(`Resuming from checkpoint: turn ${resumeState.currentTurn}, ${resumeState.toolResults.length} tool results`);
+      messages = resumeState.messages;
+      toolResults = resumeState.toolResults;
+      currentTurn = resumeState.currentTurn;
+    } else {
+      messages = [{ role: 'user', content: userMessage }];
+      toolResults = [];
+      currentTurn = 0;
+    }
+
+    const maxTurns = 10;
+
+    while (currentTurn < maxTurns) {
+      currentTurn++;
+      this.logger.log(`Agent turn ${currentTurn}/${maxTurns}`);
+
+      const requestParams: any = {
+        model: this.model,
+        max_tokens: 4096,
+        system: [
+          {
+            type: 'text',
+            text: SYSTEM_PROMPT,
+            cache_control: { type: 'ephemeral' }, // Cache system prompt
+          }
+        ],
+        messages,
+        tools,
+      };
+
+      // Force tool use on first turn if requested
+      if (currentTurn === 1 && forceToolUse) {
+        requestParams.tool_choice = { type: 'any' };
+      }
+
+      let response;
+      let retries = 0;
+      const maxRetries = 3;
+      const baseDelay = 30000; // 30 seconds base delay
+
+      while (retries <= maxRetries) {
+        try {
+          // Throttle requests to avoid rate limits
+          await this.throttleRequest();
+
+          response = await this.anthropicClient.messages.create(requestParams);
+          break; // Success, exit retry loop
+        } catch (error) {
+          // Handle rate limit errors with exponential backoff
+          if (error.status === 429 && retries < maxRetries) {
+            retries++;
+            const delay = baseDelay * Math.pow(2, retries - 1); // Exponential backoff: 30s, 60s, 120s
+            this.logger.warn(`Rate limit hit (attempt ${retries}/${maxRetries}), waiting ${delay/1000} seconds before retry...`);
+            this.logger.log(`Checkpoint saved: turn ${currentTurn}, ${messages.length} messages, ${toolResults.length} tool results`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            // Continue with same state - no need to restart
+          } else {
+            this.logger.error(`Request failed with error: ${error.status} ${error.message}`);
+            throw error;
+          }
+        }
+      }
+
+      if (!response) {
+        throw new Error('Failed to get response after max retries');
+      }
+
+      // Check stop reason
+      this.logger.log(`Turn ${currentTurn} stop reason: ${response.stop_reason}`);
+      this.logger.log(`Turn ${currentTurn} content types: ${response.content.map(c => c.type).join(', ')}`);
+
+      if (response.stop_reason === 'end_turn' || response.stop_reason === 'max_tokens') {
+        // Extract final text response
+        const textContent = response.content.find(c => c.type === 'text');
+        const finalText = textContent ? (textContent as any).text : '';
+
+        this.logger.log(`Agent finished with stop_reason: ${response.stop_reason}`);
+        this.logger.log(`Total tool calls made: ${toolResults.length}`);
+        this.logger.log(`Final response preview: ${finalText}...`);
+
+        return {
+          finalOutput: finalText,
+          toolResults,
+        };
+      }
+
+      if (response.stop_reason === 'tool_use') {
+        // Process tool calls
+        const toolUses = response.content.filter(c => c.type === 'tool_use');
+
+        // Add assistant message to history
+        messages.push({ role: 'assistant', content: response.content });
+
+        // Execute each tool
+        const toolResultsContent: any[] = [];
+        for (const toolUse of toolUses) {
+          const toolData = toolUse as any;
+          this.logger.log(`Calling tool: ${toolData.name} with args: ${JSON.stringify(toolData.input).substring(0, 200)}`);
+
+          try {
+            const result = await this.mcpClient.callTool({
+              name: toolData.name,
+              arguments: toolData.input,
+            });
+
+            // Parse result
+            const resultText = result.content?.[0]?.text || JSON.stringify(result);
+            let parsedResult: any;
+            try {
+              parsedResult = JSON.parse(resultText);
+            } catch {
+              parsedResult = resultText;
+            }
+
+            toolResults.push({
+              tool: toolData.name,
+              input: toolData.input,
+              output: parsedResult,
+            });
+
+            toolResultsContent.push({
+              type: 'tool_result',
+              tool_use_id: toolData.id,
+              content: resultText,
+            });
+
+            // Log detailed output
+            this.logger.log(`Tool ${toolData.name} completed`);
+            this.logger.log(`Tool ${toolData.name} output preview: ${JSON.stringify(parsedResult).substring(0, 500)}`);
+
+            // Special logging for specific tools
+            if (toolData.name === 'get_supply_opportunities') {
+              const opportunities = parsedResult?.opportunities || parsedResult;
+              this.logger.log(`get_supply_opportunities returned ${Array.isArray(opportunities) ? opportunities.length : 0} opportunities`);
+              if (Array.isArray(opportunities) && opportunities.length > 0) {
+                this.logger.log(`Top 3 opportunities: ${JSON.stringify(opportunities.slice(0, 3), null, 2)}`);
+              } else {
+                this.logger.warn(`get_supply_opportunities returned no opportunities. Full output: ${JSON.stringify(parsedResult)}`);
+              }
+            }
+          } catch (error) {
+            this.logger.error(`Tool ${toolData.name} failed: ${error.message}`);
+            toolResultsContent.push({
+              type: 'tool_result',
+              tool_use_id: toolData.id,
+              content: `Error: ${error.message}`,
+              is_error: true,
+            });
+          }
+        }
+
+        // Add tool results to messages
+        messages.push({ role: 'user', content: toolResultsContent });
+      } else {
+        // Unexpected stop reason
+        this.logger.warn(`Unexpected stop reason: ${response.stop_reason}`);
+        const textContent = response.content.find(c => c.type === 'text');
+        return {
+          finalOutput: textContent ? (textContent as any).text : '',
+          toolResults,
+        };
+      }
+    }
+
+    return {
+      finalOutput: 'Max turns reached',
+      toolResults,
+    };
+  }
+
   async runRebalanceAgent(context: AgentContext): Promise<AgentResult> {
     try {
       this.logger.log(`Starting agent run for job ${context.jobId}`);
 
-      // For manual_trigger or manual_preview, try to use MCP prompt
+      // For manual_trigger or manual_preview, use local analysis prompt
       if (context.trigger === 'manual_trigger' || context.trigger === 'manual_preview') {
-        // Get the prompt from MCP server
-        // Note: MCP prompt expects chain_id (single chain), not chains (multiple)
-        const chainId = context.userPolicy.chains[0] || 'base'; // Use first chain or default to base
+        const chainId = context.userPolicy.chains[0] || 'base';
+        const chainIdNum = this.getChainId(chainId);
 
+        this.logger.log('Using local analysis prompt template');
+        this.logger.log(`Using chain_id: ${chainIdNum} (from chain: ${chainId})`);
+        this.logger.log(`User address: ${context.userAddress}`);
+
+        const analysisPrompt = buildAnalysisPrompt({
+          address: context.userAddress,
+          chainId: chainIdNum,
+        });
+
+        this.logger.log(`Analysis prompt length: ${analysisPrompt.length} characters`);
+
+        // Run with automatic retry on rate limit
+        const result = await this.runAnthropicAgentWithRetry(analysisPrompt, false, context.trigger);
+
+        this.logger.log('Agent run completed with analysis prompt');
+
+        // Extract simulation and plan from tool results or final output
+        let simulation = null;
+        let plan = null;
+
+        // Try to find simulation and plan in tool results
+        if (result.toolResults && result.toolResults.length > 0) {
+          // Look for analyze_strategy or calculate_rebalance_cost_batch results
+          const analysisResult = result.toolResults.find(
+            r => r.tool === 'analyze_strategy' || r.tool === 'calculate_rebalance_cost_batch'
+          );
+          if (analysisResult && analysisResult.output) {
+            simulation = analysisResult.output.simulation || analysisResult.output;
+            plan = analysisResult.output.plan;
+          }
+        }
+
+        // Try to parse structured JSON output from final output
+        let structuredData = null;
         try {
-          this.logger.log('Attempting to get complete_defi_analysis prompt from MCP');
-          this.logger.log(`Context chains: ${JSON.stringify(context.userPolicy.chains)}`);
+          const jsonMatch = result.finalOutput.match(/```json\n([\s\S]*?)\n```/);
+          if (jsonMatch) {
+            structuredData = JSON.parse(jsonMatch[1]);
+            this.logger.log('Successfully parsed structured JSON output');
+            this.logger.log(`Structured data keys: ${Object.keys(structuredData).join(', ')}`);
 
-          this.logger.log(`Using chain_id: ${chainId} (from chains array: [${context.userPolicy.chains.join(', ')}])`);
-          this.logger.log(`User address: ${context.userAddress}`);
+            // Use structured data if available
+            if (structuredData.opportunities && structuredData.opportunities.length > 0) {
+              this.logger.log(`Found ${structuredData.opportunities.length} opportunities in structured output`);
 
-          const promptResult = await this.mcpClient.getPrompt({
-            name: 'complete_defi_analysis',
-            arguments: {
-              address: context.userAddress,
-              chain_id: chainId,
-            },
-          });
+              // Normalize protocol names in opportunities
+              const normalizedOpportunities = structuredData.opportunities.map(opp => ({
+                ...opp,
+                protocol: opp.protocol ? this.normalizeProtocolName(opp.protocol) : opp.protocol,
+              }));
 
-          this.logger.log('Successfully got MCP prompt');
-          this.logger.log(`Prompt description: ${promptResult.description || 'N/A'}`);
-          console.log('promptResult', promptResult)
-          
-
-          // Extract the prompt messages
-          const messages = promptResult.messages || [];
-          const userMessage = messages.find(m => m.role === 'user');
-
-          if (userMessage && userMessage.content) {
-            // Extract text from content (could be array of content blocks)
-            let promptText = '';
-            if (typeof userMessage.content === 'string') {
-              promptText = userMessage.content;
-            } else if (Array.isArray(userMessage.content)) {
-              // Find text content block
-              const textBlock = userMessage.content.find(c => c.type === 'text');
-              promptText = textBlock?.text || '';
-            } else if (userMessage.content.type === 'text') {
-              promptText = userMessage.content.text;
-            }
-
-            if (promptText) {
-              this.logger.log('Creating agent and running with MCP prompt...');
-              this.logger.log(`Prompt text length: ${promptText.length} characters`);
-              this.logger.log(`Prompt preview: ${promptText}...`);
-
-              const agent = this.createAgent();
-              const result = await run(agent, promptText);
-
-              this.logger.log('Agent run completed with MCP prompt');
-              this.logger.log(`Total items in history: ${result.history?.length || 0}`);
-              this.logger.log(`New items generated: ${result.newItems?.length || 0}`);
-              this.logger.log(`Final output length: ${result.finalOutput?.length || 0} characters`);
-
-              // Log agent execution details
-              if (result.newItems && result.newItems.length > 0) {
-                this.logger.log('--- Agent Execution Steps ---');
-                result.newItems.forEach((item, idx) => {
-                  this.logger.log(`Step ${idx + 1}: ${item.type}`);
-                  if (item.type === 'tool_call_item') {
-                    this.logger.log(`  Tool: ${(item as any).functionName}`);
-                    this.logger.log(`  Args: ${JSON.stringify((item as any).arguments).substring(0, 200)}`);
-                  }
-                  if (item.type === 'tool_call_output_item') {
-                    this.logger.log(`  Tool Output: ${JSON.stringify((item as any).output).substring(0, 200)}`);
-                  }
-                  if (item.type === 'message_output_item') {
-                    const content = (item as any).content;
-                    if (content) {
-                      const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
-                      this.logger.log(`  Content: ${contentStr.substring(0, 150)}`);
-                    }
-                  }
-                });
-                this.logger.log('--- End of Execution Steps ---');
-              }
-
-              return {
-                success: true,
-                action: 'analyzed',
-                data: result.finalOutput,
+              plan = {
+                description: 'Rebalance plan from structured analysis',
+                recommendation: structuredData.recommendation || result.finalOutput,
+                hasOpportunity: true,
+                opportunities: normalizedOpportunities,
+                currentPositions: structuredData.currentPositions || [],
+                chainId: structuredData.chainId || chainIdNum,
+                userAddress: structuredData.userAddress || context.userAddress,
               };
             }
           }
-        } catch (promptError) {
-          // Handle rate limit errors specifically
-          if (promptError.status === 429) {
-            this.logger.warn(`Rate limit hit: ${promptError.message}`);
-            const retryAfter = promptError.headers?.['retry-after'];
-            if (retryAfter) {
-              this.logger.log(`Rate limit - should retry after ${retryAfter} seconds`);
-            }
-            // Extract wait time from error message
-            const waitMatch = promptError.message.match(/try again in ([\d.]+)s/);
-            if (waitMatch) {
-              const waitSeconds = parseFloat(waitMatch[1]);
-              this.logger.log(`Waiting ${waitSeconds} seconds before retrying...`);
-              await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000));
-
-              // Retry once
-              try {
-                this.logger.log('Retrying MCP prompt after rate limit wait...');
-                const promptResult = await this.mcpClient.getPrompt({
-                  name: 'complete_defi_analysis',
-                  arguments: {
-                    address: context.userAddress,
-                    chain_id: chainId,
-                  },
-                });
-
-                // Process the retry result
-                const messages = promptResult.messages || [];
-                const userMessage = messages.find(m => m.role === 'user');
-                if (userMessage && userMessage.content) {
-                  let promptText = '';
-                  if (typeof userMessage.content === 'string') {
-                    promptText = userMessage.content;
-                  } else if (Array.isArray(userMessage.content)) {
-                    const textBlock = userMessage.content.find(c => c.type === 'text');
-                    promptText = textBlock?.text || '';
-                  } else if (userMessage.content.type === 'text') {
-                    promptText = userMessage.content.text;
-                  }
-
-                  if (promptText) {
-                    const agent = this.createAgent();
-                    const result = await run(agent, promptText);
-                    return {
-                      success: true,
-                      action: 'analyzed',
-                      data: result.finalOutput,
-                    };
-                  }
-                }
-              } catch (retryError) {
-                this.logger.error(`Retry failed: ${retryError.message}`);
-              }
-            }
-          } else {
-            this.logger.warn(`Failed to get MCP prompt: ${promptError.message}`);
-          }
-          // Fall through to standard flow
+        } catch (e) {
+          this.logger.warn(`Could not parse structured JSON from agent output: ${e.message}`);
         }
+
+        // If we have tool results with positions and opportunities, consider it a successful analysis
+        const hasPositionData = result.toolResults.some(
+          r => r.tool === 'get_idle_assets' || r.tool === 'get_active_investments'
+        );
+        const hasOpportunities = result.toolResults.some(
+          r => r.tool === 'get_supply_opportunities' || r.tool === 'get_lp_simulate_batch'
+        );
+
+        // Fallback: Extract opportunities data from tool results if no structured plan
+        if (!plan) {
+          const opportunitiesResult = result.toolResults.find(
+            r => r.tool === 'get_supply_opportunities'
+          );
+          const lpSimulateResult = result.toolResults.find(
+            r => r.tool === 'get_lp_simulate_batch'
+          );
+
+          let opportunitiesData = [];
+
+          // Try to extract from supply opportunities
+          if (opportunitiesResult?.output) {
+            const supplyOps = opportunitiesResult.output.opportunities || opportunitiesResult.output;
+            if (Array.isArray(supplyOps)) {
+              opportunitiesData = supplyOps;
+            }
+          }
+
+          // Try to extract from LP simulations
+          if (lpSimulateResult?.output) {
+            const lpOps = lpSimulateResult.output.results || lpSimulateResult.output;
+            if (Array.isArray(lpOps)) {
+              opportunitiesData = [...opportunitiesData, ...lpOps];
+            }
+          }
+
+          this.logger.log(`Extracted ${opportunitiesData.length} opportunities from tool results`);
+
+          // If we have a recommendation in the output, create a plan
+          const hasRecommendation = result.finalOutput && (
+            result.finalOutput.toLowerCase().includes('recommendation') ||
+            result.finalOutput.toLowerCase().includes('recommended') ||
+            result.finalOutput.toLowerCase().includes('rebalance') ||
+            result.finalOutput.toLowerCase().includes('opportunity')
+          );
+
+          if (hasRecommendation || opportunitiesData.length > 0) {
+            this.logger.log('Creating plan from tool results and recommendation text');
+            plan = {
+              description: 'Rebalance plan generated from analysis',
+              recommendation: result.finalOutput,
+              hasOpportunity: opportunitiesData.length > 0,
+              opportunities: opportunitiesData,
+              chainId: chainIdNum,
+              userAddress: context.userAddress,
+            };
+          }
+        }
+
+        // Create a basic simulation result if we have opportunities but no simulation
+        if (!simulation && hasOpportunities) {
+          const opportunitiesResult = result.toolResults.find(
+            r => r.tool === 'get_supply_opportunities'
+          );
+          if (opportunitiesResult && opportunitiesResult.output) {
+            this.logger.log('Creating simulation from opportunities data');
+            simulation = {
+              opportunities: opportunitiesResult.output.opportunities || opportunitiesResult.output,
+              hasOpportunity: true,
+            };
+          }
+        }
+
+        this.logger.log(`Final data - has simulation: ${!!simulation}, has plan: ${!!plan}`);
+        if (simulation) {
+          this.logger.log(`Simulation keys: ${Object.keys(simulation).join(', ')}`);
+        }
+        if (plan) {
+          this.logger.log(`Plan keys: ${Object.keys(plan).join(', ')}`);
+        }
+
+        return {
+          success: true,
+          action: (simulation || plan || (hasPositionData && hasOpportunities)) ? 'simulated' : 'analyzed',
+          data: {
+            simulation,
+            plan,
+            reasoning: result.finalOutput,
+            toolResults: result.toolResults,
+          },
+        };
       }
 
       const userContext = buildUserContext(context);
-
-      // Log available tools for debugging
-      this.logger.log(`Available tools: ${this.allTools.length}`);
-      this.allTools.forEach(tool => {
-        this.logger.log(`  - ${tool.function?.name || tool.name}`);
-      });
-
-      // Create fresh agent instance for clean context
-      // This prevents context pollution between different users/jobs
-      // For fetch_positions, force tool usage
       const forceToolUse = context.trigger === 'fetch_positions';
-      const agent = this.createAgent(forceToolUse);
 
-      this.logger.log(`Agent created with forceToolUse=${forceToolUse}`);
-      if (forceToolUse) {
-        this.logger.log('Tool choice set to: { type: "any" }');
-      }
+      this.logger.log(`Running agent with forceToolUse=${forceToolUse}, trigger=${context.trigger}`);
 
-      const result = await run(agent, userContext);
+      // Run with automatic retry on rate limit
+      const result = await this.runAnthropicAgentWithRetry(userContext, forceToolUse, context.trigger);
 
       this.logger.log('Agent run completed');
-      this.logger.log(`Result details: turns=${result.state._currentTurn}, items=${result.state._generatedItems.length}`);
+      this.logger.log(`Tool results: ${result.toolResults.length}`);
+      this.logger.log(`Final output length: ${result.finalOutput?.length || 0} characters`);
 
-      // Debug: log the last response
-      if (result.state._lastTurnResponse) {
-        this.logger.log('Last turn response:');
-        this.logger.log(`  - response ID: ${result.state._lastTurnResponse.responseId}`);
-        this.logger.log(`  - output items: ${result.state._lastTurnResponse.output?.length || 0}`);
-        if (result.state._lastTurnResponse.output) {
-          result.state._lastTurnResponse.output.forEach((item: any, idx: number) => {
-            this.logger.log(`    [${idx}] type: ${item.type}`);
-            if (item.type === 'function') {
-              this.logger.log(`        function: ${item.name}`);
-            }
-          });
-        }
-      }
+      // For fetch_positions, return tool results
+      if (context.trigger === 'fetch_positions' && result.toolResults.length > 0) {
+        // Combine idle_assets and active_investments
+        const idleAssets = result.toolResults.find(t => t.tool === 'get_idle_assets')?.output;
+        const activeInvestments = result.toolResults.find(t => t.tool === 'get_active_investments')?.output;
 
-      // Parse the result to extract simulation and plan data
-      // Note: result.finalOutput contains the agent's final response
-      // Tool calls and their results are handled internally by the SDK
-
-      const output = result.finalOutput;
-
-      // For fetch_positions, extract tool output data from newItems
-      if (context.trigger === 'fetch_positions') {
-        console.log('output', result)
-
-        // Try to extract tool output from newItems first
-        if (result.newItems && result.newItems.length > 0) {
-          let toolOutputData = null;
-
-          // Find the last tool_call_output_item which usually contains the combined result
-          for (let i = result.newItems.length - 1; i >= 0; i--) {
-            const item = result.newItems[i];
-            if (item.type === 'tool_call_output_item') {
-              const itemOutput = (item as any).output;
-              if (itemOutput && typeof itemOutput === 'object') {
-                toolOutputData = itemOutput;
-                break;
-              }
-            }
-          }
-
-          if (toolOutputData) {
-            this.logger.log('Extracted tool output data from newItems');
-            return {
-              success: true,
-              action: 'analyzed',
-              data: toolOutputData,
-            };
-          }
-        }
-
-        // Fallback: try to parse JSON from text output
-        try {
-          const jsonMatch = output.match(/```json\n([\s\S]*?)\n```/);
-          if (jsonMatch) {
-            const positionsData = JSON.parse(jsonMatch[1]);
-            return {
-              success: true,
-              action: 'analyzed',
-              data: positionsData, // Return clean JSON data
-            };
-          }
-        } catch (e) {
-          this.logger.warn('Could not parse positions data from agent output');
-        }
+        return {
+          success: true,
+          action: 'analyzed',
+          data: {
+            idle_assets: idleAssets || null,
+            active_investments: activeInvestments || null,
+          },
+        };
       }
 
       // For rebalancing tasks, extract simulation and plan
@@ -387,7 +620,7 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
 
       try {
         // Look for JSON blocks in the output
-        const jsonMatch = output.match(/```json\n([\s\S]*?)\n```/);
+        const jsonMatch = result.finalOutput.match(/```json\n([\s\S]*?)\n```/);
         if (jsonMatch) {
           const data = JSON.parse(jsonMatch[1]);
           simulation = data.simulation;
@@ -403,32 +636,11 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
         data: {
           simulation,
           plan,
-          reasoning: output,
+          reasoning: result.finalOutput,
         },
       };
     } catch (error) {
-      // Handle API errors
       this.logger.error(`Agent run failed: ${error.status || 'unknown'} ${error.message}`);
-      if (error.response) {
-        this.logger.error(`Response body: ${JSON.stringify(error.response)}`);
-      }
-      if (error.request) {
-        this.logger.error(`Request: ${JSON.stringify(error.request)}`);
-      }
-
-      if (error.status === 429) {
-        this.logger.error('API quota exceeded. Please check billing settings.');
-        return {
-          success: false,
-          action: 'rejected',
-          error: 'API quota exceeded. Please add payment method or check billing settings.',
-        };
-      }
-
-      if (error.status === 404) {
-        this.logger.error('404 error - this may indicate incompatibility between Anthropic API and OpenAI Agents SDK');
-        this.logger.error('Consider switching to OpenAI or using a different integration method');
-      }
 
       return {
         success: false,
@@ -438,28 +650,37 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /**
-   * Execute rebalance by running agent with execution instruction
-   * This is called after guard approval
-   */
   async executeRebalance(
     userId: string,
     plan: any,
     idempotencyKey: string,
+    userAddress?: string,
   ): Promise<any> {
     try {
       this.logger.log(`Executing rebalance for user ${userId}`);
 
-      const executeMessage = `Execute the following approved rebalance plan for user ${userId}:
+      // Get safe address and chain ID
+      const safeAddress = userAddress || plan?.safeAddress || plan?.userAddress || plan?.address;
+      const chainId = plan?.chainId || '8453'; // Default to Base
 
-Plan: ${JSON.stringify(plan, null, 2)}
-Idempotency Key: ${idempotencyKey}
+      if (!safeAddress) {
+        throw new Error('safeAddress is required but not found in plan or parameters');
+      }
 
-Use the execute_steps tool to perform the on-chain execution. Return the execution result in JSON format.`;
+      this.logger.log(`Preparing execution with safeAddress: ${safeAddress}, chainId: ${chainId}`);
 
-      // Create fresh agent instance for clean context
-      const agent = this.createAgent();
-      const result = await run(agent, executeMessage);
+      // Use the execution prompt template
+      const executeMessage = buildExecutionPrompt({
+        userId,
+        safeAddress,
+        idempotencyKey,
+        plan,
+        chainId,
+      });
+
+      this.logger.log(`Using execution prompt template (length: ${executeMessage.length})`);
+
+      const result = await this.runAnthropicAgentWithRetry(executeMessage, false, 'execute_rebalance');
 
       // Try to parse execution result from output
       let execResult = null;
@@ -470,6 +691,16 @@ Use the execute_steps tool to perform the on-chain execution. Return the executi
         }
       } catch (e) {
         this.logger.warn('Could not parse execution result from agent output');
+      }
+
+      // Also check tool results for execution output
+      if (!execResult && result.toolResults) {
+        const executeResult = result.toolResults.find(
+          r => r.tool === 'execute_steps' || r.tool === 'swap' || r.tool === 'add_liquidity'
+        );
+        if (executeResult && executeResult.output) {
+          execResult = executeResult.output;
+        }
       }
 
       return execResult || {

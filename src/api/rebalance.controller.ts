@@ -295,10 +295,17 @@ export class RebalanceController {
         );
       }
 
+      // Get user address from input context
+      const inputContext = typeof job.inputContext === 'string'
+        ? JSON.parse(job.inputContext)
+        : job.inputContext;
+      const userAddress = inputContext?.userAddress;
+
       const result = await this.agentService.executeRebalance(
         job.userId,
         plan,
         job.id,
+        userAddress,
       );
 
       job.execResult = result;

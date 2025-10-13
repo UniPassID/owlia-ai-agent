@@ -133,6 +133,20 @@ export class MonitorService {
       const simulation = agentResult.data?.simulation;
       const plan = agentResult.data?.plan;
 
+      // Log what we received
+      this.logger.log(`Agent result - action: ${agentResult.action}`);
+      this.logger.log(`Agent result - has simulation: ${!!simulation}`);
+      this.logger.log(`Agent result - has plan: ${!!plan}`);
+      this.logger.log(`Agent result - has reasoning: ${!!agentResult.data?.reasoning}`);
+      this.logger.log(`Agent result - has toolResults: ${agentResult.data?.toolResults?.length || 0}`);
+
+      if (simulation) {
+        this.logger.log(`Simulation type: ${typeof simulation}, keys: ${Object.keys(simulation).join(', ')}`);
+      }
+      if (plan) {
+        this.logger.log(`Plan type: ${typeof plan}, keys: ${Object.keys(plan).join(', ')}`);
+      }
+
       if (!simulation || !plan) {
         job.status = JobStatus.REJECTED;
         job.errorMessage = 'No simulation or plan generated - likely no beneficial rebalance opportunity';
@@ -168,10 +182,17 @@ export class MonitorService {
       job.status = JobStatus.EXECUTING;
       await this.jobRepo.save(job);
 
+      // Get user address from input context
+      const inputContext = typeof job.inputContext === 'string'
+        ? JSON.parse(job.inputContext)
+        : job.inputContext;
+      const userAddress = inputContext?.userAddress || user.address;
+
       const execResult = await this.agentService.executeRebalance(
         job.userId,
         plan,
         job.id,
+        userAddress,
       );
 
       job.execResult = execResult;

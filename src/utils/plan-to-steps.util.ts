@@ -17,6 +17,7 @@ export interface ExecutionResult {
   title: string;
   summary: string;
   steps: ExecutionStep[];
+  messageType: 'timeline' | 'simple';
 }
 
 /**
@@ -198,6 +199,7 @@ export function convertPlanToSteps(
     title,
     summary,
     steps,
+    messageType: 'timeline',
   };
 }
 

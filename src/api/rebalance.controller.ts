@@ -173,12 +173,13 @@ export class RebalanceController {
         title: execResult.title,
         summary: execResult.summary,
         steps: execResult.steps,
+        messageType: execResult.messageType || 'timeline',
       };
     }
 
     // Otherwise, generate from plan
     const plan = job.simulateReport?.plan;
-    const executionResult = plan ? convertPlanToSteps(plan, execResult, job.status) : { title: '', summary: '', steps: [] };
+    const executionResult = plan ? convertPlanToSteps(plan, execResult, job.status) : { title: '', summary: '', steps: [], messageType: 'timeline' as const };
 
     return { success: true, job, ...executionResult };
   }
@@ -244,12 +245,13 @@ export class RebalanceController {
           title: execResult.title,
           summary: execResult.summary,
           steps: execResult.steps,
+          messageType: execResult.messageType || 'timeline',
         };
       }
 
       // Otherwise, generate from plan
       const plan = job.simulateReport?.plan;
-      const executionResult = plan ? convertPlanToSteps(plan, execResult, job.status) : { title: '', summary: '', steps: [] };
+      const executionResult = plan ? convertPlanToSteps(plan, execResult, job.status) : { title: '', summary: '', steps: [], messageType: 'timeline' as const };
 
       return {
         id: job.id,

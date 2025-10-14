@@ -163,8 +163,21 @@ export class RebalanceController {
     }
 
     // Convert plan to execution steps
-    const plan = job.simulateReport?.plan;
     const execResult = job.execResult;
+
+    // If execResult already contains steps (e.g., "no rebalancing needed" case), use it directly
+    if (execResult?.steps && execResult?.title && execResult?.summary) {
+      return {
+        success: true,
+        job,
+        title: execResult.title,
+        summary: execResult.summary,
+        steps: execResult.steps,
+      };
+    }
+
+    // Otherwise, generate from plan
+    const plan = job.simulateReport?.plan;
     const executionResult = plan ? convertPlanToSteps(plan, execResult, job.status) : { title: '', summary: '', steps: [] };
 
     return { success: true, job, ...executionResult };
@@ -220,8 +233,22 @@ export class RebalanceController {
 
     // Return only steps data
     const jobsData = jobs.map(job => {
-      const plan = job.simulateReport?.plan;
       const execResult = job.execResult;
+
+      // If execResult already contains steps (e.g., "no rebalancing needed" case), use it directly
+      if (execResult?.steps && execResult?.title && execResult?.summary) {
+        return {
+          id: job.id,
+          createdAt: job.createdAt,
+          completedAt: job.completedAt,
+          title: execResult.title,
+          summary: execResult.summary,
+          steps: execResult.steps,
+        };
+      }
+
+      // Otherwise, generate from plan
+      const plan = job.simulateReport?.plan;
       const executionResult = plan ? convertPlanToSteps(plan, execResult, job.status) : { title: '', summary: '', steps: [] };
 
       return {

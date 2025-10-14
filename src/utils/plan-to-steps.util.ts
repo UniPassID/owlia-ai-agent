@@ -76,10 +76,19 @@ export function convertPlanToSteps(
       },
     });
   } else {
+    // Check if this is a "no rebalancing needed" scenario (completed job with no opportunities)
+    const isNoRebalanceNeeded = jobStatus === 'completed' && opportunities.length === 0;
+    const recommendation = plan?.recommendation || '';
+
     steps.push({
       id: '2',
-      content: 'No better opportunities found',
+      content: isNoRebalanceNeeded
+        ? 'No better yields found, current allocation is optimal'
+        : 'No better opportunities found',
       status: 'success',
+      metadata: isNoRebalanceNeeded && recommendation ? {
+        reason: recommendation,
+      } : undefined,
     });
   }
 
@@ -134,42 +143,51 @@ export function convertPlanToSteps(
       },
     });
   } else {
-    steps.push({
-      id: '3',
-      content: 'No rebalancing needed',
-      status: 'success',
-      metadata: {
-        reason: plan?.recommendation || 'Current position is already optimal',
-      },
-    });
+    // Don't add step 3 if this is a "no rebalancing needed" completed job
+    // Step 2 already covers this case
+    if (jobStatus !== 'completed') {
+      steps.push({
+        id: '3',
+        content: 'No rebalancing needed',
+        status: 'success',
+        metadata: {
+          reason: plan?.recommendation || 'Current position is already optimal',
+        },
+      });
+    }
   }
 
   // Step 4: Completion status
-  if (execResult) {
-    const txHash = execResult.txHash || execResult.transactionHash;
-    const success = execResult.success !== false && jobStatus === 'completed';
-    const errorMessage = execResult.error || execResult.errorMessage;
+  // Skip step 4 for "no rebalancing needed" completed jobs (only 2 steps needed)
+  const isNoRebalanceCompleted = jobStatus === 'completed' && opportunities.length === 0;
 
-    steps.push({
-      id: '4',
-      content: success
-        ? 'Rebalance completed successfully'
-        : 'Rebalance failed',
-      status: success ? 'success' : 'error',
-      metadata: txHash ? { txHash } : errorMessage ? { reason: errorMessage } : undefined,
-    });
-  } else if (jobStatus === 'approved' || jobStatus === 'pending') {
-    steps.push({
-      id: '4',
-      content: 'Awaiting execution approval',
-      status: 'pending',
-    });
-  } else if (jobStatus === 'executing') {
-    steps.push({
-      id: '4',
-      content: 'Executing transactions...',
-      status: 'pending',
-    });
+  if (!isNoRebalanceCompleted) {
+    if (execResult) {
+      const txHash = execResult.txHash || execResult.transactionHash;
+      const success = execResult.success !== false && jobStatus === 'completed';
+      const errorMessage = execResult.error || execResult.errorMessage;
+
+      steps.push({
+        id: '4',
+        content: success
+          ? 'Rebalance completed successfully'
+          : 'Rebalance failed',
+        status: success ? 'success' : 'error',
+        metadata: txHash ? { txHash } : errorMessage ? { reason: errorMessage } : undefined,
+      });
+    } else if (jobStatus === 'approved' || jobStatus === 'pending') {
+      steps.push({
+        id: '4',
+        content: 'Awaiting execution approval',
+        status: 'pending',
+      });
+    } else if (jobStatus === 'executing') {
+      steps.push({
+        id: '4',
+        content: 'Executing transactions...',
+        status: 'pending',
+      });
+    }
   }
 
   // Generate title and summary
@@ -213,6 +231,12 @@ function generateSummary(
   currentAPY?: number,
 ): string {
   const opportunities = plan?.opportunities || [];
+
+  // Handle "no rebalancing needed" completed jobs
+  if (jobStatus === 'completed' && opportunities.length === 0) {
+    const apyText = currentAPY > 0 ? ` at ${currentAPY.toFixed(2)}% APY` : '';
+    return `Holding steady${apyText}, rebalancing not required.`;
+  }
 
   if (jobStatus === 'completed' && opportunities.length > 0) {
     // Calculate weighted target APY

@@ -148,11 +148,42 @@ export class MonitorService {
         this.logger.log(`Plan type: ${typeof plan}, keys: ${Object.keys(plan).join(', ')}`);
       }
 
+      // Check if rebalancing is not needed
+      if (agentResult.data?.shouldRebalance === false) {
+        job.status = JobStatus.COMPLETED;
+
+        // Generate steps for "no rebalancing needed" scenario
+        const currentPositions = agentResult.data?.currentStrategy || agentResult.data?.currentPositions || [];
+        const currentAPY = agentResult.data?.currentStrategy?.apy || 0;
+        const currentValue = agentResult.data?.currentStrategy?.value || 0;
+        const reason = agentResult.data?.reasoning || agentResult.data?.analysis?.reason || 'Current allocation is already optimal';
+
+        const noRebalanceResult = convertPlanToSteps(
+          {
+            currentPositions: Array.isArray(currentPositions) ? currentPositions : [currentPositions],
+            opportunities: [],
+            recommendation: reason,
+          },
+          null,
+          JobStatus.COMPLETED
+        );
+
+        job.execResult = {
+          success: true,
+          output: reason,
+          ...noRebalanceResult,
+        };
+        job.completedAt = new Date();
+        await this.jobRepo.save(job);
+        this.logger.log(`Job ${job.id} completed: no rebalancing needed`);
+        return;
+      }
+
       if (!simulation || !plan) {
         job.status = JobStatus.REJECTED;
-        job.errorMessage = 'No simulation or plan generated - likely no beneficial rebalance opportunity';
+        job.errorMessage = 'No simulation or plan generated - analysis incomplete';
         await this.jobRepo.save(job);
-        this.logger.log(`Job ${job.id} rejected: no rebalance opportunity found`);
+        this.logger.log(`Job ${job.id} rejected: analysis incomplete`);
         return;
       }
 

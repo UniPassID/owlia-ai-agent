@@ -17,10 +17,9 @@ import { UserPolicy } from '../entities/user-policy.entity';
 import { RebalanceJob, JobStatus } from '../entities/rebalance-job.entity';
 import { User } from '../entities/user.entity';
 import { MonitorService } from '../monitor/monitor.service';
-import { UpdatePolicyDto, TriggerRebalanceDto, ExecuteJobDto } from './dto/rebalance.dto';
+import { TriggerRebalanceDto, ExecuteJobDto } from './dto/rebalance.dto';
 import { AgentService } from '../agent/agent.service';
 import { convertPlanToSteps } from '../utils/plan-to-steps.util';
-import { ExecutionStepDto } from './dto/execution-steps.dto';
 
 @ApiTags('rebalance')
 @Controller('rebalance')
@@ -41,20 +40,20 @@ export class RebalanceController {
   /**
    * Get user positions (via Agent)
    */
-  @Get('positions/:userId')
+  @Get('positions/:address')
   @ApiOperation({ summary: 'Get user positions', description: 'Fetch user DeFi positions across chains using AI agent' })
-  @ApiParam({ name: 'userId', description: 'User ID', example: '550e8400-e29b-41d4-a716-446655440000' })
+  @ApiParam({ name: 'address', description: 'User wallet address', example: '0x1234567890abcdef1234567890abcdef12345678' })
   @ApiQuery({ name: 'networks', required: false, description: 'Comma-separated network list', example: 'ethereum,base' })
   @ApiResponse({ status: 200, description: 'Positions retrieved successfully' })
   @ApiResponse({ status: 404, description: 'User not found' })
   @ApiResponse({ status: 500, description: 'Internal server error' })
   async getPositions(
-    @Param('userId') userId: string,
+    @Param('address') address: string,
     @Query('networks') networks?: string,
   ) {
     try {
       // First verify user exists
-      const user = await this.userRepo.findOne({ where: { id: userId } });
+      const user = await this.userRepo.findOne({ where: { address } });
       if (!user) {
         throw new HttpException(
           { success: false, error: 'User not found' },
@@ -63,14 +62,14 @@ export class RebalanceController {
       }
 
       // Then get policy (optional)
-      const policy = await this.userPolicyRepo.findOne({ where: { userId } });
+      const policy = await this.userPolicyRepo.findOne({ where: { userId: user.id } });
 
       // Use network from query param or user's chainId
       const chainList = networks ? networks.split(',') : [user.chainId];
 
       // Use agent to fetch positions via MCP
       const result = await this.agentService.runRebalanceAgent({
-        userId,
+        userId: user.id,
         userAddress: user.address,
         jobId: 'query-positions-' + Date.now(),
         userPolicy: {
@@ -99,65 +98,6 @@ export class RebalanceController {
   }
 
   /**
-   * Preview rebalance (simulate without executing)
-   */
-  @Post('preview')
-  @ApiOperation({ summary: 'Preview rebalance', description: 'Simulate rebalancing without executing to see potential outcomes' })
-  @ApiBody({ type: TriggerRebalanceDto })
-  @ApiResponse({ status: 200, description: 'Preview generated successfully' })
-  @ApiResponse({ status: 404, description: 'User not found' })
-  @ApiResponse({ status: 500, description: 'Internal server error' })
-  async previewRebalance(@Body() dto: TriggerRebalanceDto) {
-    try {
-      // First verify user exists
-      const user = await this.userRepo.findOne({ where: { id: dto.userId } });
-      if (!user) {
-        throw new HttpException(
-          { success: false, error: 'User not found' },
-          HttpStatus.NOT_FOUND,
-        );
-      }
-
-      // Then get policy (optional)
-      const policy = await this.userPolicyRepo.findOne({ where: { userId: dto.userId } });
-
-      const chains = policy?.chains || [user.chainId];
-      this.logger.log(`Preview rebalance for user ${dto.userId}:`);
-      this.logger.log(`  - User chainId from DB: ${user.chainId}`);
-      this.logger.log(`  - Policy chains: ${policy?.chains ? JSON.stringify(policy.chains) : 'none (null/undefined)'}`);
-      this.logger.log(`  - Final chains to use: ${JSON.stringify(chains)}`);
-      this.logger.log(`  - User address: ${user.address}`);
-
-      const result = await this.agentService.runRebalanceAgent({
-        userId: dto.userId,
-        userAddress: user.address,
-        jobId: 'preview-' + Date.now(),
-        userPolicy: {
-          chains,
-          assetWhitelist: policy?.assetWhitelist || [],
-          minAprLiftBps: policy?.minAprLiftBps || 50,
-          minNetUsd: policy ? Number(policy.minNetUsd) : 10,
-          minHealthFactor: policy ? Number(policy.minHealthFactor) : 1.5,
-          maxSlippageBps: policy?.maxSlippageBps || 100,
-          maxGasUsd: policy ? Number(policy.maxGasUsd) : 50,
-          maxPerTradeUsd: policy ? Number(policy.maxPerTradeUsd) : 10000,
-        },
-        trigger: dto.trigger || 'manual_preview',
-      });
-
-      return {
-        success: true,
-        preview: result.data,
-      };
-    } catch (error) {
-      throw new HttpException(
-        { success: false, error: error.message },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-
-  /**
    * Trigger a rebalance job
    */
   @Post('rebalance')
@@ -169,7 +109,7 @@ export class RebalanceController {
   async triggerRebalance(@Body() dto: TriggerRebalanceDto) {
     try {
       // First verify user exists
-      const user = await this.userRepo.findOne({ where: { id: dto.userId } });
+      const user = await this.userRepo.findOne({ where: { address: dto.address } });
       if (!user) {
         throw new HttpException(
           { success: false, error: 'User not found' },
@@ -178,9 +118,9 @@ export class RebalanceController {
       }
 
       // Then get policy (optional)
-      const policy = await this.userPolicyRepo.findOne({ where: { userId: dto.userId } });
+      const policy = await this.userPolicyRepo.findOne({ where: { userId: user.id } });
 
-      this.logger.log(`Trigger rebalance for user ${dto.userId}:`);
+      this.logger.log(`Trigger rebalance for user ${user.address}:`);
       this.logger.log(`  - User chainId from DB: ${user.chainId}`);
       this.logger.log(`  - Policy chains: ${policy?.chains ? JSON.stringify(policy.chains) : 'none (null/undefined)'}`);
       this.logger.log(`  - User address: ${user.address}`);
@@ -231,107 +171,78 @@ export class RebalanceController {
   }
 
   /**
-   * Get user's job history
+   * Get user's successful jobs by address
    */
-  @Get('jobs/user/:userId')
-  @ApiOperation({ summary: 'Get user job history', description: 'Retrieve the list of rebalancing jobs for a user' })
-  @ApiParam({ name: 'userId', description: 'User ID', example: '550e8400-e29b-41d4-a716-446655440000' })
-  @ApiQuery({ name: 'limit', required: false, description: 'Maximum number of jobs to return', example: '50' })
+  @Get('jobs/address/:address')
+  @ApiOperation({ summary: 'Get successful jobs by address', description: 'Retrieve successful rebalancing jobs for a user address with pagination' })
+  @ApiParam({ name: 'address', description: 'User wallet address', example: '0x1234567890abcdef1234567890abcdef12345678' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number (starts from 1)', example: '1' })
+  @ApiQuery({ name: 'pageSize', required: false, description: 'Number of items per page (max 100)', example: '20' })
   @ApiResponse({ status: 200, description: 'Jobs retrieved successfully' })
-  async getUserJobs(
-    @Param('userId') userId: string,
-    @Query('limit') limit?: string,
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async getJobsByAddress(
+    @Param('address') address: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
-    const jobs = await this.jobRepo.find({
-      where: { userId },
-      order: { createdAt: 'DESC' },
-      take: limit ? parseInt(limit) : 50,
+    // Find user by address
+    const user = await this.userRepo.findOne({ where: { address } });
+    if (!user) {
+      throw new HttpException(
+        { success: false, error: 'User not found' },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    // Parse pagination params
+    const pageNum = page ? parseInt(page) : 1;
+    const size = pageSize ? Math.min(parseInt(pageSize), 100) : 20;
+    const skip = (pageNum - 1) * size;
+
+    // Get total count
+    const total = await this.jobRepo.count({
+      where: {
+        userId: user.id,
+        status: JobStatus.COMPLETED,
+      },
     });
 
-    // Add steps to each job
-    const jobsWithSteps = jobs.map(job => {
+    // Get jobs
+    const jobs = await this.jobRepo.find({
+      where: {
+        userId: user.id,
+        status: JobStatus.COMPLETED,
+      },
+      order: { createdAt: 'DESC' },
+      skip,
+      take: size,
+    });
+
+    // Return only steps data
+    const jobsData = jobs.map(job => {
       const plan = job.simulateReport?.plan;
       const execResult = job.execResult;
       const executionResult = plan ? convertPlanToSteps(plan, execResult, job.status) : { title: '', summary: '', steps: [] };
-      return { ...job, ...executionResult };
-    });
-
-    return { success: true, jobs: jobsWithSteps };
-  }
-
-  /**
-   * Execute an approved job manually
-   */
-  @Post('execute')
-  @ApiOperation({ summary: 'Execute approved job', description: 'Manually execute an approved rebalancing job' })
-  @ApiBody({ type: ExecuteJobDto })
-  @ApiResponse({ status: 200, description: 'Job executed successfully' })
-  @ApiResponse({ status: 400, description: 'Bad request - job not approved or no plan found' })
-  @ApiResponse({ status: 404, description: 'Job not found' })
-  @ApiResponse({ status: 500, description: 'Internal server error' })
-  async executeJob(@Body() dto: ExecuteJobDto) {
-    try {
-      const job = await this.jobRepo.findOne({ where: { id: dto.jobId } });
-
-      if (!job) {
-        throw new HttpException(
-          { success: false, error: 'Job not found' },
-          HttpStatus.NOT_FOUND,
-        );
-      }
-
-      if (job.status !== 'approved') {
-        throw new HttpException(
-          { success: false, error: 'Job must be approved before execution' },
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-
-      const plan = job.simulateReport?.plan;
-      if (!plan) {
-        throw new HttpException(
-          { success: false, error: 'No execution plan found' },
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-
-      // Get user address from input context
-      const inputContext = typeof job.inputContext === 'string'
-        ? JSON.parse(job.inputContext)
-        : job.inputContext;
-      const userAddress = inputContext?.userAddress;
-
-      const result = await this.agentService.executeRebalance(
-        job.userId,
-        plan,
-        job.id,
-        userAddress,
-      );
-
-      // Generate execution steps
-      const executionResult = convertPlanToSteps(
-        plan,
-        result,
-        result.success ? JobStatus.COMPLETED : JobStatus.FAILED
-      );
-
-      job.execResult = {
-        ...result,
-        ...executionResult,
-      };
-      job.status = result.success ? JobStatus.COMPLETED : JobStatus.FAILED;
-      job.completedAt = new Date();
-      await this.jobRepo.save(job);
 
       return {
-        success: true,
-        result,
+        id: job.id,
+        createdAt: job.createdAt,
+        completedAt: job.completedAt,
+        ...executionResult,
       };
-    } catch (error) {
-      throw new HttpException(
-        { success: false, error: error.message },
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
+    });
+
+    return {
+      success: true,
+      data: jobsData,
+      pagination: {
+        page: pageNum,
+        pageSize: size,
+        total,
+        totalPages: Math.ceil(total / size),
+      },
+    };
   }
+
+
 }

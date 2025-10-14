@@ -43,11 +43,15 @@ ${JSON.stringify(plan, null, 2)}
 
 3. **targetLendingSupplyPositions**: Extract from plan.opportunities where protocol in ["aave", "euler", "venus"]
    - Map to format: { protocol, token: tokenAddress, vToken, amount }
+   - **protocol field is REQUIRED** - must be one of: "aave", "euler", "venus"
    - **All contract addresses are already in the opportunities data**
+   - **Amount should be converted to string** (e.g., amount: "1000.25")
 
 4. **targetLiquidityPositions**: Extract from plan.opportunities where protocol in ["uniswapV3", "aerodromeSlipstream"]
    - Map to format: { protocol, poolAddress, token0Address, token1Address, targetTickLower, targetTickUpper, targetAmount0, targetAmount1 }
+   - **protocol field is REQUIRED** - must be one of: "uniswapV3", "aerodromeSlipstream"
    - **All addresses and tick ranges are already in the opportunities data**
+   - **Amounts should be converted to strings** (e.g., targetAmount0: "100.5", targetAmount1: "200.75")
    - **⚠️ CRITICAL**: When copying protocol field from plan.opportunities:
      * If you see "aerodrome" → MUST change it to "aerodromeSlipstream"
      * If you see "aerodromeSlipstream" → Use it as-is (correct)
@@ -72,12 +76,14 @@ ${JSON.stringify(plan, null, 2)}
 **⚠️ CRITICAL: Token Amounts**
 
 When preparing positions for rebalance_position tool:
-- Use amounts directly from plan data
-- Each position's amount reflects its specific allocation
+- Use amounts directly from plan data as decimal numbers (NOT wei/smallest units)
+- The plan already contains decimal amounts (e.g., 100.5 USDC)
+- Convert decimal amounts to strings for the API call
+- DO NOT multiply by 10^decimals or convert to wei
 - Example:
-  * LP position: targetAmount0, targetAmount1 from plan
-  * Supply position: tokenAmount from plan
-- Extract amounts from the provided plan structure
+  * LP position: targetAmount0: "100.5", targetAmount1: "200.75" (from plan)
+  * Supply position: amount: "1000.25" (from plan)
+- Extract amounts from the provided plan structure and convert to strings
 
 Call rebalance_position MCP tool:
 \`\`\`
@@ -87,22 +93,22 @@ rebalance_position({
   chainId: "${chainId}",                // Chain ID
   targetLendingSupplyPositions: [       // Required: Target lending positions
     {
-      protocol: "aave",                  // "aave", "euler", or "venus"
-      token: "0x...",                    // Token contract address
-      vToken: "0x...",                   // vToken address from plan
-      amount: "1.1"                      // Amount from plan
+      protocol: "aave",                  // REQUIRED: "aave", "euler", or "venus"
+      token: "0x...",                    // REQUIRED: Token contract address
+      vToken: "0x...",                   // REQUIRED: vToken address from plan
+      amount: "1.1"                      // REQUIRED: Amount from plan (as decimal string)
     }
   ],
   targetLiquidityPositions: [           // Optional: Target LP positions
     {
-      protocol: "aerodromeSlipstream",   // "uniswapV3" or "aerodromeSlipstream"
-      poolAddress: "0x...",              // Pool contract address
-      token0Address: "0x...",            // Token0 contract address
-      token1Address: "0x...",            // Token1 contract address
-      targetTickLower: -887272,          // Lower tick
-      targetTickUpper: 887272,           // Upper tick
-      targetAmount0: "1.1",              // Amount from plan
-      targetAmount1: "2.2"               // Amount from plan
+      protocol: "aerodromeSlipstream",   // REQUIRED: "uniswapV3" or "aerodromeSlipstream"
+      poolAddress: "0x...",              // REQUIRED: Pool contract address
+      token0Address: "0x...",            // REQUIRED: Token0 contract address
+      token1Address: "0x...",            // REQUIRED: Token1 contract address
+      targetTickLower: -887272,          // REQUIRED: Lower tick
+      targetTickUpper: 887272,           // REQUIRED: Upper tick
+      targetAmount0: "1.1",              // REQUIRED: Amount from plan (as decimal string)
+      targetAmount1: "2.2"               // REQUIRED: Amount from plan (as decimal string)
     }
   ]
 })

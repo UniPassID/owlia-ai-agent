@@ -79,11 +79,11 @@ export class UpdatePolicyDto {
 
 export class TriggerRebalanceDto {
   @ApiProperty({
-    description: 'User ID',
-    example: '550e8400-e29b-41d4-a716-446655440000',
+    description: 'User wallet address',
+    example: '0x1234567890abcdef1234567890abcdef12345678',
   })
   @IsString()
-  userId: string;
+  address: string;
 
   @ApiPropertyOptional({
     description: 'Trigger reason',

@@ -3,6 +3,28 @@
  * Based on MCP complete_defi_analysis prompt
  */
 
+/**
+ * Token configuration by chain
+ * Contains verified token addresses and their decimal places
+ */
+export const TOKEN_CONFIG = {
+  // BSC (BNB Chain) - Chain ID: 56
+  '56': {
+    USDT: { address: '0x55d398326f99059ff775485246999027b3197955', decimals: 18 },
+    USDC: { address: '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d', decimals: 18 },
+    USD1: { address: '0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d', decimals: 18 },
+    DAI: { address: '0x1af3f329e8be154074d8769d1ffa4ee058b1dbc3', decimals: 18 },
+  },
+  // Base - Chain ID: 8453
+  '8453': {
+    USDC: { address: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', decimals: 6 },
+    USDT: { address: '0xfde4c96c8593536e31f229ea8f37b2ada2699bb2', decimals: 6 },
+    oUSDT: { address: '0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189', decimals: 6 },
+  },
+} as const;
+
+
+
 export interface AnalysisPromptParams {
   address: string;
   chainId: string;
@@ -335,7 +357,7 @@ After completing Steps 1-3 (account analysis, LP analysis, supply analysis, stra
 1. You MUST include a json code block with triple backticks
 2. The JSON must contain the "opportunities" array with the selected strategy's positions
 3. Every position must include complete contract addresses (poolAddress, token0Address, token1Address for LP; tokenAddress, vToken for supply)
-4. All amounts must be in wei/smallest unit as strings
+4. All amounts must be decimal numbers (NOT wei/smallest units) - use the actual token amount (e.g., 100.5 USDC, not "100500000")
 5. Protocol names must use correct format (aerodromeSlipstream, uniswapV3, aave, euler, venus)
 
 **Example structure:**
@@ -355,9 +377,9 @@ After completing Steps 1-3 (account analysis, LP analysis, supply analysis, stra
       "token1Symbol": "string",
       "targetTickLower": number,
       "targetTickUpper": number,
-      "targetAmount0": "string",
-      "targetAmount1": "string",
-      "amount": "string",
+      "targetAmount0": number,
+      "targetAmount1": number,
+      "amount": number,
       "tokenAddress": "0x..." (for supply positions),
       "tokenSymbol": "string" (for supply positions),
       "vToken": "0x..." (for supply positions),
@@ -371,7 +393,7 @@ After completing Steps 1-3 (account analysis, LP analysis, supply analysis, stra
       "protocol": "string",
       "poolAddress": "0x..." (if applicable),
       "tokenAddress": "0x..." (if applicable),
-      "amount": "string",
+      "amount": number,
       "value": number
     }
   ],
@@ -384,7 +406,10 @@ After completing Steps 1-3 (account analysis, LP analysis, supply analysis, stra
 - **LP Positions**: Must include poolAddress, token0Address, token1Address, targetTickLower, targetTickUpper, targetAmount0, targetAmount1
 - **Supply Positions**: Must include tokenAddress, tokenSymbol, vToken, amount
 - All addresses must be complete contract addresses (0x...)
-- All amounts must be in wei/smallest unit as strings
+- **Token Amounts**: All amounts must be decimal numbers representing the actual token amount
+  - Use human-readable decimal format (e.g., 245.16 for USDT, not "245160000")
+  - Do NOT convert to wei or smallest units
+  - Example: 100.5 USDC should be stored as 100.5 (not "100500000")
 - All APY values must be in percentage (e.g., 5.23 for 5.23%)
 
 **CRITICAL: Protocol Name Mapping**
@@ -430,7 +455,7 @@ Before you consider the analysis complete, verify you have executed ALL of these
 ### Final Output ✅
 - [ ] Output json code block with complete opportunities array
 - [ ] Included all contract addresses (0x...)
-- [ ] Included target amounts in wei/smallest unit
+- [ ] Included target amounts as decimal numbers (NOT wei/smallest units)
 - [ ] Used correct protocol names (aerodromeSlipstream, not aerodromeCL)
 
 **IF ANY CHECKBOX IS UNCHECKED, YOU MUST GO BACK AND COMPLETE THAT STEP**

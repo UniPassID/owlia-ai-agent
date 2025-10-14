@@ -29,17 +29,10 @@ export function buildAnalysisPrompt(params: AnalysisPromptParams): string {
 
 ## Execution Instructions
 - **SILENT EXECUTION**: Do NOT display any output for this step
-- Save the complete analysis data using save_analysis_resource tool:
-  - sessionId: "${address}"
-  - resourceType: "account"
-  - data: Simple JSON structure with only statistics:
-    {
-      "walletAddress": "${address}",
-      "chainId": "${chainId}",
-      "totalAssets": number,
-      "currentAPY": number,
-      "timestamp": "ISO-8601"
-    }
+- Remember the following data in memory for later steps:
+  - Total Assets (idle + active investments)
+  - Deployable Capital
+  - Current Portfolio APY
 - Continue immediately to Step 2 without any output
 
 ### ✅ Step 2: Market Opportunities Analysis
@@ -47,13 +40,6 @@ export function buildAnalysisPrompt(params: AnalysisPromptParams): string {
 **MANDATORY: You MUST complete BOTH LP Opportunities AND Supply Opportunities analysis**
 
 #### 2.1 LP Opportunities with Tick Status Analysis (MANDATORY)
-
-## Load Account Analysis Data
-
-Use load_analysis_resource:
-- sessionId: "${address}"
-- resourceType: "account"
-- Extract deployableCapital from loaded data
 
 ## MANDATORY Step 1: Get Pool Data & Market Prices
 
@@ -223,16 +209,10 @@ Compare all results and select top strategies based on:
 **MINIMAL OUTPUT - ONLY DISPLAY:**
 **Best LP Strategy:** [Pool Name] with [APY]% expected return
 
-### Save Analysis Results
-Use save_analysis_resource:
-- sessionId: "${address}"
-- resourceType: "lp"
-- data: Complete JSON structure
-
 ## EXECUTION:
 1. Perform complete analysis silently
 2. Display ONLY the best LP strategy line
-3. Save complete data to resource without notification
+3. Remember the best LP opportunity in memory (pool address, tick range, expected APY, required token amounts)
 4. Continue immediately to next step
 
 ---
@@ -241,7 +221,7 @@ Use save_analysis_resource:
 - ✅ Called get_dex_pools
 - ✅ Called get_binance_depth (optional if no binance pairs match)
 - ✅ Called get_lp_simulate_batch with proper poolOperation structure
-- ✅ Saved LP analysis results
+- ✅ Identified and remembered best LP opportunity
 
 **If you have NOT called get_lp_simulate_batch, you MUST go back and do it now.**
 
@@ -251,14 +231,9 @@ Use save_analysis_resource:
 
 **DO NOT skip this step - Supply analysis is REQUIRED**
 
-## Load Account Analysis Data
-
-Use load_analysis_resource:
-- sessionId: "${address}"
-- resourceType: "account"
-- Extract deployableCapital from loaded data
-
 ## Required Analysis
+
+Use the total deployable capital from Step 1 (get_idle_assets + get_active_investments results):
 1. Call get_supply_opportunities with FULL capital amount
 2. Analyze results for ALL protocols (Aave, Euler, Venus, etc.)
 3. Sort by post-investment APY (highest first)
@@ -269,84 +244,101 @@ Use load_analysis_resource:
 **MINIMAL OUTPUT - ONLY DISPLAY:**
 **Best Supply Strategy:** [Protocol] [Token] with [APY]% expected return
 
-### Save Analysis Results
-Use save_analysis_resource:
-- sessionId: "${address}"
-- resourceType: "supply"
-- data: Complete JSON structure
-
 ## EXECUTION:
 1. Perform complete analysis silently
 2. Display ONLY the best supply strategy line
-3. Save complete data to resource without notification
+3. Remember the best supply opportunity in memory (protocol, token address, vToken, amount, expected APY)
 4. Continue immediately to next step
 
-### ✅ Step 3: Basic Portfolio Rebalancing Analysis
+### ✅ Step 3: Portfolio Rebalancing Analysis (MANDATORY - DO NOT SKIP)
 
-## Load Analysis Data
+**YOU MUST COMPLETE THIS STEP - This is the CORE of the analysis**
 
-Load from saved resources using load_analysis_resource:
-- Load account resource: sessionId="${address}", resourceType="account"
-- Load LP resource: sessionId="${address}", resourceType="lp"
-- Load supply resource: sessionId="${address}", resourceType="supply"
+**CRITICAL: You have now completed:**
+- ✅ Account analysis (idle assets + active investments)
+- ✅ LP opportunities analysis (get_lp_simulate_batch results)
+- ✅ Supply opportunities analysis (get_supply_opportunities results)
 
-Extract:
-- totalCapital from account analysis (deployableCapital field)
-- currentPortfolio APY and value from account analysis
-- Best LP strategy details from LP opportunities (topStrategy field)
-- Best supply strategy details from supply opportunities (topStrategy field)
+**NOW you MUST analyze portfolio rebalancing strategies**
 
-## MANDATORY: Test These Allocation Strategies
+## Extract Data from Previous Steps
 
-### Base Strategies (Must Test All)
-1. **Status Quo** - Keep current allocation
-2. **100% LP** - All capital to LP strategy
-3. **100% Supply** - All capital to Supply strategy
-4. **75-25** - 75% LP, 25% Supply
-5. **50-50** - 50% LP, 50% Supply
-6. **25-75** - 25% LP, 75% Supply
+From your previous tool calls in this conversation, you already have in memory:
+1. **Total deployable capital** (from get_idle_assets + get_active_investments in Step 1)
+2. **Best LP opportunity** (from get_lp_simulate_batch results in Step 2.1 - highest APY pool with tick range, token addresses)
+3. **Best supply opportunity** (from get_supply_opportunities in Step 2.2 - highest APY protocol with token address, vToken)
+4. **Current positions** (from get_active_investments - existing LP and lending positions)
 
-### For EACH Strategy:
-1. **Calculate target positions**:
-   - LP portion: Use requiredTokens ratio from LP topStrategy
-   - Supply portion: Use target token from Supply topStrategy
+Use this data directly - do NOT call any load_analysis_resource tools.
 
-2. **Call calculate_rebalance_cost_batch (MANDATORY)**
-3. **Analyze strategies using analyze_strategy tool (MANDATORY)**
+## MANDATORY: Test Portfolio Allocation Strategies
 
-## Output Instructions
+You MUST test at least these strategies:
+1. **100% Supply** - All capital to best supply opportunity
+2. **100% LP** - All capital to best LP opportunity
+3. **50-50 Split** - 50% supply, 50% LP
 
-**MINIMAL OUTPUT - ONLY DISPLAY:**
+### For EACH Strategy, you MUST:
 
-### Current Portfolio Allocation
-**Current Portfolio Allocation:**
-| Category | Protocol | Token | Amount | USD Value | APY | Details |
-|----------|----------|-------|--------|-----------|-----|---------|
-| [category] | [protocol] | [symbol/pair] | [amount] | $[value] | [apy]% | [details] |
+**Step 3.1: Call calculate_rebalance_cost_batch**
+Calculate the gas costs and transaction details for each strategy.
 
-### Target Portfolio Allocation
-**Target Portfolio Allocation:**
-| Category | Protocol | Token | Amount | USD Value | APY | Details |
-|----------|----------|-------|--------|-----------|-----|---------|
-| [category] | [protocol] | [symbol/pair] | [amount] | $[value] | [apy]% | [details] |
+**Step 3.2: Call analyze_strategy**
+Analyze risk/reward for each strategy to determine which is optimal.
 
-### Save Analysis Results
-Use save_analysis_resource:
-- sessionId: "${address}"
-- resourceType: "rebalance"
-- data: Complete JSON structure with target portfolio positions
+**IMPORTANT: After calling calculate_rebalance_cost_batch and analyze_strategy, you MUST proceed to output the final JSON structure.**
 
-## EXECUTION:
-1. Perform complete rebalancing analysis silently
-2. Test all required strategies using calculate_rebalance_cost_batch
-3. Use analyze_strategy tool for strategy evaluation
-4. Display ONLY the two portfolio allocation tables
-5. Save complete data to resource without notification
-6. Analysis complete
+## Step 3.3: Evaluate Results and Decide
 
-## CRITICAL: Final Output Structure
+Based on analyze_strategy results:
+1. Compare all strategies (APY improvement, risk, gas costs, break-even time)
+2. Evaluate if rebalancing is beneficial:
+   - **If current position is already optimal** → No rebalancing needed
+   - **If gas costs > expected gains** → No rebalancing needed
+   - **If break-even time > 30 days** → No rebalancing needed
+   - **Otherwise** → Proceed with rebalancing
 
-After completing all analysis steps, you MUST output a structured JSON block containing ALL execution details needed for rebalancing:
+### If Rebalancing is NOT Beneficial:
+
+Output a simple recommendation explaining why:
+
+\`\`\`json
+{
+  "recommendation": "Maintain current position. [Explanation: current APY X%, best alternative Y%, would take Z hours/days to break even on gas costs]",
+  "shouldRebalance": false,
+  "currentStrategy": {
+    "description": "[Current position details]",
+    "apy": X.XX,
+    "value": XXXXX
+  },
+  "analysis": {
+    "gasEstimate": XXXX,
+    "breakEvenTime": "X days/hours",
+    "reason": "Insufficient improvement to justify transaction costs"
+  }
+}
+\`\`\`
+
+### If Rebalancing IS Beneficial:
+
+Extract complete position details from the selected strategy and output the full JSON structure with opportunities array (see section below).
+
+---
+
+## 🚨 CRITICAL: Final Output Structure (MANDATORY - DO NOT SKIP)
+
+**YOU MUST OUTPUT THIS JSON BLOCK - The analysis is NOT complete without it**
+
+After completing Steps 1-3 (account analysis, LP analysis, supply analysis, strategy comparison), you MUST output a structured JSON block containing ALL execution details needed for rebalancing.
+
+**REQUIREMENTS:**
+1. You MUST include a json code block with triple backticks
+2. The JSON must contain the "opportunities" array with the selected strategy's positions
+3. Every position must include complete contract addresses (poolAddress, token0Address, token1Address for LP; tokenAddress, vToken for supply)
+4. All amounts must be in wei/smallest unit as strings
+5. Protocol names must use correct format (aerodromeSlipstream, uniswapV3, aave, euler, venus)
+
+**Example structure:**
 
 \`\`\`json
 {
@@ -407,11 +399,47 @@ DO NOT use: "AerodromeCL", "aerodrome", "UniswapV3", "AAVE", "EULER" - these wil
 
 This JSON output is CRITICAL for execution - without complete contract addresses, correct protocol names, and amounts, the rebalancing cannot be executed.
 
+---
+
+## 📋 COMPLETE EXECUTION CHECKLIST
+
+Before you consider the analysis complete, verify you have executed ALL of these steps:
+
+### Step 1: Account Analysis ✅
+- [ ] Called get_idle_assets
+- [ ] Called get_active_investments
+- [ ] Calculated total deployable capital
+
+### Step 2.1: LP Opportunities ✅
+- [ ] Called get_dex_pools
+- [ ] Called get_binance_depth (optional if no pairs match)
+- [ ] Called get_lp_simulate_batch with correct poolOperation structure
+- [ ] Identified best LP opportunity
+
+### Step 2.2: Supply Opportunities ✅
+- [ ] Called get_supply_opportunities
+- [ ] Identified best supply opportunity
+
+### Step 3: Portfolio Strategy Analysis ✅
+- [ ] Called calculate_rebalance_cost_batch for at least 3 strategies
+- [ ] Called analyze_strategy to evaluate strategies
+- [ ] Selected optimal strategy
+
+### Final Output ✅
+- [ ] Output json code block with complete opportunities array
+- [ ] Included all contract addresses (0x...)
+- [ ] Included target amounts in wei/smallest unit
+- [ ] Used correct protocol names (aerodromeSlipstream, not aerodromeCL)
+
+**IF ANY CHECKBOX IS UNCHECKED, YOU MUST GO BACK AND COMPLETE THAT STEP**
+
 ## CRITICAL IMPLEMENTATION NOTES:
-1. **Silent execution**: Steps execute without verbose output
-2. **Minimal display**: Only show specified outputs AND the final JSON structure
-3. **Complete analysis**: All calculations and tool calls remain unchanged
-4. **Data persistence**: All data saved to resources for later use
-5. **Streamlined UX**: User sees only essential information
-6. **Execution readiness**: Final JSON contains ALL data needed for execution without additional queries`;
+1. **Mandatory tool calls**: get_dex_pools, get_lp_simulate_batch, get_supply_opportunities, calculate_rebalance_cost_batch, analyze_strategy are ALL required
+2. **Final JSON output**: The analysis is NOT complete until you output the JSON structure with opportunities
+3. **Complete data**: Every opportunity must have full contract addresses and amounts
+4. **Protocol names**: Use exact names from the schema (case-sensitive)
+5. **Execution readiness**: Final JSON must contain ALL data needed for execution without additional queries
+
+**The user is expecting a complete analysis with actionable rebalancing plan. Do not stop early.**`;
+
 }

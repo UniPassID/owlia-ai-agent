@@ -377,7 +377,7 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
 
             // Log detailed output
             this.logger.log(`Tool ${toolData.name} completed`);
-            this.logger.log(`Tool ${toolData.name} output preview: ${JSON.stringify(parsedResult).substring(0, 500)}`);
+            this.logger.log(`Tool ${toolData.name} output preview: ${JSON.stringify(parsedResult)}`);
 
             // Special logging for specific tools
             if (toolData.name === 'get_supply_opportunities') {
@@ -469,7 +469,27 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
             this.logger.log('Successfully parsed structured JSON output');
             this.logger.log(`Structured data keys: ${Object.keys(structuredData).join(', ')}`);
 
-            // Use structured data if available
+            // Check if rebalancing is recommended
+            if (structuredData.shouldRebalance === false) {
+              this.logger.log('Agent recommends NOT rebalancing - insufficient improvement');
+
+              // Return analysis without plan (no rebalancing needed)
+              return {
+                success: true,
+                action: 'analyzed',
+                data: {
+                  simulation: null,
+                  plan: null,
+                  reasoning: structuredData.recommendation || result.finalOutput,
+                  analysis: structuredData.analysis || {},
+                  currentStrategy: structuredData.currentStrategy || {},
+                  shouldRebalance: false,
+                  toolResults: result.toolResults,
+                },
+              };
+            }
+
+            // Use structured data if available and rebalancing is beneficial
             if (structuredData.opportunities && structuredData.opportunities.length > 0) {
               this.logger.log(`Found ${structuredData.opportunities.length} opportunities in structured output`);
 
@@ -483,6 +503,7 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
                 description: 'Rebalance plan from structured analysis',
                 recommendation: structuredData.recommendation || result.finalOutput,
                 hasOpportunity: true,
+                shouldRebalance: true,
                 opportunities: normalizedOpportunities,
                 currentPositions: structuredData.currentPositions || [],
                 chainId: structuredData.chainId || chainIdNum,

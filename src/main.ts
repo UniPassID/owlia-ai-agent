@@ -25,19 +25,29 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // Get config
+  const configService = app.get(ConfigService);
+  const apiPrefix = configService.get('API_PREFIX') || '';
+
   // Setup Swagger/OpenAPI
-  const config = new DocumentBuilder()
+  const configBuilder = new DocumentBuilder()
     .setTitle('DeFi AI Agent API')
     .setDescription('API for managing DeFi portfolio rebalancing with AI agent')
     .setVersion('1.0')
     .addTag('user', 'User registration and management')
-    .addTag('rebalance', 'Portfolio rebalancing and policy management')
-    .build();
+    .addTag('rebalance', 'Portfolio rebalancing and policy management');
+
+  // Add server with configurable prefix
+  if (apiPrefix) {
+    configBuilder.addServer(apiPrefix, 'API Server with prefix');
+  } else {
+    configBuilder.addServer('/', 'Direct access');
+  }
+
+  const config = configBuilder.build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  // Get config
-  const configService = app.get(ConfigService);
   const port = configService.get('PORT') || 3000;
 
   await app.listen(port);

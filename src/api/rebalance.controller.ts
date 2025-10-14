@@ -19,6 +19,8 @@ import { User } from '../entities/user.entity';
 import { MonitorService } from '../monitor/monitor.service';
 import { UpdatePolicyDto, TriggerRebalanceDto, ExecuteJobDto } from './dto/rebalance.dto';
 import { AgentService } from '../agent/agent.service';
+import { convertPlanToSteps } from '../utils/plan-to-steps.util';
+import { ExecutionStepDto } from './dto/execution-steps.dto';
 
 @ApiTags('rebalance')
 @Controller('rebalance')
@@ -220,7 +222,12 @@ export class RebalanceController {
       );
     }
 
-    return { success: true, job };
+    // Convert plan to execution steps
+    const plan = job.simulateReport?.plan;
+    const execResult = job.execResult;
+    const executionResult = plan ? convertPlanToSteps(plan, execResult, job.status) : { title: '', summary: '', steps: [] };
+
+    return { success: true, job, ...executionResult };
   }
 
   /**
@@ -241,7 +248,15 @@ export class RebalanceController {
       take: limit ? parseInt(limit) : 50,
     });
 
-    return { success: true, jobs };
+    // Add steps to each job
+    const jobsWithSteps = jobs.map(job => {
+      const plan = job.simulateReport?.plan;
+      const execResult = job.execResult;
+      const executionResult = plan ? convertPlanToSteps(plan, execResult, job.status) : { title: '', summary: '', steps: [] };
+      return { ...job, ...executionResult };
+    });
+
+    return { success: true, jobs: jobsWithSteps };
   }
 
   /**
@@ -293,7 +308,17 @@ export class RebalanceController {
         userAddress,
       );
 
-      job.execResult = result;
+      // Generate execution steps
+      const executionResult = convertPlanToSteps(
+        plan,
+        result,
+        result.success ? JobStatus.COMPLETED : JobStatus.FAILED
+      );
+
+      job.execResult = {
+        ...result,
+        ...executionResult,
+      };
       job.status = result.success ? JobStatus.COMPLETED : JobStatus.FAILED;
       job.completedAt = new Date();
       await this.jobRepo.save(job);

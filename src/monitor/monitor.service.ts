@@ -7,6 +7,7 @@ import { User } from '../entities/user.entity';
 import { RebalanceJob, JobStatus } from '../entities/rebalance-job.entity';
 import { AgentService } from '../agent/agent.service';
 import { GuardService } from '../guard/guard.service';
+import { convertPlanToSteps } from '../utils/plan-to-steps.util';
 
 @Injectable()
 export class MonitorService {
@@ -155,7 +156,13 @@ export class MonitorService {
         return;
       }
 
-      job.simulateReport = simulation;
+      // Store simulation and plan with steps
+      const executionResult = convertPlanToSteps(plan, null, JobStatus.SIMULATING);
+      job.simulateReport = {
+        ...simulation,
+        plan,
+        ...executionResult,
+      };
       await this.jobRepo.save(job);
 
       // Guard approval
@@ -195,7 +202,17 @@ export class MonitorService {
         userAddress,
       );
 
-      job.execResult = execResult;
+      // Update steps with execution result
+      const finalExecutionResult = convertPlanToSteps(
+        plan,
+        execResult,
+        execResult.success ? JobStatus.COMPLETED : JobStatus.FAILED
+      );
+
+      job.execResult = {
+        ...execResult,
+        ...finalExecutionResult,
+      };
       job.status = execResult.success ? JobStatus.COMPLETED : JobStatus.FAILED;
       job.completedAt = new Date();
       await this.jobRepo.save(job);

@@ -346,7 +346,7 @@ After completing Steps 1-3 (account analysis, LP analysis, supply analysis, stra
   "opportunities": [
     {
       "type": "lp" | "supply",
-      "protocol": "aave" | "euler" | "venus" | "uniswapV3" | "aerodromeSlipstream",
+      "protocol": "aave" | "euler" | "venus" | "uniswapV3" | "aerodromeSlipstream",  // NEVER use "aerodrome", always "aerodromeSlipstream"
       "poolName": "string",
       "poolAddress": "0x...",
       "token0Address": "0x...",
@@ -390,12 +390,14 @@ After completing Steps 1-3 (account analysis, LP analysis, supply analysis, stra
 **CRITICAL: Protocol Name Mapping**
 When outputting the JSON structure, use these EXACT protocol names (case-sensitive):
 - For Uniswap V3 pools: "uniswapV3"
-- For Aerodrome CL/Slipstream pools: "aerodromeSlipstream"
+- For Aerodrome CL/Slipstream pools: "aerodromeSlipstream" (NOT "aerodrome", NOT "AerodromeCL")
 - For AAVE lending: "aave"
 - For Euler lending: "euler"
 - For Venus lending: "venus"
 
 DO NOT use: "AerodromeCL", "aerodrome", "UniswapV3", "AAVE", "EULER" - these will cause execution failures.
+
+**⚠️ MOST COMMON MISTAKE**: Writing "aerodrome" instead of "aerodromeSlipstream" - always use the full name "aerodromeSlipstream"
 
 This JSON output is CRITICAL for execution - without complete contract addresses, correct protocol names, and amounts, the rebalancing cannot be executed.
 

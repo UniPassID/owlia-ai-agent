@@ -45,9 +45,13 @@ ${JSON.stringify(plan, null, 2)}
    - Map to format: { protocol, token: tokenAddress, vToken, amount }
    - **All contract addresses are already in the opportunities data**
 
-4. **targetLiquidityPositions**: Extract from plan.opportunities where protocol in ["uniswapV3", "aerodromeSlipstream", "aerodrome"]
+4. **targetLiquidityPositions**: Extract from plan.opportunities where protocol in ["uniswapV3", "aerodromeSlipstream"]
    - Map to format: { protocol, poolAddress, token0Address, token1Address, targetTickLower, targetTickUpper, targetAmount0, targetAmount1 }
    - **All addresses and tick ranges are already in the opportunities data**
+   - **⚠️ CRITICAL**: When copying protocol field from plan.opportunities:
+     * If you see "aerodrome" → MUST change it to "aerodromeSlipstream"
+     * If you see "aerodromeSlipstream" → Use it as-is (correct)
+     * Always use "aerodromeSlipstream", never "aerodrome" in the execution call
 
 **IMPORTANT**:
 - The plan.opportunities array contains COMPLETE position data with ALL required contract addresses

@@ -7,6 +7,7 @@ import { AgentContext, AgentResult } from './agent.types';
 import { SYSTEM_PROMPT, buildUserContext } from './agent.prompt';
 import { buildExecutionPrompt } from './execution.prompt';
 import { buildAnalysisPrompt } from './analysis.prompt';
+import { extractTxHashFromOutput, verifyTransactionOnChain } from '../utils/chain-verifier.util';
 
 @Injectable()
 export class AgentService implements OnModuleInit, OnModuleDestroy {
@@ -721,6 +722,55 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
         );
         if (executeResult && executeResult.output) {
           execResult = executeResult.output;
+        }
+      }
+
+      // If no structured result, try to extract tx hash from output
+      if (!execResult || !execResult.success) {
+        const output = result.finalOutput || execResult?.output || '';
+        const txHash = extractTxHashFromOutput(output);
+
+        this.logger.log(`Extracted tx hash from output: ${txHash || 'none'}`);
+
+        if (txHash) {
+          // Verify transaction on chain
+          this.logger.log(`Verifying transaction ${txHash} on chain ${chainId}`);
+          const verificationResult = await verifyTransactionOnChain(txHash, chainId);
+
+          this.logger.log(`Verification result: ${JSON.stringify(verificationResult)}`);
+
+          if (verificationResult.success && verificationResult.confirmed) {
+            // Transaction confirmed successfully on chain
+            return {
+              success: true,
+              txHash,
+              transactionHash: txHash,
+              blockNumber: verificationResult.blockNumber,
+              status: 'confirmed',
+              output,
+            };
+          } else if (verificationResult.success && !verificationResult.confirmed) {
+            // Transaction submitted but failed on chain
+            return {
+              success: false,
+              txHash,
+              transactionHash: txHash,
+              blockNumber: verificationResult.blockNumber,
+              status: 'failed',
+              error: 'Transaction failed on chain',
+              output,
+            };
+          } else {
+            // Transaction not found or pending
+            return {
+              success: false,
+              txHash,
+              transactionHash: txHash,
+              status: 'pending',
+              error: verificationResult.error || 'Transaction not confirmed',
+              output,
+            };
+          }
         }
       }
 

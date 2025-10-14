@@ -27,10 +27,10 @@ export class RegisterUserDto {
   activationTxHash: string;
 
   @ApiProperty({
-    description: 'Blockchain chain ID',
+    description: 'Blockchain network',
     example: 'ethereum',
   })
   @IsString()
   @IsNotEmpty()
-  chainId: string;
+  network: string;
 }

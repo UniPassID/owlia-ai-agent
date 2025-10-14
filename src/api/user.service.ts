@@ -62,7 +62,7 @@ export class UserService {
 
     // Verify transaction on chain
     await this.verifyActivationTransaction(
-      dto.chainId,
+      dto.network,
       dto.activationTxHash,
       dto.address,
     );
@@ -72,7 +72,7 @@ export class UserService {
       address: dto.address.toLowerCase(),
       safeOwner: dto.safeOwner.toLowerCase(),
       activationTxHash: dto.activationTxHash.toLowerCase(),
-      chainId: dto.chainId,
+      chainId: dto.network,
     });
 
     await this.userRepo.save(user);

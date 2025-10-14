@@ -3,13 +3,13 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdatePolicyDto {
   @ApiPropertyOptional({
-    description: 'List of blockchain chains to monitor',
+    description: 'List of blockchain networks to monitor',
     example: ['ethereum', 'base'],
     type: [String],
   })
   @IsOptional()
   @IsArray()
-  chains?: string[];
+  networks?: string[];
 
   @ApiPropertyOptional({
     description: 'Whitelist of allowed assets',

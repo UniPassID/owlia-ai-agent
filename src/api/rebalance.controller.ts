@@ -42,13 +42,13 @@ export class RebalanceController {
   @Get('positions/:userId')
   @ApiOperation({ summary: 'Get user positions', description: 'Fetch user DeFi positions across chains using AI agent' })
   @ApiParam({ name: 'userId', description: 'User ID', example: '550e8400-e29b-41d4-a716-446655440000' })
-  @ApiQuery({ name: 'chains', required: false, description: 'Comma-separated chain list', example: 'ethereum,base' })
+  @ApiQuery({ name: 'networks', required: false, description: 'Comma-separated network list', example: 'ethereum,base' })
   @ApiResponse({ status: 200, description: 'Positions retrieved successfully' })
   @ApiResponse({ status: 404, description: 'User not found' })
   @ApiResponse({ status: 500, description: 'Internal server error' })
   async getPositions(
     @Param('userId') userId: string,
-    @Query('chains') chains?: string,
+    @Query('networks') networks?: string,
   ) {
     try {
       // First verify user exists
@@ -63,8 +63,8 @@ export class RebalanceController {
       // Then get policy (optional)
       const policy = await this.userPolicyRepo.findOne({ where: { userId } });
 
-      // Use chain from query param or user's chainId
-      const chainList = chains ? chains.split(',') : [user.chainId];
+      // Use network from query param or user's chainId
+      const chainList = networks ? networks.split(',') : [user.chainId];
 
       // Use agent to fetch positions via MCP
       const result = await this.agentService.runRebalanceAgent({

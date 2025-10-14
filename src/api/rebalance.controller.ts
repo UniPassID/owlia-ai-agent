@@ -10,6 +10,7 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { UserPolicy } from '../entities/user-policy.entity';
@@ -19,6 +20,7 @@ import { MonitorService } from '../monitor/monitor.service';
 import { UpdatePolicyDto, TriggerRebalanceDto, ExecuteJobDto } from './dto/rebalance.dto';
 import { AgentService } from '../agent/agent.service';
 
+@ApiTags('rebalance')
 @Controller('rebalance')
 export class RebalanceController {
   private readonly logger = new Logger(RebalanceController.name);
@@ -35,56 +37,15 @@ export class RebalanceController {
   ) {}
 
   /**
-   * Get user policy
-   */
-  @Get('policy/:userId')
-  async getPolicy(@Param('userId') userId: string) {
-    let policy = await this.userPolicyRepo.findOne({ where: { userId } });
-
-    if (!policy) {
-      // Create default policy
-      policy = this.userPolicyRepo.create({
-        userId,
-        chains: ['ethereum', 'base'],
-        assetWhitelist: [],
-        minAprLiftBps: 50,
-        minNetUsd: 10,
-        minHealthFactor: 1.5,
-        maxSlippageBps: 100,
-        maxGasUsd: 50,
-        maxPerTradeUsd: 10000,
-        autoEnabled: false,
-      });
-      await this.userPolicyRepo.save(policy);
-    }
-
-    return policy;
-  }
-
-  /**
-   * Update user policy
-   */
-  @Put('policy/:userId')
-  async updatePolicy(
-    @Param('userId') userId: string,
-    @Body() dto: UpdatePolicyDto,
-  ) {
-    let policy = await this.userPolicyRepo.findOne({ where: { userId } });
-
-    if (!policy) {
-      policy = this.userPolicyRepo.create({ userId });
-    }
-
-    Object.assign(policy, dto);
-    await this.userPolicyRepo.save(policy);
-
-    return { success: true, policy };
-  }
-
-  /**
    * Get user positions (via Agent)
    */
   @Get('positions/:userId')
+  @ApiOperation({ summary: 'Get user positions', description: 'Fetch user DeFi positions across chains using AI agent' })
+  @ApiParam({ name: 'userId', description: 'User ID', example: '550e8400-e29b-41d4-a716-446655440000' })
+  @ApiQuery({ name: 'chains', required: false, description: 'Comma-separated chain list', example: 'ethereum,base' })
+  @ApiResponse({ status: 200, description: 'Positions retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
   async getPositions(
     @Param('userId') userId: string,
     @Query('chains') chains?: string,
@@ -139,6 +100,11 @@ export class RebalanceController {
    * Preview rebalance (simulate without executing)
    */
   @Post('preview')
+  @ApiOperation({ summary: 'Preview rebalance', description: 'Simulate rebalancing without executing to see potential outcomes' })
+  @ApiBody({ type: TriggerRebalanceDto })
+  @ApiResponse({ status: 200, description: 'Preview generated successfully' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
   async previewRebalance(@Body() dto: TriggerRebalanceDto) {
     try {
       // First verify user exists
@@ -193,6 +159,11 @@ export class RebalanceController {
    * Trigger a rebalance job
    */
   @Post('rebalance')
+  @ApiOperation({ summary: 'Trigger rebalance', description: 'Trigger a new rebalancing job for a user' })
+  @ApiBody({ type: TriggerRebalanceDto })
+  @ApiResponse({ status: 200, description: 'Rebalance job triggered successfully' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
   async triggerRebalance(@Body() dto: TriggerRebalanceDto) {
     try {
       // First verify user exists
@@ -235,6 +206,10 @@ export class RebalanceController {
    * Get job status
    */
   @Get('jobs/:jobId')
+  @ApiOperation({ summary: 'Get job status', description: 'Retrieve the status and details of a rebalancing job' })
+  @ApiParam({ name: 'jobId', description: 'Job ID', example: '660e8400-e29b-41d4-a716-446655440001' })
+  @ApiResponse({ status: 200, description: 'Job retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Job not found' })
   async getJob(@Param('jobId') jobId: string) {
     const job = await this.jobRepo.findOne({ where: { id: jobId } });
 
@@ -252,6 +227,10 @@ export class RebalanceController {
    * Get user's job history
    */
   @Get('jobs/user/:userId')
+  @ApiOperation({ summary: 'Get user job history', description: 'Retrieve the list of rebalancing jobs for a user' })
+  @ApiParam({ name: 'userId', description: 'User ID', example: '550e8400-e29b-41d4-a716-446655440000' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Maximum number of jobs to return', example: '50' })
+  @ApiResponse({ status: 200, description: 'Jobs retrieved successfully' })
   async getUserJobs(
     @Param('userId') userId: string,
     @Query('limit') limit?: string,
@@ -269,6 +248,12 @@ export class RebalanceController {
    * Execute an approved job manually
    */
   @Post('execute')
+  @ApiOperation({ summary: 'Execute approved job', description: 'Manually execute an approved rebalancing job' })
+  @ApiBody({ type: ExecuteJobDto })
+  @ApiResponse({ status: 200, description: 'Job executed successfully' })
+  @ApiResponse({ status: 400, description: 'Bad request - job not approved or no plan found' })
+  @ApiResponse({ status: 404, description: 'Job not found' })
+  @ApiResponse({ status: 500, description: 'Internal server error' })
   async executeJob(@Body() dto: ExecuteJobDto) {
     try {
       const job = await this.jobRepo.findOne({ where: { id: dto.jobId } });

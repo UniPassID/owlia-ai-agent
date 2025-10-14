@@ -33,6 +33,7 @@
     "@nestjs/core": "^10.3.0",
     "@nestjs/platform-express": "^10.3.0",
     "@nestjs/schedule": "^4.0.0",
+    "@nestjs/swagger": "^7.4.2",
     "@nestjs/typeorm": "^10.0.1",
     "@openai/agents": "^0.1.0",
     "axios": "^1.6.5",
@@ -45,6 +46,7 @@
     "redis": "^4.6.12",
     "reflect-metadata": "^0.1.14",
     "rxjs": "^7.8.1",
+    "swagger-ui-express": "^5.0.1",
     "typeorm": "^0.3.19",
     "uuid": "^9.0.1",
     "zod": "^3.22.4"

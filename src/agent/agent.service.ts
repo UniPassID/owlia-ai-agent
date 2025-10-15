@@ -191,6 +191,44 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Directly execute an MCP tool and return parsed output.
+   * Useful for lightweight data fetches outside of full agent runs.
+   */
+  async callMcpTool<T = any>(toolName: string, input: Record<string, any>): Promise<T> {
+    if (!this.mcpClient) {
+      throw new Error('MCP client not initialized');
+    }
+
+    const toolExists = this.allTools.some(tool => tool.name === toolName);
+    if (!toolExists) {
+      throw new Error(`Tool ${toolName} is not available on MCP server`);
+    }
+
+    // await this.throttleRequest();
+    this.logger.log(`Calling MCP tool ${toolName} with input ${JSON.stringify(input)}`);
+
+    const result = await this.mcpClient.callTool({
+      name: toolName,
+      arguments: input,
+    });
+
+    const resultText = result.content?.[0]?.text;
+    if (!resultText) {
+      this.logger.warn(`Tool ${toolName} returned empty content`);
+      return result as unknown as T;
+    }
+
+    try {
+      const parsed = JSON.parse(resultText);
+      this.logger.log(`Tool ${toolName} returned keys: ${Object.keys(parsed).join(', ')}`);
+      return parsed as T;
+    } catch {
+      this.logger.warn(`Tool ${toolName} returned non-JSON content: ${resultText}`);
+      return resultText as unknown as T;
+    }
+  }
+
+  /**
    * Wrapper with automatic retry and checkpoint resume for entire agent run
    */
   private async runAnthropicAgentWithRetry(

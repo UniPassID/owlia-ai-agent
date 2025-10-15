@@ -120,6 +120,20 @@ export class RebalanceController {
       // Then get policy (optional)
       const policy = await this.userPolicyRepo.findOne({ where: { userId: user.id } });
 
+      // Run precheck to decide if we should trigger
+      const precheck = await this.monitorService.evaluateUserPrecheckByAddress(user.address);
+
+      if (!precheck.shouldTrigger) {
+        this.logger.log(
+          `Skipping manual rebalance trigger for user ${user.address}: precheck indicates no action needed (diff=${precheck.differenceBps.toFixed(2)} bps)`,
+        );
+        return {
+          success: true,
+          shouldTrigger: false,
+          message: 'Precheck indicates rebalancing is not beneficial at this time.',
+        };
+      }
+
       this.logger.log(`Trigger rebalance for user ${user.address}:`);
       this.logger.log(`  - User chainId from DB: ${user.chainId}`);
       this.logger.log(`  - Policy chains: ${policy?.chains ? JSON.stringify(policy.chains) : 'none (null/undefined)'}`);
@@ -133,6 +147,7 @@ export class RebalanceController {
 
       return {
         success: true,
+        shouldTrigger: true,
         jobId: job.id,
         status: job.status,
       };

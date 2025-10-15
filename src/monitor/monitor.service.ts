@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -6,10 +6,12 @@ import { UserPolicy } from '../entities/user-policy.entity';
 import { User } from '../entities/user.entity';
 import { RebalanceJob, JobStatus } from '../entities/rebalance-job.entity';
 import { RebalanceQueueService } from '../queue/rebalance-queue.service';
+import { RebalancePrecheckService } from './rebalance-precheck.service';
 
 @Injectable()
 export class MonitorService {
   private readonly logger = new Logger(MonitorService.name);
+  private monitoringInProgress = false;
 
   constructor(
     @InjectRepository(User)
@@ -19,33 +21,45 @@ export class MonitorService {
     @InjectRepository(RebalanceJob)
     private jobRepo: Repository<RebalanceJob>,
     private queueService: RebalanceQueueService,
-  ) {}
+    private precheckService: RebalancePrecheckService,
+  ) {
+
+    setTimeout(() => {
+      this.monitorAllUsers()
+    }, 30 * 1000)
+  }
 
   /**
    * Scheduled task to monitor all users with auto-enabled
    */
-  // @Cron(CronExpression.EVERY_5_MINUTES)
+  @Cron(CronExpression.EVERY_5_MINUTES)
   async monitorAllUsers() {
+    if (this.monitoringInProgress) {
+      this.logger.warn('Skipping scheduled monitoring - previous run still in progress');
+      return;
+    }
+
+    this.monitoringInProgress = true;
     this.logger.log('Starting scheduled monitoring...');
 
     try {
-      const enabledPolicies = await this.userPolicyRepo.find({
-        where: { autoEnabled: true },
-      });
+      const users = await this.userRepo.find();
+      this.logger.log(`Found ${users.length} users to monitor`);
 
-      this.logger.log(`Found ${enabledPolicies.length} users with auto-enabled`);
-
-      for (const policy of enabledPolicies) {
+      for (const user of users) {
         try {
-          await this.checkUserPositions(policy);
+          const policy = await this.userPolicyRepo.findOne({ where: { userId: user.id } });
+          await this.checkUserPositions(user, policy);
         } catch (error) {
           this.logger.error(
-            `Failed to monitor user ${policy.userId}: ${error.message}`,
+            `Failed to monitor user ${user.id}: ${error.message}`,
           );
         }
       }
     } catch (error) {
       this.logger.error(`Monitoring task failed: ${error.message}`);
+    } finally {
+      this.monitoringInProgress = false;
     }
   }
 
@@ -53,18 +67,37 @@ export class MonitorService {
    * Check a specific user's positions and trigger rebalance if needed
    * Agent will analyze positions and determine if rebalancing is beneficial
    */
-  async checkUserPositions(policy: UserPolicy): Promise<void> {
-    this.logger.log(`Checking positions for user ${policy.userId}`);
+  async checkUserPositions(user: User, policy: UserPolicy | null): Promise<void> {
+    this.logger.log(`Checking positions for user ${user.id}`);
 
-    // Get user info
-    const user = await this.userRepo.findOne({ where: { id: policy.userId } });
-    if (!user) {
-      this.logger.error(`User ${policy.userId} not found`);
-      return;
+    // Trigger rebalance check - let agent decide
+    try {
+      const precheck = await this.precheckService.evaluate(user, policy);
+      if (!precheck.shouldTrigger) {
+        this.logger.log(
+          `Skipped rebalance for user ${user.id}: portfolio APY ${precheck.portfolioApy.toFixed(2)}% ` +
+          `vs opportunity APY ${precheck.opportunityApy.toFixed(2)}% (diff ${precheck.differenceBps.toFixed(2)} bps)`,
+        );
+        return;
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Precheck failed for user ${user.id}: ${error.message}. Proceeding with trigger.`,
+      );
     }
 
     // Trigger rebalance check - let agent decide
     await this.triggerRebalance(user, policy, 'scheduled_monitor');
+  }
+
+  async evaluateUserPrecheckByAddress(address: string) {
+    const user = await this.userRepo.findOne({ where: { address } });
+    if (!user) {
+      throw new NotFoundException(`User with address ${address} not found`);
+    }
+
+    const policy = await this.userPolicyRepo.findOne({ where: { userId: user.id } });
+    return this.precheckService.evaluate(user, policy);
   }
 
   /**

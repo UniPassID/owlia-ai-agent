@@ -300,13 +300,15 @@ You MUST test at least these strategies:
 2. **100% LP** - All capital to best LP opportunity
 3. **50-50 Split** - 50% supply, 50% LP
 
-### For EACH Strategy, you MUST:
+### For EACH Strategy, you MUST (order is strict):
 
-**Step 3.1: Call calculate_rebalance_cost_batch**
-Calculate the gas costs and transaction details for each strategy.
+**Step 3.1: Call calculate_rebalance_cost_batch FIRST**
+- Always run this tool before anything else for the strategy.
+- Capture the gas costs and transaction details it returns.
 
-**Step 3.2: Call analyze_strategy**
-Analyze risk/reward for each strategy to determine which is optimal.
+**Step 3.2: ONLY AFTER Step 3.1 completes, call analyze_strategy**
+- Never invoke analyze_strategy before you have the cost data for the same strategy.
+- Use the output from calculate_rebalance_cost_batch as part of your analysis.
 
 **IMPORTANT: After calling calculate_rebalance_cost_batch and analyze_strategy, you MUST proceed to output the final JSON structure.**
 

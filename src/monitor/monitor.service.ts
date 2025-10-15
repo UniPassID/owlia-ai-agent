@@ -108,6 +108,27 @@ export class MonitorService {
     policy: UserPolicy | null,
     trigger: string,
   ): Promise<RebalanceJob> {
+    const latestJob = await this.jobRepo.findOne({
+      where: { userId: user.id },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (latestJob) {
+      const jobAgeMs = Date.now() - new Date(latestJob.createdAt).getTime();
+      const tenMinutesMs = 10 * 60 * 1000;
+
+      if (
+        latestJob.status === JobStatus.PENDING ||
+        latestJob.status === JobStatus.SIMULATING ||
+        jobAgeMs <= tenMinutesMs
+      ) {
+        this.logger.log(
+          `Skipping new job for user ${user.id}: recent job ${latestJob.id} in status ${latestJob.status} (age ${Math.round(jobAgeMs / 1000)}s)`,
+        );
+        return latestJob;
+      }
+    }
+
     // Create job record
     const job = this.jobRepo.create({
       userId: user.id,

@@ -62,6 +62,18 @@ export class RebalancePrecheckService {
     const portfolioInfo = this.calculatePortfolioMetrics(idleAssetsResults, activeInvestmentResults);
     this.logger.log(`Portfolio summary for user ${user.id}: ${JSON.stringify(portfolioInfo)}`);
 
+    if(portfolioInfo.totalValueUsd < 50) {
+      return {
+      shouldTrigger: false,
+      portfolioApy: portfolioInfo.apy,
+      opportunityApy: 0,
+      differenceBps: 0,
+      totalPortfolioValueUsd: portfolioInfo.totalValueUsd,
+      idleAssets: idleAssetsResults,
+      activeInvestments: activeInvestmentResults,
+      }; 
+    }
+
     try {
       const dexPools = await this.agentService.callMcpTool<Record<string, any>>('get_dex_pools', {
         chain_id: chainId,

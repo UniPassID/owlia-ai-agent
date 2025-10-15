@@ -160,7 +160,7 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
     }
 
     // Essential tools for rebalancing
-    if (trigger === 'trigger_rebalance' || trigger === 'manual_trigger' || trigger === 'manual_preview') {
+    if (trigger === 'trigger_rebalance' || trigger === 'manual_trigger' || trigger === 'manual_preview' || trigger === 'scheduled_monitor') {
       const allowedTools = [
         // Position data
         'get_idle_assets',
@@ -462,8 +462,13 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
     try {
       this.logger.log(`Starting agent run for job ${context.jobId}`);
 
+      if(!['manual_trigger', 'manual_preview', 'scheduled_monitor', 'fetch_positions'].includes(context.trigger)) {
+        this.logger.error(`unsupported trigger: ${context.trigger}`)
+        return
+      }
+
       // For manual_trigger or manual_preview, use local analysis prompt
-      if (context.trigger === 'manual_trigger' || context.trigger === 'manual_preview') {
+      if (context.trigger === 'manual_trigger' || context.trigger === 'manual_preview' || context.trigger === 'scheduled_monitor') {
         const chainId = context.userPolicy.chains[0] || 'base';
         const chainIdNum = this.getChainId(chainId);
 

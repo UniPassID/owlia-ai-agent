@@ -192,7 +192,7 @@ You MUST call get_lp_simulate_batch for all prepared scenarios with CORRECT stru
         "tickLower": -887272,
         "tickUpper": 887272
       },
-      "timeHorizon": 60
+      "timeHorizon": 30
     }
   ]
 }
@@ -341,6 +341,8 @@ Output a simple recommendation explaining why:
 }
 \`\`\`
 
+**MANDATORY**: Replace \`current APY X%\` with the actual numeric current APY value (e.g., \`current APY 4.75%\`)—do NOT leave placeholders or omit this data.
+
 ### If Rebalancing IS Beneficial:
 
 Extract complete position details from the selected strategy and output the full JSON structure with opportunities array (see section below).
@@ -394,7 +396,8 @@ After completing Steps 1-3 (account analysis, LP analysis, supply analysis, stra
       "poolAddress": "0x..." (if applicable),
       "tokenAddress": "0x..." (if applicable),
       "amount": number,
-      "value": number
+      "value": number,
+      "apy": number
     }
   ],
   "chainId": "${chainId}",
@@ -411,6 +414,8 @@ After completing Steps 1-3 (account analysis, LP analysis, supply analysis, stra
   - Do NOT convert to wei or smallest units
   - Example: 100.5 USDC should be stored as 100.5 (not "100500000")
 - All APY values must be in percentage (e.g., 5.23 for 5.23%)
+- Recommendation text must include the real current APY value; never leave placeholders like "current APY X%"
+- **Current Positions**: Must include apy and it must always be a numeric value (do NOT leave blank or null)
 
 **CRITICAL: Protocol Name Mapping**
 When outputting the JSON structure, use these EXACT protocol names (case-sensitive):

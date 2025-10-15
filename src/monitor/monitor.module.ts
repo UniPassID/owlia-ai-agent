@@ -4,14 +4,12 @@ import { MonitorService } from './monitor.service';
 import { User } from '../entities/user.entity';
 import { UserPolicy } from '../entities/user-policy.entity';
 import { RebalanceJob } from '../entities/rebalance-job.entity';
-import { AgentModule } from '../agent/agent.module';
-import { GuardModule } from '../guard/guard.module';
+import { QueueModule } from '../queue/queue.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, UserPolicy, RebalanceJob]),
-    AgentModule,
-    GuardModule,
+    QueueModule,
   ],
   providers: [MonitorService],
   exports: [MonitorService],

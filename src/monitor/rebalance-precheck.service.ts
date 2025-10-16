@@ -237,23 +237,15 @@ export class RebalancePrecheckService {
 
   private extractMaxApy(data: GetSupplyOpportunitiesResponse): number {
     let maxApy = 0;
-    this.walkStructure(data, (node) => {
-      if (node && typeof node === 'object' && !Array.isArray(node)) {
-        const apy = this.findNumberDirect(node, [
-          'apy',
-          'currentAPY',
-          'currentApy',
-          'apr',
-          'aprPercent',
-          'expectedAPY',
-          'netApy',
-          'supplyAPY',
-        ]);
-        if (apy !== null) {
-          maxApy = Math.max(maxApy, apy);
+
+    // Extract supplyAPY from after field in opportunities
+    if (data.opportunities && Array.isArray(data.opportunities)) {
+      for (const opportunity of data.opportunities) {
+        if (opportunity.after && typeof opportunity.after.supplyAPY === 'number') {
+          maxApy = Math.max(maxApy, opportunity.after.supplyAPY);
         }
       }
-    });
+    }
 
     return maxApy;
   }

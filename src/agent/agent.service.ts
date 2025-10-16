@@ -165,6 +165,7 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
         // Position data
         'get_idle_assets',
         'get_active_investments',
+        'get_account_yield_summary',
         // Market data
         'get_dex_pools',
         'get_binance_depth',

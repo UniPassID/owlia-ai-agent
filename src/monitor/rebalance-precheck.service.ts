@@ -3,12 +3,11 @@ import { AgentService } from '../agent/agent.service';
 import { User } from '../entities/user.entity';
 import { UserPolicy } from '../entities/user-policy.entity';
 import {
-  ActiveInvestmentsResponse,
+  AccountYieldSummaryResponse,
   ChainId,
   GetLpSimulateRequest,
   GetLpSimulateResponse,
   GetSupplyOpportunitiesResponse,
-  IdleAssetsResponse,
 } from '../agent/types/mcp.types';
 
 export interface RebalancePrecheckResult {
@@ -17,8 +16,7 @@ export interface RebalancePrecheckResult {
   opportunityApy: number;
   differenceBps: number;
   totalPortfolioValueUsd: number;
-  idleAssets: IdleAssetsResponse[];
-  activeInvestments: ActiveInvestmentsResponse[];
+  yieldSummary?: AccountYieldSummaryResponse;
 }
 
 @Injectable()
@@ -32,53 +30,53 @@ export class RebalancePrecheckService {
   async evaluate(user: User, policy: UserPolicy | null): Promise<RebalancePrecheckResult> {
     const chainId = this.normalizeChainId(user.chainId) as ChainId;
 
-    const idleAssetsResults: IdleAssetsResponse[] = [];
-    const activeInvestmentResults: ActiveInvestmentsResponse[] = [];
     const lpSimulationResults: GetLpSimulateResponse[] = [];
     const supplyOpportunitiesByChain: GetSupplyOpportunitiesResponse[] = [];
+    let yieldSummary: AccountYieldSummaryResponse | null = null;
 
     try {
-      const idle = await this.agentService.callMcpTool<IdleAssetsResponse>('get_idle_assets', {
+      yieldSummary = await this.agentService.callMcpTool<AccountYieldSummaryResponse>('get_account_yield_summary', {
         wallet_address: user.address,
         chain_id: chainId,
       });
-      this.logger.log(`get_idle_assets result: ${JSON.stringify(idle)}`)
-      idleAssetsResults.push(idle);
+      this.logger.log(`get_account_yield_summary result: ${JSON.stringify(yieldSummary)}`);
     } catch (error) {
-      this.logger.warn(`get_idle_assets failed for user ${user.id} on chain ${chainId}: ${error.message}`);
+      this.logger.warn(`get_account_yield_summary failed for user ${user.id} on chain ${chainId}: ${error.message}`);
     }
 
-    try {
-      const active = await this.agentService.callMcpTool<ActiveInvestmentsResponse>('get_active_investments', {
-        wallet_address: user.address,
-        chain_id: chainId,
-      });
-      this.logger.log(`get_active_investments result: ${JSON.stringify(active)}`)
-      activeInvestmentResults.push(active);
-    } catch (error) {
-      this.logger.warn(`get_active_investments failed for user ${user.id} on chain ${chainId}: ${error.message}`);
-    }
-
-    const portfolioInfo = this.calculatePortfolioMetrics(idleAssetsResults, activeInvestmentResults);
-    this.logger.log(`Portfolio summary for user ${user.id}: ${JSON.stringify(portfolioInfo)}`);
-
-    if(portfolioInfo.totalValueUsd < 50) {
+    if (!yieldSummary) {
       return {
-      shouldTrigger: false,
-      portfolioApy: portfolioInfo.apy,
-      opportunityApy: 0,
-      differenceBps: 0,
-      totalPortfolioValueUsd: portfolioInfo.totalValueUsd,
-      idleAssets: idleAssetsResults,
-      activeInvestments: activeInvestmentResults,
-      }; 
+        shouldTrigger: false,
+        portfolioApy: 0,
+        opportunityApy: 0,
+        differenceBps: 0,
+        totalPortfolioValueUsd: 0,
+      };
+    }
+
+    const totalAssetsUsd = this.parseNumber(yieldSummary.totalAssetsUsd) || 0;
+    const portfolioApy = this.parseNumber(yieldSummary.portfolioApy) || 0;
+
+    this.logger.log(
+      `Portfolio summary for user ${user.id}: totalAssetsUsd=${totalAssetsUsd}, portfolioApy=${portfolioApy}`,
+    );
+
+    if (totalAssetsUsd < 50) {
+      return {
+        shouldTrigger: false,
+        portfolioApy,
+        opportunityApy: 0,
+        differenceBps: 0,
+        totalPortfolioValueUsd: totalAssetsUsd,
+        yieldSummary,
+      };
     }
 
     try {
       const dexPools = await this.agentService.callMcpTool<Record<string, any>>('get_dex_pools', {
         chain_id: chainId,
       });
-      const lpRequests = this.buildLpSimulateRequests(chainId, dexPools, portfolioInfo.totalValueUsd);
+      const lpRequests = this.buildLpSimulateRequests(chainId, dexPools, totalAssetsUsd);
       if (lpRequests.length > 0) {
         this.logger.log(`Simulating ${lpRequests.length} LP pools for user ${user.id}`);
         const simulationsRaw = await this.agentService.callMcpTool<any>(
@@ -98,7 +96,7 @@ export class RebalancePrecheckService {
     try {
       const supplyOpps = await this.agentService.callMcpTool<GetSupplyOpportunitiesResponse>('get_supply_opportunities', {
         chain_id: chainId,
-        amount: portfolioInfo.totalValueUsd,
+        amount: totalAssetsUsd,
       });
       this.logger.log(`Supply opportunities for user ${user.id}: ${JSON.stringify(supplyOpps)}`);
       supplyOpportunitiesByChain.push(supplyOpps);
@@ -108,7 +106,7 @@ export class RebalancePrecheckService {
 
     const opportunityApy = this.calculateOpportunityApy(lpSimulationResults, supplyOpportunitiesByChain);
 
-    const difference = opportunityApy - portfolioInfo.apy;
+    const difference = opportunityApy - portfolioApy;
     const differenceBps = difference * 100;
     const minLiftBps = policy?.minAprLiftBps ?? 50;
 
@@ -117,19 +115,18 @@ export class RebalancePrecheckService {
       : true;
 
     this.logger.log(
-      `Precheck for user ${user.id}: portfolio APY=${portfolioInfo.apy.toFixed(2)}%, ` +
+      `Precheck for user ${user.id}: portfolio APY=${portfolioApy.toFixed(2)}%, ` +
       `opportunity APY=${opportunityApy.toFixed(2)}%, diff=${differenceBps.toFixed(2)} bps, ` +
-      `threshold=${minLiftBps} bps, total value=$${portfolioInfo.totalValueUsd.toFixed(2)} -> ${shouldTrigger ? 'trigger' : 'skip'}`,
+      `threshold=${minLiftBps} bps, total value=$${totalAssetsUsd.toFixed(2)} -> ${shouldTrigger ? 'trigger' : 'skip'}`,
     );
 
     return {
       shouldTrigger,
-      portfolioApy: portfolioInfo.apy,
+      portfolioApy,
       opportunityApy,
       differenceBps,
-      totalPortfolioValueUsd: portfolioInfo.totalValueUsd,
-      idleAssets: idleAssetsResults,
-      activeInvestments: activeInvestmentResults,
+      totalPortfolioValueUsd: totalAssetsUsd,
+      yieldSummary,
     };
   }
 
@@ -164,7 +161,6 @@ export class RebalancePrecheckService {
     }
 
     const requests: GetLpSimulateRequest[] = [];
-
     const notional = Math.max(amount, this.lpSimulationAmountUsd);
 
     for (const [poolAddress, poolData] of Object.entries(dexPools)) {
@@ -200,102 +196,6 @@ export class RebalancePrecheckService {
     return requests;
   }
 
-  private calculatePortfolioMetrics(
-    idleAssets: IdleAssetsResponse[],
-    activeInvestments: ActiveInvestmentsResponse[],
-  ): { apy: number; totalValueUsd: number } {
-    const idleValue = idleAssets.reduce(
-      (sum, response) => sum + this.extractIdleAssetsValue(response),
-      0,
-    );
-
-    let totalActiveValue = 0;
-    let weightedActiveYield = 0;
-    const fallbackPositions: Array<{ value: number; apy: number }> = [];
-
-    for (const investment of activeInvestments) {
-      const { valueUsd, weightedApy } = this.extractActiveInvestmentMetrics(investment);
-      if (valueUsd > 0) {
-        totalActiveValue += valueUsd;
-        weightedActiveYield += valueUsd * weightedApy;
-      } else {
-        fallbackPositions.push(...this.extractPositions(investment));
-      }
-    }
-
-    if (totalActiveValue <= 0) {
-      if (fallbackPositions.length === 0) {
-        fallbackPositions.push(...this.extractPositions(activeInvestments));
-      }
-      const fallbackActiveValue = fallbackPositions.reduce((sum, pos) => sum + pos.value, 0);
-      const fallbackYield = fallbackPositions.reduce((sum, pos) => sum + pos.value * pos.apy, 0);
-      if (fallbackActiveValue > 0) {
-        totalActiveValue = fallbackActiveValue;
-        weightedActiveYield = fallbackYield;
-      }
-    }
-
-    const totalValue = idleValue + totalActiveValue;
-    if (totalValue <= 0) {
-      return { apy: 0, totalValueUsd: 0 };
-    }
-
-    const portfolioYield = weightedActiveYield; // idle capital assumed 0% APY
-    return {
-      apy: portfolioYield / totalValue,
-      totalValueUsd: totalValue,
-    };
-  }
-
-  private extractIdleAssetsValue(response: IdleAssetsResponse | null | undefined): number {
-    if (!response) {
-      return 0;
-    }
-
-    const total = this.parseNumber(response.idleAssetsUsd);
-    if (total !== null) {
-      return total;
-    }
-
-    if (Array.isArray(response.assets)) {
-      return response.assets.reduce((sum, asset) => {
-        const value = this.parseNumber(asset?.balanceUsd);
-        return sum + (value !== null ? value : 0);
-      }, 0);
-    }
-
-    return this.aggregateIdleValue(response);
-  }
-
-  private extractActiveInvestmentMetrics(
-    response: ActiveInvestmentsResponse | null | undefined,
-  ): { valueUsd: number; weightedApy: number } {
-    if (!response) {
-      return { valueUsd: 0, weightedApy: 0 };
-    }
-
-    const value = this.parseNumber(response.activeInvestmentsUsd) || 0;
-    const weightedApy = this.parseNumber(response.performanceSummary?.weightedApy) || 0;
-
-    if (value > 0 && weightedApy > 0) {
-      return { valueUsd: value, weightedApy };
-    }
-
-    // Fall back to aggregating detailed positions if summary data is missing
-    const positions = this.extractPositions(response);
-    const totalValue = positions.reduce((sum, pos) => sum + pos.value, 0);
-    const totalYield = positions.reduce((sum, pos) => sum + pos.value * pos.apy, 0);
-
-    if (totalValue > 0 && totalYield > 0) {
-      return {
-        valueUsd: totalValue,
-        weightedApy: totalYield / totalValue,
-      };
-    }
-
-    return { valueUsd: value, weightedApy };
-  }
-
   private calculateOpportunityApy(
     lpSimulations: GetLpSimulateResponse[],
     supplyData: GetSupplyOpportunitiesResponse[],
@@ -309,8 +209,6 @@ export class RebalancePrecheckService {
       (currentMax, data) => Math.max(currentMax, this.extractMaxApy(data)),
       0,
     );
-
-    this.logger.log(`maxLpApy: ${maxLpApy}, maxSupplyApy: ${maxSupplyApy}`)
 
     return Math.max(maxLpApy, maxSupplyApy);
   }
@@ -337,6 +235,29 @@ export class RebalancePrecheckService {
     return 0;
   }
 
+  private extractMaxApy(data: GetSupplyOpportunitiesResponse): number {
+    let maxApy = 0;
+    this.walkStructure(data, (node) => {
+      if (node && typeof node === 'object' && !Array.isArray(node)) {
+        const apy = this.findNumberDirect(node, [
+          'apy',
+          'currentAPY',
+          'currentApy',
+          'apr',
+          'aprPercent',
+          'expectedAPY',
+          'netApy',
+          'supplyAPY',
+        ]);
+        if (apy !== null) {
+          maxApy = Math.max(maxApy, apy);
+        }
+      }
+    });
+
+    return maxApy;
+  }
+
   private normalizeDictionaryResponse<T>(data: any): T[] {
     if (!data) {
       return [];
@@ -348,6 +269,7 @@ export class RebalancePrecheckService {
 
     if (typeof data === 'object') {
       const entries = Object.entries(data).filter(([key]) => key !== '_dataSource');
+
       if (entries.length === 0) {
         return [];
       }
@@ -355,6 +277,7 @@ export class RebalancePrecheckService {
       entries.sort((a, b) => {
         const aNum = Number(a[0]);
         const bNum = Number(b[0]);
+
         const aIsNum = !Number.isNaN(aNum);
         const bIsNum = !Number.isNaN(bNum);
 
@@ -376,104 +299,6 @@ export class RebalancePrecheckService {
     return [];
   }
 
-  private aggregateIdleValue(idleAssets: IdleAssetsResponse): number {
-    if (!idleAssets) {
-      return 0;
-    }
-
-    const total = this.findNumberDeep(idleAssets, [
-      'totalValueUsd',
-      'total_value_usd',
-      'totalValue',
-      'portfolioValueUsd',
-      'netValueUsd',
-      'idleAssetsUsd',
-    ]);
-
-    if (total !== null) {
-      return total;
-    }
-
-    let sum = 0;
-    this.walkStructure(idleAssets, (node) => {
-      if (Array.isArray(node)) {
-        for (const item of node) {
-          const value = this.findNumberDirect(item, ['valueUsd', 'value_usd', 'usdValue', 'value']);
-          if (value !== null) {
-            sum += value;
-          }
-        }
-      }
-    });
-
-    return sum;
-  }
-
-  private extractPositions(data: any): Array<{ value: number; apy: number }> {
-    const positions: Array<{ value: number; apy: number }> = [];
-    this.walkStructure(data, (node) => {
-      if (node && typeof node === 'object' && !Array.isArray(node)) {
-        const value = this.findNumberDirect(node, [
-          'valueUsd',
-          'value_usd',
-          'usdValue',
-          'value',
-          'netValueUsd',
-          'principalUsd',
-          'balanceUsd',
-          'balance_usd',
-          'supplyAmountUsd',
-          'totalNetWorthUsd',
-          'totalSupplyUsd',
-          'depositedAmountUsd',
-        ]);
-        const apy = this.findNumberDirect(node, [
-          'apy',
-          'currentAPY',
-          'currentApy',
-          'apr',
-          'aprPercent',
-          'expectedAPY',
-          'netApy',
-          'weightedApy',
-          'avgApy',
-          'positionApy',
-          'supplyApy',
-          'totalApy',
-        ]);
-
-        if (value !== null && value > 0 && apy !== null) {
-          positions.push({ value, apy });
-        }
-      }
-    });
-    return positions;
-  }
-
-  private extractMaxApy(data: GetSupplyOpportunitiesResponse): number {
-    const maxApy = data.opportunities.reduce((prev, current) => {
-      return Math.max(prev, current.after.supplyAPY)
-    }, 0)
-
-    return maxApy;
-  }
-
-  private findNumberDeep(source: any, keys: string[]): number | null {
-    let result: number | null = null;
-    this.walkStructure(source, (node) => {
-      if (result !== null) {
-        return;
-      }
-      if (node && typeof node === 'object' && !Array.isArray(node)) {
-        const number = this.findNumberDirect(node, keys);
-        if (number !== null) {
-          result = number;
-        }
-      }
-    });
-    return result;
-  }
-
   private findNumberDirect(source: any, keys: string[]): number | null {
     if (!source || typeof source !== 'object') {
       return null;
@@ -487,6 +312,26 @@ export class RebalancePrecheckService {
         }
       }
     }
+    return null;
+  }
+
+  private parseNumber(value: any): number | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === 'string') {
+      const sanitized = value.replace(/[%,$]/g, '').trim();
+      const parsed = Number(sanitized);
+      if (!Number.isNaN(parsed)) {
+        return parsed;
+      }
+    }
+
     return null;
   }
 
@@ -519,25 +364,5 @@ export class RebalancePrecheckService {
         }
       }
     }
-  }
-
-  private parseNumber(value: any): number | null {
-    if (value === null || value === undefined) {
-      return null;
-    }
-
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return value;
-    }
-
-    if (typeof value === 'string') {
-      const sanitized = value.replace(/[%,$]/g, '').trim();
-      const parsed = Number(sanitized);
-      if (!Number.isNaN(parsed)) {
-        return parsed;
-      }
-    }
-
-    return null;
   }
 }

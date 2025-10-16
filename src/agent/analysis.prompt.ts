@@ -40,20 +40,15 @@ export function buildAnalysisPrompt(params: AnalysisPromptParams): string {
 ### ✅ Step 1: Account Analysis (Silent Execution)
 
 ## Required Analysis
-1. Call get_idle_assets (with chain_id=${chainId}) for address ${address} → Get idle funds and detailed token breakdown
-2. Call get_active_investments (with chain_id=${chainId}) for address ${address} → Get LP, supply, and borrow positions
-3. Calculate metrics:
-   - Total Assets = idle + active investments
-   - Deployable Capital = Total Assets
-   - Weighted APY = sum(position_value * position_apy) / total_invested
-   - Deployment Rate = invested / total_assets
-   - Portfolio APY = weightedAPY * deploymentRate (accounts for idle funds)
+1. Call get_account_yield_summary (with chain_id=${chainId}) for address ${address} → Get idle funds and detailed token breakdown and all positions including LP, supply, and borrow positions
+2. Extract metrics:
+   - Total Assets 
+   - Portfolio APY
 
 ## Execution Instructions
 - **SILENT EXECUTION**: Do NOT display any output for this step
 - Remember the following data in memory for later steps:
-  - Total Assets (idle + active investments)
-  - Deployable Capital
+  - Total Assets 
   - Current Portfolio APY
 - Continue immediately to Step 2 without any output
 
@@ -440,9 +435,8 @@ This JSON output is CRITICAL for execution - without complete contract addresses
 Before you consider the analysis complete, verify you have executed ALL of these steps:
 
 ### Step 1: Account Analysis ✅
-- [ ] Called get_idle_assets
-- [ ] Called get_active_investments
-- [ ] Calculated total deployable capital
+- [ ] Called get_account_yield_summary
+- [ ] Extract total deployable capital
 
 ### Step 2.1: LP Opportunities ✅
 - [ ] Called get_dex_pools

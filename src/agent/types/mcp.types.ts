@@ -288,3 +288,11 @@ export interface GetLpSimulateResponse {
     
   };
 }
+
+
+export interface AccountYieldSummaryResponse {
+  idleAssets: IdleAssetsResponse;
+  activeInvestments: ActiveInvestmentsResponse;
+  totalAssetsUsd: string;
+  portfolioApy: string;
+}

@@ -9,6 +9,7 @@ import { UserPolicy } from '../entities/user-policy.entity';
 import { AgentService } from '../agent/agent.service';
 import { GuardService } from '../guard/guard.service';
 import { convertPlanToSteps } from '../utils/plan-to-steps.util';
+import { RebalancePlan } from '../agent/agent.types';
 
 export interface RebalanceJobData {
   jobId: string;
@@ -253,22 +254,37 @@ export class RebalanceQueueService implements OnModuleInit, OnModuleDestroy {
         throw new Error(agentResult.error || 'Agent failed');
       }
 
-      const simulation = agentResult.data?.simulation;
-      const plan = agentResult.data?.plan;
+      const data = agentResult.data;
+      if (!data || !('simulation' in data) || !('plan' in data)) {
+        this.logger.warn(`Agent result for job ${job.id} is not a rebalance analysis payload; skipping execution`);
+        job.status = JobStatus.REJECTED;
+        job.errorMessage = 'Agent result missing rebalance analysis data';
+        await this.jobRepo.save(job);
+        return;
+      }
+
+      const simulation = data.simulation;
+      const plan = data.plan as RebalancePlan | null;
 
       // Check if rebalancing is not needed
-      if (agentResult.data?.shouldRebalance === false) {
+      if (data.shouldRebalance === false) {
         job.status = JobStatus.COMPLETED;
 
         // Generate steps for "no rebalancing needed" scenario
-        const currentPositions = agentResult.data?.currentStrategy || agentResult.data?.currentPositions || [];
-        const reason = agentResult.data?.reasoning || agentResult.data?.analysis?.reason || 'Current allocation is already optimal';
+        const currentPositions = data.currentStrategy || plan?.currentPositions || [];
+        const reason = data.reasoning || data.analysis?.reason || 'Current allocation is already optimal';
 
         const noRebalanceResult = convertPlanToSteps(
           {
+            description: 'Current allocation optimal',
+            recommendation: reason,
+            hasOpportunity: false,
+            shouldRebalance: false,
             currentPositions: Array.isArray(currentPositions) ? currentPositions : [currentPositions],
             opportunities: [],
-            recommendation: reason,
+            chainId: user.chainId || (policy?.chains?.[0] ?? '8453'),
+            userAddress: user.address,
+            costEstimates: [],
           },
           null,
           JobStatus.COMPLETED

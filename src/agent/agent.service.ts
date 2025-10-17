@@ -6,11 +6,11 @@ import Anthropic from '@anthropic-ai/sdk';
 import { AgentContext, AgentResult } from './agent.types';
 import { SYSTEM_PROMPT, buildUserContext } from './agent.prompt';
 import {
-  buildStep2Prompt,
-  buildStep3Prompt,
-  Step1SummaryData,
-  Step2SummaryData,
-  LpPlanSuggestion,
+  buildLPRangeRecommendationPrompt,
+  buildBestOpportunityPrompt,
+  PortfolioAnalysisSummary,
+  MarketOpportunitiesSummary,
+  PoolRebalanceSuggestion,
 } from './analysis.prompt';
 import {
   AccountYieldSummaryResponse,
@@ -41,7 +41,7 @@ const TOKEN_ADDRESS_BY_CHAIN: Record<string, Record<string, string>> = {
   },
 };
 
-interface ParsedStep1Summary extends Step1SummaryData {
+interface ParsedStep1Summary extends PortfolioAnalysisSummary {
   totalAssetsUsd: number;
   portfolioApy: number;
   yieldSummary: AccountYieldSummaryResponse;
@@ -74,12 +74,12 @@ interface ParsedSupplyOpportunity {
   currentAPY: number;
 }
 
-interface ParsedStep2Summary extends Step2SummaryData {
+interface ParsedStep2Summary extends MarketOpportunitiesSummary {
   bestLpOpportunity: ParsedLpOpportunity | null;
   lpCandidates: ParsedLpOpportunity[];
   bestSupplyOpportunity: ParsedSupplyOpportunity | null;
   supplyOpportunities: ParsedSupplyOpportunity[];
-  lpPlanSuggestions: LpPlanSuggestion[];
+  lpPlanSuggestions: PoolRebalanceSuggestion[];
 }
 
 interface LpPoolContextEntry {
@@ -103,7 +103,7 @@ interface LpPoolContextEntry {
 }
 
 interface LpSimulationMeta {
-  suggestion: LpPlanSuggestion;
+  suggestion: PoolRebalanceSuggestion;
   scenario: {
     label: string;
     tickLower: number;
@@ -199,17 +199,6 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
       await this.mcpClient.close();
       this.logger.log('MCP Client connection closed');
     }
-  }
-
-  /**
-   * Convert MCP tools to Anthropic tool format
-   */
-  private convertMcpToolsToAnthropic(): any[] {
-    return this.allTools.map(tool => ({
-      name: tool.name,
-      description: tool.description || '',
-      input_schema: tool.inputSchema || { type: 'object', properties: {}, required: [] },
-    }));
   }
 
   private parseJsonOutput<T>(output: string, contextLabel: string): T {
@@ -344,7 +333,7 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
   }
 
   private buildLpSimulationRequests(
-    suggestions: LpPlanSuggestion[],
+    suggestions: PoolRebalanceSuggestion[],
     chainId: ChainId,
     amountUsd: number,
     poolContexts: LpPoolContextEntry[],
@@ -759,13 +748,6 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
-   * Convert chains array to chain_ids string
-   */
-  private convertChainsToIds(chains: string[]): string {
-    return chains.map(chain => this.getChainId(chain)).join(',');
-  }
-
-  /**
    * Filter tools based on context to reduce token usage
    */
   private filterToolsForContext(trigger: string): any[] {
@@ -1145,17 +1127,17 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
 
         this.logger.log(`step2 lpContext: ${JSON.stringify(lpContext, null, 2)}`)
 
-        const step2Prompt = buildStep2Prompt({
+        const step2Prompt = buildLPRangeRecommendationPrompt({
           address: context.userAddress,
           chainId: chainIdNum,
-          step1Summary,
-          lpContext,
+          portfolioSummary: step1Summary,
+          liquidityPoolContext: lpContext,
         });
         this.logger.log(`Step 2 prompt length: ${step2Prompt.length} characters`);
         const step2Result = await this.runAnthropicAgentWithRetry(step2Prompt, false, context.trigger);
         combinedToolResults.push(...(step2Result.toolResults || []));
 
-        const lpPlanResponse = this.parseJsonOutput<{ lpPlanSuggestions: LpPlanSuggestion[] }>(
+        const lpPlanResponse = this.parseJsonOutput<{ lpPlanSuggestions: PoolRebalanceSuggestion[] }>(
           step2Result.finalOutput,
           'Step 2 LP plan',
         );
@@ -1211,11 +1193,11 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
         };
 
         // Step 3: Strategy evaluation
-        const step3Prompt = buildStep3Prompt({
+        const step3Prompt = buildBestOpportunityPrompt({
           address: context.userAddress,
           chainId: chainIdNum,
-          step1Summary,
-          step2Summary,
+          portfolioSummary: step1Summary,
+          marketOpportunitiesSummary: step2Summary,
         });
         this.logger.log(`Step 3 prompt length: ${step3Prompt.length} characters`);
         const step3Result = await this.runAnthropicAgentWithRetry(step3Prompt, false, context.trigger);

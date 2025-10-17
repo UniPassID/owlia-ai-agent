@@ -108,16 +108,22 @@ export class RebalancePrecheckService {
 
     const difference = opportunityApy - portfolioApy;
     const differenceBps = difference * 100;
-    const minLiftBps = policy?.minAprLiftBps ?? 50;
+
+    // New APY must satisfy BOTH conditions:
+    // a) At least 10% higher than current portfolio APY
+    // b) At least 2 percentage points higher in absolute terms
+    const relativeIncrease = portfolioApy > 0 ? (opportunityApy / portfolioApy) : Infinity;
+    const absoluteIncrease = opportunityApy - portfolioApy;
 
     const shouldTrigger = Number.isFinite(differenceBps)
-      ? differenceBps >= minLiftBps
+      ? (relativeIncrease >= 1.1 && absoluteIncrease >= 2)
       : true;
 
     this.logger.log(
       `Precheck for user ${user.id}: portfolio APY=${portfolioApy.toFixed(2)}%, ` +
       `opportunity APY=${opportunityApy.toFixed(2)}%, diff=${differenceBps.toFixed(2)} bps, ` +
-      `threshold=${minLiftBps} bps, total value=$${totalAssetsUsd.toFixed(2)} -> ${shouldTrigger ? 'trigger' : 'skip'}`,
+      `relative=${relativeIncrease.toFixed(2)}x, absolute=${absoluteIncrease.toFixed(2)}pp, ` +
+      `total value=$${totalAssetsUsd.toFixed(2)} -> ${shouldTrigger ? 'trigger' : 'skip'}`,
     );
 
     return {

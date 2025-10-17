@@ -62,58 +62,66 @@ export async function verifyTransactionOnChain(
     };
   }
 
-  try {
-    // Get transaction receipt from RPC
-    const response = await axios.post(
-      rpcUrl,
-      {
-        jsonrpc: '2.0',
-        method: 'eth_getTransactionReceipt',
-        params: [txHash],
-        id: 1,
-      },
-      {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 10000,
-      },
-    );
+  const MAX_RETRIES = 10;
+  const POLL_INTERVAL_MS = 1_000;
 
-    if (response.data.error) {
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const response = await axios.post(
+        rpcUrl,
+        {
+          jsonrpc: '2.0',
+          method: 'eth_getTransactionReceipt',
+          params: [txHash],
+          id: 1,
+        },
+        {
+          headers: { 'Content-Type': 'application/json' },
+          timeout: 10000,
+        },
+      );
+
+      if (response.data.error) {
+        return {
+          success: false,
+          confirmed: false,
+          error: response.data.error.message,
+        };
+      }
+
+      const receipt = response.data.result;
+
+      if (receipt) {
+        // Check transaction status (0x1 = success, 0x0 = failed)
+        const txSuccess = receipt.status === '0x1';
+        const blockNumber = receipt.blockNumber
+          ? parseInt(receipt.blockNumber, 16)
+          : undefined;
+
+        return {
+          success: true,
+          confirmed: txSuccess,
+          status: receipt.status,
+          blockNumber,
+        };
+      }
+
+      // No receipt yet, wait 1 second before retry (unless it's the last attempt)
+      if (attempt < MAX_RETRIES - 1) {
+        await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+      }
+    } catch (error) {
       return {
         success: false,
         confirmed: false,
-        error: response.data.error.message,
+        error: `RPC request failed: ${error.message}`,
       };
     }
-
-    const receipt = response.data.result;
-
-    if (!receipt) {
-      // Transaction not found or not yet mined
-      return {
-        success: false,
-        confirmed: false,
-        error: 'Transaction not found or pending',
-      };
-    }
-
-    // Check transaction status (0x1 = success, 0x0 = failed)
-    const txSuccess = receipt.status === '0x1';
-    const blockNumber = receipt.blockNumber
-      ? parseInt(receipt.blockNumber, 16)
-      : undefined;
-
-    return {
-      success: true,
-      confirmed: txSuccess,
-      status: receipt.status,
-      blockNumber,
-    };
-  } catch (error) {
-    return {
-      success: false,
-      confirmed: false,
-      error: `RPC request failed: ${error.message}`,
-    };
   }
+
+  return {
+    success: false,
+    confirmed: false,
+    error: `Transaction not confirmed after ${MAX_RETRIES} attempts`,
+  };
 }

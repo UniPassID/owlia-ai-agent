@@ -15,7 +15,7 @@ export interface AgentContext {
   trigger: string;
 }
 
-import { Step1SummaryData, Step2SummaryData } from './analysis.prompt';
+import { PortfolioAnalysisSummary, MarketOpportunitiesSummary } from './analysis.prompt';
 
 export interface AgentResult {
   success: boolean;
@@ -91,8 +91,8 @@ export interface RebalanceAnalysisData {
   currentStrategy?: any;
   shouldRebalance?: boolean;
   toolResults: any[];
-  step1Summary?: Step1SummaryData;
-  step2Summary?: Step2SummaryData;
+  step1Summary?: PortfolioAnalysisSummary;
+  step2Summary?: MarketOpportunitiesSummary;
 }
 
 

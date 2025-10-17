@@ -120,7 +120,7 @@ export function convertPlanToSteps(
       status: executeStatus,
       metadata: {
         reason: roi > 0
-          ? `Targeting **${weightedAPY.toFixed(2)}% APY**, achieving **${roi.toFixed(0)}× ROI** with only **$${gasEstimate.toFixed(5)}** in cost`
+          ? `Targeting **${weightedAPY.toFixed(2)}% APY**, achieving **${roi.toFixed(2)}× ROI** with only **$${gasEstimate.toFixed(5)}** in cost`
           : `Targeting **${weightedAPY.toFixed(2)}% APY**`,
       },
     });

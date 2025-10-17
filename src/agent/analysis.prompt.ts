@@ -188,7 +188,7 @@ Total deployable capital equals the totalAssetsUsd value above.
    - The new APY must satisfy BOTH conditions:
      a) At least 10% higher than current portfolio APY (e.g., if current is 5%, new must be >= 5.5%)
      b) At least 2 percentage points higher in absolute terms (e.g., if current is 5%, new must be >= 7%)
-   - Break-even time must be <= 1 days to proceed.
+   - Break-even time must be <= 4 hours to proceed.
    - Only recommend rebalancing if the APY gain significantly outweighs the gas costs and complexity.
 4. Assemble the final execution plan using current positions from Step 1's yieldSummary.
 

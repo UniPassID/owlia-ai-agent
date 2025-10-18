@@ -1231,6 +1231,7 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
           }
         }
 
+        // Parse structured output from agent
         let structuredData: any = null;
         try {
           structuredData = this.parseJsonOutput<any>(finalOutput, 'Step 3 final output');
@@ -1238,29 +1239,30 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
           this.logger.log('Successfully parsed structured JSON output from Step 3');
           this.logger.log(`Structured data keys: ${Object.keys(structuredData).join(', ')}`);
 
+          // Handle "no rebalance" recommendation
           if (structuredData.shouldRebalance === false) {
-            this.logger.log('Agent recommends NOT rebalancing - insufficient improvement');
-            const data: RebalanceAnalysisData = {
-              simulation: null,
-              plan: null,
-              reasoning: structuredData.recommendation || finalOutput,
-              analysis: structuredData.analysis || {},
-              currentStrategy: structuredData.currentStrategy || {},
-              shouldRebalance: false,
-              toolResults: finalToolResults,
-              step1Summary,
-              step2Summary,
-            };
-
+            this.logger.log('Agent recommends NOT rebalancing');
             return {
               success: true,
               action: 'analyzed',
-              data,
+              data: {
+                simulation: null,
+                plan: null,
+                summary: structuredData.summary,
+                reasoning: structuredData.recommendation || finalOutput,
+                analysis: structuredData.analysis || {},
+                shouldRebalance: false,
+                toolResults: finalToolResults,
+                step1Summary,
+                step2Summary,
+              },
             };
           }
 
-          if (structuredData.opportunities && structuredData.opportunities.length > 0) {
+          // Build rebalance plan from structured output
+          if (structuredData.opportunities?.length > 0) {
             this.logger.log(`Found ${structuredData.opportunities.length} opportunities in structured output`);
+
             const normalizedOpportunities = structuredData.opportunities.map(opp => ({
               ...opp,
               protocol: opp.protocol ? this.normalizeProtocolName(opp.protocol) : opp.protocol,
@@ -1269,6 +1271,7 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
             plan = this.normalizePlan(
               {
                 description: 'Rebalance plan from structured analysis',
+                summary: structuredData.summary,
                 recommendation: structuredData.recommendation || finalOutput,
                 hasOpportunity: true,
                 shouldRebalance: true,
@@ -1285,72 +1288,14 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
           this.logger.warn(`Could not parse structured JSON from Step 3 output: ${parseError instanceof Error ? parseError.message : String(parseError)}`);
         }
 
-        const hasPositionData = finalToolResults.some(
-          r => r.tool === 'get_account_yield_summary'
-        );
-        const hasOpportunities = finalToolResults.some(
-          r => r.tool === 'get_supply_opportunities' || r.tool === 'get_lp_simulate_batch'
-        );
-
-        if (!plan) {
-          const opportunitiesResult = finalToolResults.find(r => r.tool === 'get_supply_opportunities');
-          const lpSimulateResult = finalToolResults.find(r => r.tool === 'get_lp_simulate_batch');
-
-          let opportunitiesData = [] as any[];
-
-          if (opportunitiesResult?.output) {
-            const supplyOps = opportunitiesResult.output.opportunities || opportunitiesResult.output;
-            if (Array.isArray(supplyOps)) {
-              opportunitiesData = supplyOps;
-            }
-          }
-
-          if (lpSimulateResult?.output) {
-            const lpOps = lpSimulateResult.output.results || lpSimulateResult.output;
-            if (Array.isArray(lpOps)) {
-              opportunitiesData = [...opportunitiesData, ...lpOps];
-            }
-          }
-
-          if (opportunitiesData.length > 0) {
-            plan = this.normalizePlan(
-              {
-                description: 'Rebalance plan generated from analysis',
-                recommendation: finalOutput,
-                hasOpportunity: opportunitiesData.length > 0,
-                opportunities: opportunitiesData,
-                chainId: chainIdNum,
-                userAddress: context.userAddress,
-              },
-              { chainId: chainIdNum, userAddress: context.userAddress },
-              costEstimates,
-            );
-          }
-        }
-
-        if (plan && costEstimates.length && (!plan.costEstimates || plan.costEstimates.length === 0)) {
-          plan = {
-            ...plan,
-            costEstimates,
-          };
-        }
-
-        if (!simulation && hasOpportunities) {
-          const opportunitiesResult = finalToolResults.find(r => r.tool === 'get_supply_opportunities');
-          if (opportunitiesResult && opportunitiesResult.output) {
-            simulation = {
-              opportunities: opportunitiesResult.output.opportunities || opportunitiesResult.output,
-              hasOpportunity: true,
-            };
-          }
-        }
-
-        this.logger.log(`Final data - has simulation: ${!!simulation}, has plan: ${!!plan}`);
+        // Return final result
+        this.logger.log(`Final result - has plan: ${!!plan}`);
 
         const data: RebalanceAnalysisData = {
-          simulation,
+          simulation: null,
           plan: plan ?? null,
-          reasoning: finalOutput,
+          summary: structuredData?.summary,
+          reasoning: structuredData?.recommendation || finalOutput,
           toolResults: finalToolResults,
           step1Summary,
           step2Summary,
@@ -1358,7 +1303,7 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
 
         return {
           success: true,
-          action: (simulation || plan || (hasPositionData && hasOpportunities)) ? 'simulated' : 'analyzed',
+          action: plan ? 'simulated' : 'analyzed',
           data,
         };
       }

@@ -206,6 +206,7 @@ Total deployable capital equals the totalAssetsUsd value above.
 Respond only with the final JSON block required by the executor:
 \`\`\`json
 {
+  "summary": "string (brief overview of the entire rebalancing proposal in 1 sentence)",
   "recommendation": "string",
   "shouldRebalance": true | false,
   "opportunities": [
@@ -255,6 +256,11 @@ Rules:
 - Use the positions contained in Step 1's yieldSummary to populate currentPositions and express amounts in human-readable decimals.
 - All numeric fields must be numbers, not strings.
 - Protocol names must match the allowed casing exactly.
+- The summary field should provide a one-sentence overview of the entire proposal:
+  * If shouldRebalance is true: "Rebalance to [strategy] for [X]% APY ([Y]pp gain, [Z]h break-even)."
+  * If shouldRebalance is false: "No rebalancing needed. [brief reason]"
+  * Example (true): "Rebalance to AAVE USDC supply for 7.9% APY (+3.2pp gain, 2h break-even)."
+  * Example (false): "No rebalancing needed. Best opportunity below 2pp minimum threshold."
 - The recommendation string should be user-friendly and informative:
   * Use a conversational, helpful tone (avoid cold technical language)
   * If shouldRebalance is true:

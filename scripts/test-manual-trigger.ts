@@ -98,20 +98,21 @@ async function main() {
     }
 
     if (result.data) {
+
+      if(result.data.summary ) {
+      console.log('\n' + '='.repeat(80));
+      console.log('SUMMARY:');
+      console.log('='.repeat(80));
+        console.log(result.data.summary)
+      }
+
       console.log('\n' + '='.repeat(80));
       console.log('RECOMMENDATION:');
       console.log('='.repeat(80));
-
       if (result.data.reasoning) {
         console.log(result.data.reasoning);
       }
 
-      if(result.data.analysis && result.data.analysis.reason) {
-      console.log('\n' + '='.repeat(80));
-      console.log('RECOMMENDATION:');
-      console.log('='.repeat(80));
-        console.log(result.data.analysis.reason)
-      }
 
       if (result.data.plan) {
         console.log('\n📋 Rebalance Plan:');

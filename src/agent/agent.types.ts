@@ -72,6 +72,7 @@ export interface RebalanceCostEstimate {
 
 export interface RebalancePlan {
   description?: string;
+  summary?: string;
   recommendation?: string;
   hasOpportunity?: boolean;
   shouldRebalance?: boolean;
@@ -86,6 +87,7 @@ export interface RebalancePlan {
 export interface RebalanceAnalysisData {
   simulation: any;
   plan: RebalancePlan | null;
+  summary?: string;
   reasoning?: string;
   analysis?: any;
   currentStrategy?: any;

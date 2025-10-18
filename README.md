@@ -1,305 +1,257 @@
 # DeFi AI Agent Backend
 
-基于 NestJS + OpenAI Agents SDK 的 DeFi 自动调仓与收益优化 Agent 平台后端。
+Backend for DeFi automated rebalancing and yield optimization agent platform based on NestJS + Anthropic Claude SDK.
 
-## 功能特性
+## Features
 
-- ✅ **自动收益优化**：智能分析用户在 AAVE、EULER、Uniswap V3、Aerodrome CL 等协议的仓位，寻找更优收益策略
-- ✅ **风控先行**：强制仿真 → 审批 → 执行流程，多层风控保护
-- ✅ **智能监控**：定时检测 APR、LP out-of-range 等指标，自动触发调仓
-- ✅ **OpenAI Agent**：使用 OpenAI Agents SDK + Responses API 实现智能决策
-- ✅ **MCP 工具集成**：通过 MCP 协议调用链上数据与执行模块
+- ✅ **Automated Yield Optimization**: Intelligently analyze user positions across AAVE, EULER, Uniswap V3, Aerodrome CL, Venus and other protocols to find better yield strategies
+- ✅ **Risk Control First**: Enforced simulation → approval → execution workflow with multi-layer risk protection
+- ✅ **Intelligent Monitoring**: Scheduled detection of APR, LP out-of-range and other metrics, automatic rebalancing triggers
+- ✅ **Anthropic Claude Agent**: Intelligent decision making using Anthropic Claude SDK with multi-step analysis
+- ✅ **MCP Tool Integration**: Call on-chain data and execution modules through MCP protocol
+- ✅ **Queue System**: BullMQ-based job queue for async rebalancing task processing
 
-## 架构设计
+## Architecture Design
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      前端 Web 应用                           │
-│              (钱包授权 / 仓位查看 / 调仓控制)                 │
+│                      Frontend Web App                        │
+│         (Wallet Auth / Position View / Rebalance Control)    │
 └─────────────────────┬───────────────────────────────────────┘
                       │ REST API
 ┌─────────────────────▼───────────────────────────────────────┐
-│                  NestJS Backend (本项目)                     │
+│                  NestJS Backend (This Project)               │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐     │
 │  │ Agent Module │  │ Guard Module │  │Monitor Module│     │
-│  │ (OpenAI SDK) │  │  (风控审核)  │  │  (定时调度)  │     │
+│  │(Anthropic SDK│  │(Risk Control)│  │  (Scheduler) │     │
 │  │   + Stdio    │  └──────────────┘  └──────────────┘     │
-│  │     MCP      │  ┌──────────────┐  ┌──────────────┐     │
-│  └──────┬───────┘  │   Database   │  │  API Module  │     │
-│         │          │  (Postgres)  │  │ (REST接口)   │     │
+│  │     MCP)     │  ┌──────────────┐  ┌──────────────┐     │
+│  └──────┬───────┘  │ Queue Module │  │  API Module  │     │
+│         │          │   (BullMQ)   │  │  (REST API)  │     │
 │         │          └──────────────┘  └──────────────┘     │
 └─────────┼───────────────────────────────────────────────────┘
           │ Stdio (stdin/stdout)
 ┌─────────▼─────────────────────────────────────────────────┐
-│                    MCP Server (已实现)                      │
-│   get_positions / analyze_yields / plan_rebalance         │
-│   simulate / execute_steps                                 │
+│                    MCP Server (Implemented)                 │
+│   get_idle_assets / get_active_investments /              │
+│   get_account_yield_summary / get_dex_pools /             │
+│   get_binance_depth / get_lp_simulate_batch /             │
+│   get_supply_opportunities / analyze_strategy /           │
+│   calculate_rebalance_cost_batch / rebalance_position     │
 └─────────┬─────────────────────────────────────────────────┘
           │
 ┌─────────▼─────────────────────────────────────────────────┐
-│              链上 DeFi 协议                                 │
-│      AAVE / EULER / UniswapV3 / AerodromeCL                │
+│              On-chain DeFi Protocols                        │
+│      AAVE / EULER / Venus / UniswapV3 / AerodromeCL        │
 └───────────────────────────────────────────────────────────┘
 ```
 
-## 项目结构
+## Project Structure
 
 ```
 src/
-├── agent/              # Agent 核心模块 (OpenAI Agents SDK + Stdio MCP)
-│   ├── agent.service.ts      # Agent 执行服务
-│   ├── agent.types.ts        # Agent 类型定义
-│   ├── agent.prompt.ts       # System Prompt & 上下文构建
+├── agent/              # Agent core module (Anthropic Claude SDK + Stdio MCP)
+│   ├── agent.service.ts      # Agent execution service
+│   ├── agent.types.ts        # Agent type definitions
+│   ├── agent.prompt.ts       # System Prompt & context builder
+│   ├── analysis.prompt.ts    # Multi-step analysis prompts
+│   ├── types/
+│   │   └── mcp.types.ts      # MCP tool types
 │   └── agent.module.ts
-├── guard/              # 风控审核模块
-│   ├── guard.service.ts      # 风控逻辑
+├── guard/              # Risk control module
+│   ├── guard.service.ts      # Risk control logic
 │   └── guard.module.ts
-├── monitor/            # 监控调度模块
-│   ├── monitor.service.ts    # 定时任务与触发逻辑
+├── monitor/            # Monitoring scheduler module
+│   ├── monitor.service.ts           # Scheduled tasks & trigger logic
+│   ├── monitor.controller.ts        # Monitor API endpoints
+│   ├── rebalance-precheck.service.ts # Pre-check logic
 │   └── monitor.module.ts
-├── api/                # REST API 模块
-│   ├── rebalance.controller.ts  # API 控制器
-│   ├── dto/                     # 请求 DTO
+├── queue/              # Queue module
+│   ├── rebalance-queue.service.ts   # BullMQ queue service
+│   └── queue.module.ts
+├── api/                # REST API module
+│   ├── rebalance.controller.ts  # Rebalance API controller
+│   ├── user.controller.ts       # User API controller
+│   ├── user.service.ts          # User service
+│   ├── dto/                     # Request DTOs
+│   │   ├── rebalance.dto.ts
+│   │   ├── user.dto.ts
+│   │   └── execution-steps.dto.ts
 │   └── api.module.ts
-├── entities/           # 数据库实体
-│   ├── user-policy.entity.ts   # 用户风控策略
-│   └── rebalance-job.entity.ts # 调仓任务记录
-├── config/             # 配置
+├── entities/           # Database entities
+│   ├── user.entity.ts          # User entity
+│   ├── user-policy.entity.ts   # User risk control policy
+│   └── rebalance-job.entity.ts # Rebalance job records
+├── utils/              # Utilities
+│   ├── chain-verifier.util.ts  # Chain transaction verifier
+│   └── plan-to-steps.util.ts   # Plan to execution steps converter
+├── config/             # Configuration
 │   └── database.config.ts
-├── app.module.ts       # 主应用模块
-└── main.ts             # 入口文件
+├── migrations/         # Database migrations
+├── app.module.ts       # Main application module
+└── main.ts             # Entry point
 ```
 
-## 快速开始
+## Quick Start
 
-### 1. 安装依赖
+### 1. Install Dependencies
 
 ```bash
 npm install
 ```
 
-### 2. 配置环境变量
+### 2. Configure Environment Variables
 
-复制 `.env.example` 为 `.env` 并填写配置：
+Copy `.env.example` to `.env` and fill in the configuration:
 
 ```bash
 cp .env.example .env
 ```
 
-必需配置：
-- `OPENAI_API_KEY`: OpenAI API 密钥
-- `OPENAI_MODEL`: OpenAI 模型 (默认 gpt-4o)
-- `DB_*`: PostgreSQL 数据库配置
-- `MCP_SERVER_COMMAND`: MCP Server 启动命令 (如 `npx` 或 `node`)
-- `MCP_SERVER_ARGS`: MCP Server 参数 (逗号分隔，如 `-y,@modelcontextprotocol/server-defi`)
+Required configuration:
+- `ANTHROPIC_API_KEY`: Anthropic API key
+- `MODEL`: Anthropic model (default claude-3-5-sonnet-20241022)
+- `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_DATABASE`: Database configuration
+- `REDIS_HOST`, `REDIS_PORT`: Redis configuration for BullMQ
+- `MCP_SERVER_COMMAND`: MCP Server startup command (e.g. `npx` or `node`)
+- `MCP_SERVER_ARGS`: MCP Server arguments (comma-separated, e.g. `-y,@modelcontextprotocol/server-defi`)
 
-### 3. 启动数据库
+### 3. Start Database and Redis
 
-确保 PostgreSQL 已启动并创建数据库：
+Ensure MySQL and Redis are running:
 
 ```bash
-createdb defi_agent
+# Create database (MySQL)
+mysql -u root -p -e "CREATE DATABASE defi_agent;"
+
+# Start Redis (if not already running)
+redis-server
 ```
 
-### 4. 启动服务
+### 4. Start Service
 
 ```bash
-# 开发模式
+# Development mode
 npm run start:dev
 
-# 生产模式
+# Production mode
 npm run build
 npm run start:prod
 ```
 
-## API 文档
+## Core Workflow
 
-### 用户策略管理
+### Automated Rebalancing Workflow
 
-#### 获取用户策略
-```
-GET /api/policy/:userId
-```
+1. **Monitoring Trigger** (Scheduled, currently disabled)
+   - Check all users with `autoEnabled=true`
+   - Run precheck to filter users who need rebalancing
+   - Add eligible users to rebalancing queue
 
-#### 更新用户策略
-```
-PUT /api/policy/:userId
-Body: {
-  "minAprLiftBps": 50,
-  "minNetUsd": 10,
-  "autoEnabled": true,
-  ...
-}
-```
+2. **Queue Processing**
+   - BullMQ worker picks up jobs from queue
+   - Execute agent analysis for each job
+   - Handle retries and failures
 
-### 仓位查询
+3. **Multi-Step Agent Analysis**
+   - **Step 1**: Fetch account yield summary (`get_account_yield_summary`)
+   - **Step 2**: Analyze LP opportunities with market data (`get_dex_pools`, `get_binance_depth`, `get_lp_simulate_batch`, `get_supply_opportunities`)
+   - **Step 3**: Evaluate best strategy and generate rebalance plan (`analyze_strategy`, `calculate_rebalance_cost_batch`)
 
-#### 获取用户仓位
-```
-GET /api/positions/:userId?chains=ethereum,base
-```
+4. **Risk Control Approval**
+   - Check net profit, APR improvement, health factor, slippage, gas cost
+   - Approved → job status updated to APPROVED
+   - Rejected → record reason
 
-### 调仓操作
+5. **On-chain Execution** (Manual or automatic)
+   - Call MCP `rebalance_position` with execution plan
+   - Verify transaction on-chain
+   - Record transaction hash and status
 
-#### 预览调仓 (仅仿真)
-```
-POST /api/preview
-Body: {
-  "userId": "0x123...",
-  "trigger": "manual_preview"
-}
-```
+## MCP Server Integration
 
-#### 触发调仓任务
-```
-POST /api/rebalance
-Body: {
-  "userId": "0x123...",
-  "trigger": "manual_trigger"
-}
-```
+This project integrates MCP Server using **Stdio MCP** approach. The Agent communicates with MCP Server through standard input/output.
 
-#### 查询任务状态
-```
-GET /api/jobs/:jobId
-```
+### MCP Server Requirements
 
-#### 查询用户任务历史
-```
-GET /api/jobs/user/:userId?limit=50
-```
+MCP Server must implement the following tools (following [MCP Protocol](https://modelcontextprotocol.io/)):
 
-#### 手动执行已审批任务
-```
-POST /api/execute
-Body: {
-  "jobId": "uuid"
-}
-```
-
-## 核心流程
-
-### 自动调仓流程
-
-1. **监控触发** (每 5 分钟)
-   - 检查所有 `autoEnabled=true` 的用户
-   - 获取链上仓位
-   - 分析收益率
-   - 判断是否需要调仓
-
-2. **Agent 分析**
-   - OpenAI Agent 调用 MCP 工具
-   - 执行：`get_positions` → `analyze_yields` → `plan_rebalance` → `simulate`
-   - 生成仿真报告
-
-3. **风控审批**
-   - 检查净收益、APR 提升、健康因子、滑点、Gas 成本
-   - 通过 → 进入执行阶段
-   - 拒绝 → 记录原因
-
-4. **执行上链**
-   - 调用 MCP `execute_steps`
-   - 记录交易哈希
-   - 更新任务状态
-
-## MCP Server 集成
-
-本项目使用 **Stdio MCP** 方式集成 MCP Server。Agent 通过标准输入输出与 MCP Server 通信。
-
-### MCP Server 要求
-
-MCP Server 需实现以下工具（遵循 [MCP 协议](https://modelcontextprotocol.io/)）：
-
-| 工具名 | 功能 |
+| Tool Name | Function |
 |--------|------|
-| `get_positions` | 获取用户链上仓位 |
-| `analyze_yields` | 分析收益率并找出优化机会 |
-| `plan_rebalance` | 生成调仓执行计划 |
-| `simulate` | 仿真执行计划 |
-| `execute_steps` | 实际执行调仓 |
+| `get_idle_assets` | Get user's idle assets |
+| `get_active_investments` | Get user's active investment positions |
+| `get_account_yield_summary` | Get comprehensive account yield summary |
+| `get_dex_pools` | Get DEX pool information and recent active ticks |
+| `get_binance_depth` | Get Binance order book depth data |
+| `get_lp_simulate_batch` | Batch simulate LP position scenarios |
+| `get_supply_opportunities` | Get lending/supply opportunities across protocols |
+| `analyze_strategy` | Analyze rebalancing strategy (optional) |
+| `calculate_rebalance_cost_batch` | Calculate rebalancing costs (optional) |
+| `rebalance_position` | Execute actual rebalancing transaction |
 
-### 启动方式
+### Launch Configuration
 
-在 `.env` 中配置：
+Configure in `.env`:
 
 ```bash
-# 使用 npx 启动 npm 包
+# Use npx to launch npm package
 MCP_SERVER_COMMAND=npx
 MCP_SERVER_ARGS=-y,@modelcontextprotocol/server-defi
 
-# 或使用 node 启动本地脚本
+# Or use node to launch local script
 MCP_SERVER_COMMAND=node
 MCP_SERVER_ARGS=/path/to/your/mcp-server.js
 
-# 或使用 Python
+# Or use Python
 MCP_SERVER_COMMAND=python
 MCP_SERVER_ARGS=/path/to/your/mcp_server.py
 ```
 
-### 如何配置你的MCP Server
+### How to Configure Your MCP Server
 
-由于你已经实现了MCP Server，只需要在 `.env` 中配置启动命令。例如：
+If you have already implemented the MCP Server, simply configure the startup command in `.env`. For example:
 
 ```bash
-# 如果你的MCP Server是一个Node.js脚本
+# If your MCP Server is a Node.js script
 MCP_SERVER_COMMAND=node
 MCP_SERVER_ARGS=/path/to/your/defi-mcp-server/index.js
 
-# 如果你使用TypeScript + tsx
+# If you use TypeScript + tsx
 MCP_SERVER_COMMAND=npx
 MCP_SERVER_ARGS=tsx,/path/to/your/defi-mcp-server/index.ts
 
-# 如果你的MCP Server是Python脚本
+# If your MCP Server is a Python script
 MCP_SERVER_COMMAND=python3
 MCP_SERVER_ARGS=/path/to/your/defi-mcp-server/server.py
 ```
 
-后端会在启动时自动连接到MCP Server，并在每次Agent运行时通过Stdio调用MCP工具。
+The backend will automatically connect to the MCP Server on startup and call MCP tools via Stdio during each Agent run.
 
-## 风控参数
+## Risk Control Parameters
 
-每个用户可配置以下风控参数：
+Each user can configure the following risk control parameters:
 
-| 参数 | 说明 | 默认值 |
+| Parameter | Description | Default |
 |------|------|--------|
-| `minAprLiftBps` | 最小 APR 提升 (基点) | 50 |
-| `minNetUsd` | 最小净收益 (USD) | 10 |
-| `minHealthFactor` | 最小健康因子 | 1.5 |
-| `maxSlippageBps` | 最大滑点 (基点) | 100 |
-| `maxGasUsd` | 最大 Gas 成本 (USD) | 50 |
-| `maxPerTradeUsd` | 单笔最大交易额 (USD) | 10000 |
-| `autoEnabled` | 是否开启自动调仓 | false |
+| `minAprLiftBps` | Minimum APR improvement (basis points) | 50 |
+| `minNetUsd` | Minimum net profit (USD) | 10 |
+| `minHealthFactor` | Minimum health factor | 1.5 |
+| `maxSlippageBps` | Maximum slippage (basis points) | 100 |
+| `maxGasUsd` | Maximum gas cost (USD) | 50 |
+| `maxPerTradeUsd` | Maximum trade amount per transaction (USD) | 10000 |
+| `autoEnabled` | Enable automatic rebalancing | false |
 
-## 安全考虑
 
-- ✅ 强制仿真阶段，禁止直接执行
-- ✅ 多层风控审核
-- ✅ 协议白名单限制
-- ✅ 资产白名单限制
-- ✅ 执行幂等性保证
-- ✅ 完整的任务审计日志
+## Monitoring & Logging
 
-## 监控与日志
+All operations are recorded in the `rebalance_jobs` table, including:
+- Input context
+- Simulation report
+- Execution results
+- Status changes
+- Error messages
 
-所有操作均记录在 `rebalance_jobs` 表中，包括：
-- 输入上下文
-- 仿真报告
-- 执行结果
-- 状态变化
-- 错误信息
-
-## 开发计划
-
-- [ ] 添加更多协议支持 (Compound, Morpho, Curve)
-- [ ] 实现 WebSocket 实时推送
-- [ ] Agent 协同架构 (多 Agent 分工)
-- [ ] Prometheus 监控指标
-- [ ] 前端 Dashboard
 
 ## License
 
 MIT
-
-## 作者
-
-张兰西

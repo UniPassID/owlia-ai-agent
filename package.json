@@ -2,7 +2,7 @@
   "name": "defi-ai-agent-backend",
   "version": "1.0.0",
   "description": "DeFi AI Agent Backend with NestJS",
-  "author": "Zhang Lanxi",
+  "author": "John Zhang",
   "private": true,
   "license": "MIT",
   "scripts": {

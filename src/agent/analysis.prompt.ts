@@ -185,11 +185,21 @@ Total deployable capital equals the totalAssetsUsd value above.
    - Call calculate_rebalance_cost_batch first to obtain gas and execution details.
    - After the cost call completes, call analyze_strategy using the same strategy definition.
 3. Decide whether rebalancing is beneficial considering APY lift, gas costs, and break-even time:
-   - The new APY must satisfy BOTH conditions:
-     a) At least 10% higher than current portfolio APY (e.g., if current is 5%, new must be >= 5.5%)
-     b) At least 2 percentage points higher in absolute terms (e.g., if current is 5%, new must be >= 7%)
+   - The new APY must satisfy BOTH conditions simultaneously:
+     a) Relative increase: new APY ÷ current APY >= 1.1 (i.e., new APY is at least 1.1x the current)
+        Example: if current is 5%, new must be >= 5.5% (5 × 1.1 = 5.5)
+     b) Absolute increase: new APY - current APY >= 2 percentage points
+        Example: if current is 5%, new must be >= 7% (5 + 2 = 7)
+
+     **Calculation verification:**
+     - Current APY: 4.708%
+     - New APY: 7.894%
+     - Relative: 7.894 ÷ 4.708 = 1.677 (✓ >= 1.1, meaning 67.7% increase)
+     - Absolute: 7.894 - 4.708 = 3.186pp (✓ >= 2pp)
+     - Result: APY conditions SATISFIED
+
    - Break-even time must be <= 4 hours to proceed.
-   - Only recommend rebalancing if the APY gain significantly outweighs the gas costs and complexity.
+   - Only recommend rebalancing if BOTH APY conditions AND break-even time are satisfied.
 4. Assemble the final execution plan using current positions from Step 1's yieldSummary.
 
 ### Output format
@@ -245,6 +255,21 @@ Rules:
 - Use the positions contained in Step 1's yieldSummary to populate currentPositions and express amounts in human-readable decimals.
 - All numeric fields must be numbers, not strings.
 - Protocol names must match the allowed casing exactly.
-- The recommendation string must state the real current APY value (no placeholders).
+- The recommendation string should be user-friendly and informative:
+  * Use a conversational, helpful tone (avoid cold technical language)
+  * If shouldRebalance is true:
+    - Clearly explain the recommended strategy (what assets, what protocol)
+    - Show the APY improvement with actual numbers (e.g., "from 4.7% to 7.9%")
+    - Mention break-even time if reasonable
+  * If shouldRebalance is false:
+    - STRICTLY follow one of these formats (no other text allowed):
+      Format 1: "Best opportunity: 4.7% → 5.1% (+0.4pp). Below 2pp minimum."
+      Format 2: "Best opportunity: 4.7% → 7.9% (+3.2pp). Break-even 9h (cost $0.95) exceeds 4h limit."
+    - Use Format 1 if APY threshold failed
+    - Use Format 2 if break-even time threshold failed
+    - Do NOT add: explanations, current positions, protocol names, "while", "although", "hold current position"
+    - Just state the numbers and which threshold failed, nothing more
+  * Do not use Strategy A/B/C labels in the final recommendation without explaining what they are
+  * Do not include elaborate risk assessments or philosophical justifications
 - Do not include any text outside the JSON code block.`;
 }

@@ -258,9 +258,27 @@ Rules:
 - Protocol names must match the allowed casing exactly.
 - The summary field should provide a one-sentence overview of the entire proposal:
   * If shouldRebalance is true: "Rebalance to [strategy] for [X]% APY ([Y]pp gain, [Z]h break-even)."
-  * If shouldRebalance is false: "No rebalancing needed. [brief reason]"
+  * If shouldRebalance is false:
+    - Length: 40-60 characters maximum
+    - Style: Simple, friendly, conversational (first-person perspective)
+    - Content: Explain WHY we're not rebalancing without using numbers or technical jargon
+    - HOW TO DETERMINE WHICH SCENARIO:
+      * Scenario A (APY gain insufficient): Use when the best alternative APY is <= current APY, OR when APY improvement is < 2pp
+        - This means current position is already optimal or close to it
+      * Scenario B (Break-even time too long): Use when best alternative APY > current APY + 2pp, BUT break-even time > 4 hours
+        - This means there IS a better option, but gas costs are too high
+    - Scenario A (APY gain insufficient): Emphasize current position is already good
+      Examples: "Current position is optimal, alternatives offer less yield."
+                "Your position is performing well, limited upside from switching."
+                "Yield is strong, switching adds minimal value."
+    - Scenario B (Break-even time too long): Emphasize cost/time concerns
+      Examples: "Better returns available, but cost recovery takes too long."
+                "Gas costs eat into gains too much for the improvement offered."
+                "Higher yields exist, but rebalancing fees outweigh benefits."
+    - FORBIDDEN: Do NOT use technical terms like "pp", "threshold", "basis points"
+    - REQUIRED: Keep it under 60 characters, natural and easy to understand
+    - Allow natural variation in phrasing while staying true to the actual reason
   * Example (true): "Rebalance to AAVE USDC supply for 7.9% APY (+3.2pp gain, 2h break-even)."
-  * Example (false): "No rebalancing needed. Best opportunity below 2pp minimum threshold."
 - The recommendation string should be user-friendly and informative:
   * Use a conversational, helpful tone (avoid cold technical language)
   * If shouldRebalance is true:
@@ -268,13 +286,36 @@ Rules:
     - Show the APY improvement with actual numbers (e.g., "from 4.7% to 7.9%")
     - Mention break-even time if reasonable
   * If shouldRebalance is false:
-    - STRICTLY follow one of these formats (no other text allowed):
-      Format 1: "Best opportunity: 4.7% → 5.1% (+0.4pp). Below 2pp minimum."
-      Format 2: "Best opportunity: 4.7% → 7.9% (+3.2pp). Break-even 9h (cost $0.95) exceeds 4h limit."
-    - Use Format 1 if APY threshold failed
-    - Use Format 2 if break-even time threshold failed
-    - Do NOT add: explanations, current positions, protocol names, "while", "although", "hold current position"
-    - Just state the numbers and which threshold failed, nothing more
+    - Length: Maximum 180 characters (be concise!)
+    - Tone: Professional but friendly, first-person perspective, easy to understand
+    - CRITICAL RULE: Only mention ONE strategy - the best alternative. Never list multiple strategies.
+    - HOW TO DETERMINE WHICH SCENARIO (same as summary):
+      * Scenario A (APY gain insufficient): Best alternative APY <= current APY, OR APY improvement < 2pp
+      * Scenario B (Break-even time too long): Best alternative APY > current APY + 2pp, BUT break-even time > 4h
+    - Required structure (follow this template strictly):
+      "The best alternative is [strategy composition] at [APY]% APY, but [reason why not proceeding]. Let's [conclusion]."
+    - Required information to include:
+      1. The optimal strategy composition (e.g., "50% Aerodrome LP + 50% AAVE Supply" or "100% Aerodrome LP")
+         - Simplify protocol names: use "Aerodrome LP" not "Aerodrome oUSDT/USDC LP"
+         - Use percentage allocations from the opportunities array
+      2. That strategy's APY (just the number, precise)
+      3. Simple comparison/reason (choose based on scenario):
+         - Scenario A: "but your current [X]% yield is better" or "but your current [X]% yield is still higher"
+         - Scenario B: "but the $[cost] gas fee would take [hours]h to recover"
+      4. Friendly conclusion: "Let's hold for now." or "Let's stay put." or "Let's wait."
+    - Example for Scenario A (APY gain insufficient):
+      "The best alternative is 100% Aerodrome LP at 6.5% APY, but your current 6.18% yield is already strong (gain would be only 0.32%). Let's hold for now."
+    - Example for Scenario B (gas cost too high):
+      "The best alternative is 50% Aerodrome LP + 50% AAVE Supply at 8.5% APY (up from 6.0%), but the $1.50 gas fee would take 8h to recover. Let's wait."
+    - Data source: Extract the SINGLE BEST strategy from opportunities array
+    - CRITICAL: All numbers must come from actual analysis results, no fabrication allowed
+    - ABSOLUTELY FORBIDDEN:
+      * "I evaluated three strategies..." or "I tested..." or listing multiple options
+      * Technical jargon: "pp", "threshold", "basis points", "break-even limit"
+      * Mentioning how many strategies were tested
+      * Comparing multiple alternatives
+      * Any text about the evaluation process
+    - REQUIRED: Jump straight to describing the best alternative only
   * Do not use Strategy A/B/C labels in the final recommendation without explaining what they are
   * Do not include elaborate risk assessments or philosophical justifications
 - Do not include any text outside the JSON code block.`;

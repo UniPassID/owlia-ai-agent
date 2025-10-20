@@ -109,7 +109,6 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
   private allTools: any[] = [];
   private lastRequestTime: number = 0;
   private minRequestInterval: number = 5000; // Minimum 5 seconds between requests
-  private readonly lpSimulationAmountUsd = 1000;
   private readonly lpSimulationTimeHorizonMinutes = 30;
 
   constructor(private configService: ConfigService) {}
@@ -332,7 +331,7 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
       poolMap.set(entry.poolAddress.toLowerCase(), entry);
     });
 
-    const notional = Math.max(amountUsd, this.lpSimulationAmountUsd);
+    const notional = amountUsd;
 
     suggestions.forEach((suggestion) => {
       if (!suggestion.poolAddress) {

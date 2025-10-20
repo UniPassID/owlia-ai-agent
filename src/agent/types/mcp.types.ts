@@ -296,3 +296,36 @@ export interface AccountYieldSummaryResponse {
   totalAssetsUsd: string;
   portfolioApy: string;
 }
+
+// Calculate Rebalance Cost Batch Request
+export interface CalculateRebalanceCostBatchRequest {
+  wallet_address: string;
+  chain_id: ChainId;
+  target_positions_batch: {
+    target_positions: {
+      token: string;
+      amount: string;
+    }[];
+  }[];
+}
+
+// Calculate Rebalance Cost Batch Response
+// Note: The actual response is a dictionary with numeric keys ("0", "1", "2"), not an array
+// Example: {"0":{"swap_fee":"0.09947096"},"1":{"swap_fee":"0.1"},"2":{"swap_fee":"0.14973548"},"_dataSource":"api"}
+export interface CalculateRebalanceCostBatchResponse {
+  [index: string]: CalculateRebalanceCostResult | string; // string for "_dataSource"
+  _dataSource?: string;
+}
+
+export interface CalculateRebalanceCostResult {
+  // Currently only swap_fee is returned by the MCP server
+  // All cost calculation and break-even analysis should be done based on this value
+  swap_fee: string | number;
+
+  // Future fields (not yet implemented by MCP server):
+  // gas_estimate?: string | number;
+  // break_even_time_hours?: string | number;
+  // net_gain_usd?: string | number;
+  // estimated_cost?: string | number;
+  // total_cost_usd?: string | number;
+}

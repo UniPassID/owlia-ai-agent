@@ -8,6 +8,8 @@ import {
   GetLpSimulateRequest,
   GetLpSimulateResponse,
   GetSupplyOpportunitiesResponse,
+  CalculateRebalanceCostBatchRequest,
+  CalculateRebalanceCostBatchResponse,
 } from '../agent/types/mcp.types';
 
 export interface RebalancePrecheckResult {
@@ -17,6 +19,10 @@ export interface RebalancePrecheckResult {
   differenceBps: number;
   totalPortfolioValueUsd: number;
   yieldSummary?: AccountYieldSummaryResponse;
+  gasEstimate?: number;
+  breakEvenTimeHours?: number;
+  netGainUsd?: number;
+  failureReason?: string;
 }
 
 @Injectable()
@@ -104,26 +110,203 @@ export class RebalancePrecheckService {
       this.logger.warn(`get_supply_opportunities failed for user ${user.id} on chain ${chainId}: ${error.message}`);
     }
 
-    const opportunityApy = this.calculateOpportunityApy(lpSimulationResults, supplyOpportunitiesByChain);
+    // Step 1: Build all possible strategies from opportunities
+    const allStrategies = this.buildAllStrategies(
+      lpSimulationResults,
+      supplyOpportunitiesByChain,
+      totalAssetsUsd,
+      chainId,
+    );
 
+    if (allStrategies.length === 0) {
+      this.logger.log(`Precheck REJECTED for user ${user.id}: No valid strategies found`);
+      return {
+        shouldTrigger: false,
+        portfolioApy,
+        opportunityApy: 0,
+        differenceBps: 0,
+        totalPortfolioValueUsd: totalAssetsUsd,
+        yieldSummary,
+        failureReason: 'No valid strategies',
+      };
+    }
+
+    this.logger.log(`Built ${allStrategies.length} strategies for user ${user.id}`);
+
+    // Step 2: Calculate rebalance cost for all strategies in batch
+    let gasEstimate = 0;
+    let breakEvenTimeHours = 0;
+    let netGainUsd = 0;
+    let bestStrategyName = '';
+    let bestStrategyApy = 0;
+
+    try {
+      // Convert strategies to target_positions_batch format
+      const targetPositionsBatch = allStrategies.map(s =>
+        this.convertStrategyToTargetPositions(s.strategy, lpSimulationResults, supplyOpportunitiesByChain)
+      );
+
+      const request: CalculateRebalanceCostBatchRequest = {
+        wallet_address: user.address,
+        chain_id: chainId as ChainId,
+        target_positions_batch: targetPositionsBatch,
+      };
+
+      this.logger.log(`Calling calculate_rebalance_cost_batch with ${targetPositionsBatch.length} scenarios`);
+
+      const costResult = await this.agentService.callMcpTool<CalculateRebalanceCostBatchResponse>(
+        'calculate_rebalance_cost_batch',
+        request,
+      );
+
+      this.logger.log(`Cost analysis result: ${JSON.stringify(costResult)}`);
+
+      // Convert dictionary response to array of results
+      const resultsArray = this.normalizeDictionaryResponse<any>(costResult);
+
+      // Find the best strategy based on break-even time and net gain
+      let bestStrategyIndex = -1;
+      let bestScore = -Infinity;
+
+      if (resultsArray && resultsArray.length > 0) {
+        resultsArray.forEach((result, index) => {
+          if (index >= allStrategies.length) {
+            return; // Skip if index exceeds strategies array
+          }
+
+          // Currently MCP only returns swap_fee, so we use it as the total cost
+          const swapFee = this.parseNumber(result.swap_fee) || 0;
+          const totalCost = swapFee;
+
+          const strategyApy = allStrategies[index].apy;
+          const apyImprovement = strategyApy - portfolioApy;
+
+          // Calculate break-even time based on swap fee and APY improvement
+          // Break-even time (hours) = (total cost / annual gain) * 365 * 24
+          let breakEven = 0;
+          if (apyImprovement > 0 && totalAssetsUsd > 0) {
+            const annualGain = (totalAssetsUsd * apyImprovement) / 100;
+            if (annualGain > 0) {
+              breakEven = (totalCost / annualGain) * 365 * 24;
+            }
+          }
+
+          // Calculate estimated net gain (daily)
+          // Daily gain from APY improvement minus amortized cost over 30 days
+          const dailyGainRate = (apyImprovement / 100) / 365;
+          const dailyGain = totalAssetsUsd * dailyGainRate;
+          const dailyCost = totalCost / 30; // Amortize swap fee over 30 days
+          const netGain = dailyGain - dailyCost;
+
+          // Score: prioritize higher net gain and lower break-even time
+          // Formula: netGain / (breakEvenHours + 1) to avoid division by zero
+          const score = netGain / (breakEven + 1);
+
+          this.logger.log(
+            `Strategy ${index} (${allStrategies[index].name}): ` +
+            `APY=${strategyApy.toFixed(2)}% (current=${portfolioApy.toFixed(2)}%, improvement=+${apyImprovement.toFixed(2)}pp), ` +
+            `swap_fee=$${swapFee.toFixed(4)}, ` +
+            `break-even=${breakEven.toFixed(2)}h, ` +
+            `daily_net_gain=$${netGain.toFixed(4)}, ` +
+            `score=${score.toFixed(4)}`,
+          );
+
+          if (score > bestScore) {
+            bestScore = score;
+            bestStrategyIndex = index;
+            gasEstimate = totalCost;
+            breakEvenTimeHours = breakEven;
+            netGainUsd = netGain;
+            bestStrategyName = allStrategies[index].name;
+            bestStrategyApy = allStrategies[index].apy;
+          }
+        });
+      }
+
+      if (bestStrategyIndex === -1 && allStrategies.length > 0) {
+        // Fallback: use first strategy if no valid cost results
+        this.logger.warn(`No valid cost results, using first strategy as fallback`);
+        bestStrategyName = allStrategies[0].name;
+        bestStrategyApy = allStrategies[0].apy;
+      }
+    } catch (error) {
+      this.logger.warn(`Cost calculation failed for user ${user.id}: ${error.message}`);
+      // Continue with default values (0) - don't fail the entire precheck
+      if (allStrategies.length > 0) {
+        bestStrategyName = allStrategies[0].name;
+        bestStrategyApy = allStrategies[0].apy;
+      }
+    }
+
+    // Step 3: Check break-even time condition
+    const maxBreakEvenHours = 4;
+    const breakEvenConditionSatisfied = breakEvenTimeHours <= maxBreakEvenHours;
+
+    if (!breakEvenConditionSatisfied) {
+      this.logger.log(
+        `Precheck REJECTED for user ${user.id}: Break-even time too long. ` +
+        `Break-even=${breakEvenTimeHours.toFixed(2)}h (max ${maxBreakEvenHours}h), ` +
+        `Gas=$${gasEstimate.toFixed(2)}`,
+      );
+
+      return {
+        shouldTrigger: false,
+        portfolioApy,
+        opportunityApy: bestStrategyApy,
+        differenceBps: (bestStrategyApy - portfolioApy) * 100,
+        totalPortfolioValueUsd: totalAssetsUsd,
+        yieldSummary,
+        gasEstimate,
+        breakEvenTimeHours,
+        netGainUsd,
+        failureReason: 'Break-even time exceeds 4 hours',
+      };
+    }
+
+    // Step 4: Calculate APY metrics for the best strategy
+    const opportunityApy = bestStrategyApy;
     const difference = opportunityApy - portfolioApy;
     const differenceBps = difference * 100;
 
+    // Step 5: Check APY conditions
     // New APY must satisfy BOTH conditions:
-    // a) At least 10% higher than current portfolio APY
-    // b) At least 2 percentage points higher in absolute terms
+    // a) Relative increase: new APY ÷ current APY >= 1.1 (at least 10% higher)
+    // b) Absolute increase: new APY - current APY >= 2 percentage points
     const relativeIncrease = portfolioApy > 0 ? (opportunityApy / portfolioApy) : Infinity;
     const absoluteIncrease = opportunityApy - portfolioApy;
 
-    const shouldTrigger = Number.isFinite(differenceBps)
-      ? (relativeIncrease >= 1.1 && absoluteIncrease >= 2)
-      : true;
+    const apyConditionsSatisfied = relativeIncrease >= 1.1 && absoluteIncrease >= 2;
+
+    if (!apyConditionsSatisfied) {
+      this.logger.log(
+        `Precheck REJECTED for user ${user.id}: APY conditions not met. ` +
+        `Portfolio APY=${portfolioApy.toFixed(2)}%, Best strategy APY=${opportunityApy.toFixed(2)}%, ` +
+        `Relative=${relativeIncrease.toFixed(2)}x (need >=1.1), Absolute=${absoluteIncrease.toFixed(2)}pp (need >=2)`,
+      );
+
+      return {
+        shouldTrigger: false,
+        portfolioApy,
+        opportunityApy,
+        differenceBps,
+        totalPortfolioValueUsd: totalAssetsUsd,
+        yieldSummary,
+        gasEstimate,
+        breakEvenTimeHours,
+        netGainUsd,
+        failureReason: 'APY improvement insufficient',
+      };
+    }
+
+    // All conditions satisfied
+    const shouldTrigger = true;
 
     this.logger.log(
-      `Precheck for user ${user.id}: portfolio APY=${portfolioApy.toFixed(2)}%, ` +
-      `opportunity APY=${opportunityApy.toFixed(2)}%, diff=${differenceBps.toFixed(2)} bps, ` +
-      `relative=${relativeIncrease.toFixed(2)}x, absolute=${absoluteIncrease.toFixed(2)}pp, ` +
-      `total value=$${totalAssetsUsd.toFixed(2)} -> ${shouldTrigger ? 'trigger' : 'skip'}`,
+      `Precheck APPROVED for user ${user.id}: ` +
+      `Best strategy: ${bestStrategyName}, ` +
+      `Portfolio APY=${portfolioApy.toFixed(2)}%, Opportunity APY=${opportunityApy.toFixed(2)}%, ` +
+      `Diff=${differenceBps.toFixed(2)} bps, Relative=${relativeIncrease.toFixed(2)}x, Absolute=${absoluteIncrease.toFixed(2)}pp, ` +
+      `Gas=$${gasEstimate.toFixed(2)}, Break-even=${breakEvenTimeHours.toFixed(2)}h, Net gain=$${netGainUsd.toFixed(2)}`,
     );
 
     return {
@@ -133,7 +316,241 @@ export class RebalancePrecheckService {
       differenceBps,
       totalPortfolioValueUsd: totalAssetsUsd,
       yieldSummary,
+      gasEstimate,
+      breakEvenTimeHours,
+      netGainUsd,
     };
+  }
+
+  /**
+   * Convert strategy to target_positions format for calculate_rebalance_cost_batch
+   */
+  private convertStrategyToTargetPositions(
+    strategy: any,
+    lpSimulations: GetLpSimulateResponse[],
+    supplyData: GetSupplyOpportunitiesResponse[],
+  ): { target_positions: { token: string; amount: string }[] } {
+    const targetPositions: { token: string; amount: string }[] = [];
+
+    if (!strategy || !strategy.positions || !Array.isArray(strategy.positions)) {
+      return { target_positions: [] };
+    }
+
+    for (const position of strategy.positions) {
+      if (position.type === 'supply') {
+        // For supply positions, add the single token
+        const tokenAddress = this.findTokenAddressForSupply(position.asset, supplyData);
+        if (tokenAddress) {
+          targetPositions.push({
+            token: tokenAddress,
+            amount: position.amount.toString(),
+          });
+        }
+      } else if (position.type === 'lp') {
+        // For LP positions, add both token0 and token1
+        const lpInfo = this.findLpTokensFromSimulations(position.poolAddress, lpSimulations);
+        if (lpInfo) {
+          if (lpInfo.token0Amount > 0) {
+            targetPositions.push({
+              token: lpInfo.token0Address,
+              amount: lpInfo.token0Amount.toString(),
+            });
+          }
+          if (lpInfo.token1Amount > 0) {
+            targetPositions.push({
+              token: lpInfo.token1Address,
+              amount: lpInfo.token1Amount.toString(),
+            });
+          }
+        }
+      }
+    }
+
+    return { target_positions: targetPositions };
+  }
+
+  /**
+   * Find token address for a supply position from supply opportunities data
+   * Note: SupplyOpportunity only has 'asset' (symbol), not token address
+   * We use the asset symbol directly, or vault_address if available
+   */
+  private findTokenAddressForSupply(
+    assetSymbol: string,
+    supplyData: GetSupplyOpportunitiesResponse[],
+  ): string | null {
+    for (const data of supplyData) {
+      if (!data.opportunities || !Array.isArray(data.opportunities)) {
+        continue;
+      }
+
+      for (const opp of data.opportunities) {
+        if (opp.asset === assetSymbol) {
+          // Use vault_address if available, otherwise use asset symbol
+          return opp.vault_address || opp.asset;
+        }
+      }
+    }
+    // If not found in opportunities, return the symbol itself
+    return assetSymbol;
+  }
+
+  /**
+   * Find LP token info from simulations
+   * Note: GetLpSimulateResponse doesn't include token addresses directly
+   * We extract amounts from the simulation and use pool address
+   */
+  private findLpTokensFromSimulations(
+    poolAddress: string,
+    lpSimulations: GetLpSimulateResponse[],
+  ): { token0Address: string; token1Address: string; token0Amount: number; token1Amount: number } | null {
+    const normalizedPoolAddress = poolAddress.toLowerCase();
+
+    for (const sim of lpSimulations) {
+      const simPoolAddress = sim.pool?.poolAddress?.toLowerCase();
+      if (simPoolAddress === normalizedPoolAddress) {
+        const token0Amount = this.parseNumber(sim.summary?.requiredTokens?.token0?.amount) || 0;
+        const token1Amount = this.parseNumber(sim.summary?.requiredTokens?.token1?.amount) || 0;
+
+        // Since token addresses aren't in the simulation response,
+        // we use the pool address as a placeholder
+        // The MCP server should resolve actual tokens from pool address
+        return {
+          token0Address: poolAddress + ':token0',
+          token1Address: poolAddress + ':token1',
+          token0Amount,
+          token1Amount,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Build all possible rebalancing strategies from available opportunities
+   * Following the logic from buildBestOpportunityPrompt:
+   * - Strategy A: 100% capital into best supply opportunity
+   * - Strategy B: 100% capital into best LP opportunity
+   * - Strategy C: 50% supply / 50% LP split (only if both exist)
+   * Returns all strategies so they can be evaluated together by calculate_rebalance_cost_batch
+   */
+  private buildAllStrategies(
+    lpSimulations: GetLpSimulateResponse[],
+    supplyData: GetSupplyOpportunitiesResponse[],
+    totalCapital: number,
+    chainId: string,
+  ): Array<{ name: string; apy: number; strategy: any }> {
+    // Find best LP opportunity
+    const bestLp = lpSimulations.reduce<{ apy: number; sim: GetLpSimulateResponse | null }>(
+      (best, sim) => {
+        const apy = this.extractLpApy(sim);
+        return apy > best.apy ? { apy, sim } : best;
+      },
+      { apy: 0, sim: null },
+    );
+
+    // Find best supply opportunity
+    const bestSupply = supplyData.reduce<{ apy: number; opp: any | null }>(
+      (best, data) => {
+        if (!data.opportunities || !Array.isArray(data.opportunities)) {
+          return best;
+        }
+
+        for (const opp of data.opportunities) {
+          const apy = this.parseNumber(opp.after?.supplyAPY) || 0;
+          if (apy > best.apy) {
+            return { apy, opp };
+          }
+        }
+        return best;
+      },
+      { apy: 0, opp: null },
+    );
+
+    // Build all possible strategies
+    const strategies: Array<{ name: string; apy: number; strategy: any }> = [];
+
+    // Strategy A: 100% supply
+    if (bestSupply.opp) {
+      strategies.push({
+        name: 'Strategy A: 100% Supply',
+        apy: bestSupply.apy,
+        strategy: {
+          name: 'supply_100',
+          positions: [
+            {
+              type: 'supply',
+              protocol: this.normalizeProtocolName(bestSupply.opp.protocol || 'aave'),
+              asset: bestSupply.opp.asset || bestSupply.opp.tokenSymbol,
+              amount: totalCapital,
+              allocation: 100,
+            },
+          ],
+        },
+      });
+    }
+
+    // Strategy B: 100% LP
+    if (bestLp.sim) {
+      strategies.push({
+        name: 'Strategy B: 100% LP',
+        apy: bestLp.apy,
+        strategy: {
+          name: 'lp_100',
+          positions: [
+            {
+              type: 'lp',
+              protocol: 'aerodromeSlipstream', // or extract from sim
+              poolAddress: bestLp.sim.pool?.poolAddress || '',
+              amount: totalCapital,
+              allocation: 100,
+            },
+          ],
+        },
+      });
+    }
+
+    // Strategy C: 50% supply / 50% LP
+    if (bestSupply.opp && bestLp.sim) {
+      const combinedApy = (bestSupply.apy + bestLp.apy) / 2;
+      strategies.push({
+        name: 'Strategy C: 50% Supply + 50% LP',
+        apy: combinedApy,
+        strategy: {
+          name: 'split_50_50',
+          positions: [
+            {
+              type: 'supply',
+              protocol: this.normalizeProtocolName(bestSupply.opp.protocol || 'aave'),
+              asset: bestSupply.opp.asset || bestSupply.opp.tokenSymbol,
+              amount: totalCapital * 0.5,
+              allocation: 50,
+            },
+            {
+              type: 'lp',
+              protocol: 'aerodromeSlipstream',
+              poolAddress: bestLp.sim.pool?.poolAddress || '',
+              amount: totalCapital * 0.5,
+              allocation: 50,
+            },
+          ],
+        },
+      });
+    }
+
+    return strategies;
+  }
+
+  private normalizeProtocolName(protocol: string): string {
+    const protocolMap: Record<string, string> = {
+      aerodromecl: 'aerodromeSlipstream',
+      aerodrome: 'aerodromeSlipstream',
+      uniswapv3: 'uniswapV3',
+      aave: 'aave',
+      euler: 'euler',
+      venus: 'venus',
+    };
+    return protocolMap[protocol.toLowerCase()] || protocol;
   }
 
   private normalizeChainId(chain: string): string {

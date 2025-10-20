@@ -26,20 +26,7 @@ import {
   RebalanceCostEstimate,
   RebalanceAnalysisData,
 } from './agent.types';
-
-const TOKEN_ADDRESS_BY_CHAIN: Record<string, Record<string, string>> = {
-  '8453': {
-    USDC: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
-    USDT: '0xfde4c96c8593536e31f229ea8f37b2ada2699bb2',
-    OUSDT: '0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189',
-  },
-  '56': {
-    USDT: '0x55d398326f99059ff775485246999027b3197955',
-    USDC: '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d',
-    USD1: '0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d',
-    DAI: '0x1af3f329e8be154074d8769d1ffa4ee058b1dbc3',
-  },
-};
+import { lookupTokenAddress } from './token-utils';
 
 interface ParsedStep1Summary extends PortfolioAnalysisSummary {
   totalAssetsUsd: number;
@@ -470,7 +457,7 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
       const tokenSymbol = opp.asset || opp.tokenSymbol || '';
 
       if ((!tokenAddress || tokenAddress === '') && ['aave', 'venus'].includes(protocol) && tokenSymbol) {
-        tokenAddress = this.lookupTokenAddress(tokenSymbol, chainId);
+        tokenAddress = lookupTokenAddress(tokenSymbol, chainId);
         if (tokenAddress) {
           this.logger.log(`Filled missing token address for ${protocol} ${tokenSymbol}: ${tokenAddress}`);
         } else {
@@ -565,18 +552,6 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
     return normalized;
   }
 
-  private lookupTokenAddress(symbol: string, chainId: string): string | null {
-    if (!symbol) {
-      return null;
-    }
-
-    const chainMap = TOKEN_ADDRESS_BY_CHAIN[chainId];
-    if (!chainMap) {
-      return null;
-    }
-
-    return chainMap[symbol.toUpperCase()] || null;
-  }
 
   private extractTargetPositionsFromPlan(opportunities: RebalanceOpportunity[]): {
     supply: Array<{ protocol: string; token: string; vToken: string; amount: string }>;
@@ -987,7 +962,7 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
         const toolResultsContent: any[] = [];
         for (const toolUse of toolUses) {
           const toolData = toolUse as any;
-          this.logger.log(`Calling tool: ${toolData.name} with args: ${JSON.stringify(toolData.input).substring(0, 200)}`);
+          this.logger.log(`Calling tool: ${toolData.name} with args: ${JSON.stringify(toolData.input)}`);
 
           try {
             const result = await this.mcpClient.callTool({
@@ -1221,13 +1196,6 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
           );
           if (analysisResult && analysisResult.output) {
             simulation = analysisResult.output.simulation || analysisResult.output;
-            if (analysisResult.output.plan) {
-              plan = this.normalizePlan(
-                analysisResult.output.plan,
-                { chainId: chainIdNum, userAddress: context.userAddress },
-                costEstimates,
-              );
-            }
           }
         }
 
@@ -1292,7 +1260,7 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
         this.logger.log(`Final result - has plan: ${!!plan}`);
 
         const data: RebalanceAnalysisData = {
-          simulation: null,
+          simulation: simulation ?? null,
           plan: plan ?? null,
           summary: structuredData?.summary,
           reasoning: structuredData?.recommendation || finalOutput,

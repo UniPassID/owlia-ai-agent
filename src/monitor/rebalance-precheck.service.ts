@@ -11,6 +11,7 @@ import {
   CalculateRebalanceCostBatchRequest,
   CalculateRebalanceCostBatchResponse,
 } from '../agent/types/mcp.types';
+import { lookupTokenAddress } from '../agent/token-utils';
 
 export interface RebalancePrecheckResult {
   shouldTrigger: boolean;
@@ -39,6 +40,7 @@ export class RebalancePrecheckService {
     const lpSimulationResults: GetLpSimulateResponse[] = [];
     const supplyOpportunitiesByChain: GetSupplyOpportunitiesResponse[] = [];
     let yieldSummary: AccountYieldSummaryResponse | null = null;
+    let dexPools: Record<string, any> = {};
 
     try {
       yieldSummary = await this.agentService.callMcpTool<AccountYieldSummaryResponse>('get_account_yield_summary', {
@@ -79,7 +81,7 @@ export class RebalancePrecheckService {
     }
 
     try {
-      const dexPools = await this.agentService.callMcpTool<Record<string, any>>('get_dex_pools', {
+      dexPools = await this.agentService.callMcpTool<Record<string, any>>('get_dex_pools', {
         chain_id: chainId,
       });
       const lpRequests = this.buildLpSimulateRequests(chainId, dexPools, totalAssetsUsd);
@@ -143,7 +145,7 @@ export class RebalancePrecheckService {
     try {
       // Convert strategies to target_positions_batch format
       const targetPositionsBatch = allStrategies.map(s =>
-        this.convertStrategyToTargetPositions(s.strategy, lpSimulationResults, supplyOpportunitiesByChain)
+        this.convertStrategyToTargetPositions(s.strategy, lpSimulationResults, supplyOpportunitiesByChain, dexPools, chainId)
       );
 
       const request: CalculateRebalanceCostBatchRequest = {
@@ -329,6 +331,8 @@ export class RebalancePrecheckService {
     strategy: any,
     lpSimulations: GetLpSimulateResponse[],
     supplyData: GetSupplyOpportunitiesResponse[],
+    dexPools: Record<string, any>,
+    chainId: string,
   ): { target_positions: { token: string; amount: string }[] } {
     const targetPositions: { token: string; amount: string }[] = [];
 
@@ -339,7 +343,7 @@ export class RebalancePrecheckService {
     for (const position of strategy.positions) {
       if (position.type === 'supply') {
         // For supply positions, add the single token
-        const tokenAddress = this.findTokenAddressForSupply(position.asset, supplyData);
+        const tokenAddress = this.findTokenAddressForSupply(position.asset, supplyData, chainId);
         if (tokenAddress) {
           targetPositions.push({
             token: tokenAddress,
@@ -348,7 +352,7 @@ export class RebalancePrecheckService {
         }
       } else if (position.type === 'lp') {
         // For LP positions, add both token0 and token1
-        const lpInfo = this.findLpTokensFromSimulations(position.poolAddress, lpSimulations);
+        const lpInfo = this.findLpTokensFromSimulations(position.poolAddress, lpSimulations, dexPools);
         if (lpInfo) {
           if (lpInfo.token0Amount > 0) {
             targetPositions.push({
@@ -371,13 +375,17 @@ export class RebalancePrecheckService {
 
   /**
    * Find token address for a supply position from supply opportunities data
-   * Note: SupplyOpportunity only has 'asset' (symbol), not token address
-   * We use the asset symbol directly, or vault_address if available
+   * Tries to get token address from:
+   * 1. vault_address from supply opportunities
+   * 2. lookupTokenAddress mapping
+   * 3. Falls back to asset symbol
    */
   private findTokenAddressForSupply(
     assetSymbol: string,
     supplyData: GetSupplyOpportunitiesResponse[],
+    chainId: string,
   ): string | null {
+    // First try to find it in supply opportunities data
     for (const data of supplyData) {
       if (!data.opportunities || !Array.isArray(data.opportunities)) {
         continue;
@@ -385,45 +393,72 @@ export class RebalancePrecheckService {
 
       for (const opp of data.opportunities) {
         if (opp.asset === assetSymbol) {
-          // Use vault_address if available, otherwise use asset symbol
-          return opp.vault_address || opp.asset;
+          // Use vault_address if available
+          if (opp.vault_address) {
+            return opp.vault_address;
+          }
         }
       }
     }
-    // If not found in opportunities, return the symbol itself
+
+    // If not found in opportunities, try to lookup by symbol
+    const tokenAddress = lookupTokenAddress(assetSymbol, chainId);
+    if (tokenAddress) {
+      this.logger.log(`Resolved token address for ${assetSymbol} on chain ${chainId}: ${tokenAddress}`);
+      return tokenAddress;
+    }
+
+    // Fall back to the symbol itself
+    this.logger.warn(`Could not find token address for ${assetSymbol} on chain ${chainId}, using symbol as fallback`);
     return assetSymbol;
   }
 
   /**
-   * Find LP token info from simulations
-   * Note: GetLpSimulateResponse doesn't include token addresses directly
-   * We extract amounts from the simulation and use pool address
+   * Find LP token info from simulations and dexPools
+   * Extract token amounts from simulation and token addresses from dexPools
    */
   private findLpTokensFromSimulations(
     poolAddress: string,
     lpSimulations: GetLpSimulateResponse[],
+    dexPools: Record<string, any>,
   ): { token0Address: string; token1Address: string; token0Amount: number; token1Amount: number } | null {
     const normalizedPoolAddress = poolAddress.toLowerCase();
 
+    // Find the simulation for this pool
+    let token0Amount = 0;
+    let token1Amount = 0;
     for (const sim of lpSimulations) {
       const simPoolAddress = sim.pool?.poolAddress?.toLowerCase();
       if (simPoolAddress === normalizedPoolAddress) {
-        const token0Amount = this.parseNumber(sim.summary?.requiredTokens?.token0?.amount) || 0;
-        const token1Amount = this.parseNumber(sim.summary?.requiredTokens?.token1?.amount) || 0;
-
-        // Since token addresses aren't in the simulation response,
-        // we use the pool address as a placeholder
-        // The MCP server should resolve actual tokens from pool address
-        return {
-          token0Address: poolAddress + ':token0',
-          token1Address: poolAddress + ':token1',
-          token0Amount,
-          token1Amount,
-        };
+        token0Amount = this.parseNumber(sim.summary?.requiredTokens?.token0?.amount) || 0;
+        token1Amount = this.parseNumber(sim.summary?.requiredTokens?.token1?.amount) || 0;
+        break;
       }
     }
 
-    return null;
+    // Find token addresses from dexPools
+    let token0Address = '';
+    let token1Address = '';
+    for (const [poolAddr, poolData] of Object.entries(dexPools)) {
+      if (poolAddr.toLowerCase() === normalizedPoolAddress) {
+        const currentSnapshot = poolData?.currentSnapshot || {};
+        token0Address = currentSnapshot.token0Address || currentSnapshot.token0 || '';
+        token1Address = currentSnapshot.token1Address || currentSnapshot.token1 || '';
+        break;
+      }
+    }
+
+    // Return null if we don't have the required data
+    if (!token0Address || !token1Address || (token0Amount === 0 && token1Amount === 0)) {
+      return null;
+    }
+
+    return {
+      token0Address,
+      token1Address,
+      token0Amount,
+      token1Amount,
+    };
   }
 
   /**

@@ -187,6 +187,7 @@ Total deployable capital equals the totalAssetsUsd value above.
 3. Decide whether rebalancing is beneficial considering APY lift, gas costs, and break-even time:
    - The new APY must satisfy BOTH conditions simultaneously:
      a) Relative increase: new APY ÷ current APY >= 1.1 (i.e., new APY is at least 1.1x the current)
+        Special case: If current APY = 0, this condition is automatically satisfied.
         Example: if current is 5%, new must be >= 5.5% (5 × 1.1 = 5.5)
      b) Absolute increase: new APY - current APY >= 2 percentage points
         Example: if current is 5%, new must be >= 7% (5 + 2 = 7)
@@ -198,7 +199,20 @@ Total deployable capital equals the totalAssetsUsd value above.
      - Absolute: 7.894 - 4.708 = 3.186pp (✓ >= 2pp)
      - Result: APY conditions SATISFIED
 
-   - Break-even time must be <= 4 hours to proceed.
+   - Break-even time calculation (use results from calculate_rebalance_cost_batch):
+     **Formula:**
+     1. Calculate APY improvement: APY_improvement = new APY - current APY (in percentage points)
+     2. Calculate hourly return rate: hourly_rate = (APY_improvement / 100) / (365 × 24)
+        Example: If APY improves from 5% to 8%, improvement = 3pp
+        hourly_rate = (3 / 100) / 8760 = 0.03 / 8760 = 0.00000342465753
+     3. Calculate hourly return in USD: hourly_return_usd = totalAssetsUsd × hourly_rate
+        Example: With $1000 assets: hourly_return = 1000 × 0.00000342465753 = $0.00342465753
+     4. Calculate break-even time: break_even_hours = rebalance_cost_usd / hourly_return_usd
+        Example: With $0.15 cost: break_even = 0.15 / 0.00342465753 = 43.8 hours
+
+     **Break-even condition:**
+     - Break-even time must be <= 4 hours to proceed.
+
    - Only recommend rebalancing if BOTH APY conditions AND break-even time are satisfied.
 4. Assemble the final execution plan using current positions from Step 1's yieldSummary.
 

@@ -257,7 +257,19 @@ Rules:
 - All numeric fields must be numbers, not strings.
 - Protocol names must match the allowed casing exactly.
 - The summary field should provide a one-sentence overview of the entire proposal:
-  * If shouldRebalance is true: "Rebalance to [strategy] for [X]% APY ([Y]pp gain, [Z]h break-even)."
+  * If shouldRebalance is true:
+    - Length: 40-60 characters maximum
+    - Tone: Professional, friendly, natural language
+    - Numbers: Only 1-2 core numbers (target APY)
+    - FORBIDDEN: "pp", "basis points", "break-even", parentheses with technical details
+    - Template options (choose one for natural variation):
+      * "Rebalanced to [strategy] at [APY]% APY."
+      * "Moved to [strategy], now [APY]% APY."
+      * "Switched to [strategy] for [APY]% APY."
+    - Examples:
+      * "Rebalanced to AAVE supply at 7.9% APY."
+      * "Switched to Aerodrome LP for 18.0% APY."
+      * "Moved to mixed LP and supply at 8.5% APY."
   * If shouldRebalance is false:
     - Length: 40-60 characters maximum
     - Style: Simple, friendly, conversational (first-person perspective)
@@ -278,13 +290,39 @@ Rules:
     - FORBIDDEN: Do NOT use technical terms like "pp", "threshold", "basis points"
     - REQUIRED: Keep it under 60 characters, natural and easy to understand
     - Allow natural variation in phrasing while staying true to the actual reason
-  * Example (true): "Rebalance to AAVE USDC supply for 7.9% APY (+3.2pp gain, 2h break-even)."
 - The recommendation string should be user-friendly and informative:
   * Use a conversational, helpful tone (avoid cold technical language)
   * If shouldRebalance is true:
-    - Clearly explain the recommended strategy (what assets, what protocol)
-    - Show the APY improvement with actual numbers (e.g., "from 4.7% to 7.9%")
-    - Mention break-even time if reasonable
+    - Length: Maximum 140 characters (be concise!)
+    - Tone: Professional but friendly, execution-focused (action already taken)
+    - CRITICAL RULE: Describe ONLY the single executed strategy, no lists or alternatives
+    - Required information to include:
+      1. Strategy composition (e.g., "100% AAVE supply" or "50% Aerodrome LP + 50% AAVE supply")
+         - Simplify protocol names: use "AAVE supply" not "AAVE USDC supply position"
+         - Use percentage allocations from the opportunities array
+      2. Strategy APY (precise number)
+      3. Simple improvement and cost-time note in plain words:
+         - Use "about +[gain]%" instead of "+Xpp" or "from X% to Y%"
+         - Use "Cost $[cost], recover in [hours]h" instead of "break-even Xh"
+         - If cost is negligible (< $0.01), use "minimal cost" or omit cost sentence
+      4. Execution confirmation: "Applied." or "Executed." or "Done."
+    - Required structure (follow this template):
+      "Moved to [strategy] at [APY]% APY, about +[gain]%. Cost $[cost], recover in [hours]h. Applied."
+    - Examples:
+      * "Moved to 100% AAVE supply at 7.9% APY, about +3.2%. Cost $0.15, recover in 2h. Applied."
+      * "Switched to 100% Aerodrome LP at 18.0% APY, about +2.2%. Cost $0.10, recover in 0.5h. Executed."
+      * "Rebalanced to 50% Aerodrome LP + 50% AAVE supply at 8.5% APY, about +2.5%. Cost $1.50, recover in 3h. Done."
+      * "Moved to 100% AAVE supply at 4.8% APY, about +4.8%. Minimal cost, instant recovery. Applied."
+    - Data source: Extract the SINGLE BEST strategy from opportunities array
+    - CRITICAL: All numbers must come from actual analysis results, no fabrication allowed
+    - ABSOLUTELY FORBIDDEN:
+      * "I evaluated...", "I tested...", "I found..." or listing multiple options
+      * Technical jargon: "pp", "threshold", "basis points", "break-even limit"
+      * Mentioning how many strategies were tested
+      * Comparing multiple alternatives or explaining evaluation process
+      * Parentheses with technical details like "(+3.2pp gain, 2h break-even)"
+      * Future tense or conditional language - use past tense (action already taken)
+    - REQUIRED: Use action verbs indicating completion (Moved, Switched, Rebalanced)
   * If shouldRebalance is false:
     - Length: Maximum 180 characters (be concise!)
     - Tone: Professional but friendly, first-person perspective, easy to understand

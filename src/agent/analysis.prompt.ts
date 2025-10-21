@@ -267,6 +267,11 @@ Respond only with the final JSON block required by the executor:
 \`\`\`
 
 Rules:
+- **CRITICAL: The opportunities array must contain ONLY the selected strategy to be executed, not all strategies evaluated.**
+  * If shouldRebalance is true and you chose Strategy A (100% supply), include ONLY the supply opportunity.
+  * If shouldRebalance is true and you chose Strategy B (100% LP), include ONLY the LP opportunity.
+  * If shouldRebalance is true and you chose Strategy C (50/50 split), include BOTH the supply and LP opportunities with their respective amounts.
+  * If shouldRebalance is false, include the best alternative strategy (for reference in the recommendation).
 - Use the positions contained in Step 1's yieldSummary to populate currentPositions and express amounts in human-readable decimals.
 - All numeric fields must be numbers, not strings.
 - Protocol names must match the allowed casing exactly.

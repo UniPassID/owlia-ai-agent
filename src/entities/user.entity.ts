@@ -1,11 +1,12 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
 @Entity('users')
+@Index(['address', 'chainId'], { unique: true })
 export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ unique: true })
+  @Column()
   address: string;
 
   @Column()
@@ -14,8 +15,8 @@ export class User {
   @Column()
   activationTxHash: string;
 
-  @Column()
-  chainId: string;
+  @Column('int')
+  chainId: number;
 
   @CreateDateColumn()
   createdAt: Date;

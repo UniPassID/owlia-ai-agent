@@ -20,7 +20,7 @@ function createMockUser(address: string, chainId: string): User {
   user.id = `test-user-${Date.now()}`;
   user.address = address;
   user.safeOwner = address; // Use same address as safe owner
-  user.chainId = chainId;
+  user.chainId = parseInt(chainId, 10);
   user.createdAt = new Date();
   user.updatedAt = new Date();
   return user;

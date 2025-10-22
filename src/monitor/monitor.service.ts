@@ -7,6 +7,7 @@ import { User } from '../entities/user.entity';
 import { RebalanceJob, JobStatus } from '../entities/rebalance-job.entity';
 import { RebalanceQueueService } from '../queue/rebalance-queue.service';
 import { RebalancePrecheckService } from './rebalance-precheck.service';
+import { UserService } from '../api/user.service';
 
 @Injectable()
 export class MonitorService {
@@ -22,6 +23,7 @@ export class MonitorService {
     private jobRepo: Repository<RebalanceJob>,
     private queueService: RebalanceQueueService,
     private precheckService: RebalancePrecheckService,
+    private userService: UserService,
   ) {
 
     setTimeout(() => {
@@ -90,8 +92,8 @@ export class MonitorService {
     await this.triggerRebalance(user, policy, 'scheduled_monitor');
   }
 
-  async evaluateUserPrecheckByAddress(address: string) {
-    const user = await this.userRepo.findOne({ where: { address } });
+  async evaluateUserPrecheckByAddress(address: string, chainId: string) {
+    const user = await this.userService.getUserByAddress(address, chainId);
     if (!user) {
       throw new NotFoundException(`User with address ${address} not found`);
     }

@@ -8,12 +8,14 @@ import { RebalanceJob } from '../entities/rebalance-job.entity';
 import { QueueModule } from '../queue/queue.module';
 import { AgentModule } from '../agent/agent.module';
 import { RebalancePrecheckService } from './rebalance-precheck.service';
+import { UserModule } from '../api/user.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, UserPolicy, RebalanceJob]),
     QueueModule,
     AgentModule,
+    UserModule,
   ],
   controllers: [MonitorController],
   providers: [MonitorService, RebalancePrecheckService],

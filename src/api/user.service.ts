@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { User } from '../entities/user.entity';
 import { RegisterUserDto } from './dto/user.dto';
 import axios from 'axios';
+import { RPC_ENDPOINTS } from '../config/rpc.config';
 
 interface TransactionReceipt {
   logs: Array<{
@@ -18,9 +19,23 @@ interface TransactionReceipt {
 export class UserService {
   private readonly logger = new Logger(UserService.name);
 
-  // RPC endpoints for different chains
-  private readonly rpcEndpoints: Record<string, string> = {
-    base: process.env.BASE_RPC_URL || 'https://mainnet.base.org',
+  // Chain ID mappings (name to numeric ID)
+  private readonly chainIdMap: Record<string, number> = {
+    'ethereum': 1,
+    'eth': 1,
+    'mainnet': 1,
+    '1': 1,
+    'bsc': 56,
+    'bnb': 56,
+    '56': 56,
+    'optimism': 10,
+    'op': 10,
+    '10': 10,
+    'base': 8453,
+    '8453': 8453,
+    'arbitrum': 42161,
+    'arb': 42161,
+    '42161': 42161,
   };
 
   // Safe contract deployment event signature
@@ -33,9 +48,11 @@ export class UserService {
   private readonly ENABLED_MODULE_TOPIC =
     '0xecdf3a3effea5783a3c4c2140e677577666428d44ed9d474a0b3a4c9943f8440';
 
-  // Required module address
-  private readonly REQUIRED_MODULE_ADDRESS =
-    '0xC25Ccf56f408c37b5eD33Ac47D0358cFAd0877e0'.toLowerCase();
+  // Required module addresses by chain
+  private readonly REQUIRED_MODULE_ADDRESSES: Record<string, string> = {
+    '8453': '0xC25Ccf56f408c37b5eD33Ac47D0358cFAd0877e0'.toLowerCase(), // Base
+    '56': '0xeF07EA36e815EAc1a74F2769F1e7cA42b4BA7026'.toLowerCase(),   // BSC
+  };
 
   constructor(
     @InjectRepository(User)
@@ -43,26 +60,53 @@ export class UserService {
   ) {}
 
   /**
+   * Convert chain identifier (name or string ID) to numeric chain ID
+   */
+  private getChainId(chainIdentifier: string): number {
+    const normalized = chainIdentifier.toLowerCase();
+    const chainId = this.chainIdMap[normalized];
+
+    if (!chainId) {
+      // Try to parse as number if not found in map
+      const parsed = parseInt(chainIdentifier, 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        return parsed;
+      }
+      throw new HttpException(
+        { success: false, error: `Unsupported chain: ${chainIdentifier}` },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    return chainId;
+  }
+
+  /**
    * Register a new user with transaction verification
    */
   async register(dto: RegisterUserDto): Promise<User> {
-    this.logger.log(`Registering user with address: ${dto.address}`);
+    this.logger.log(`Registering user with address: ${dto.address} on chain: ${dto.network}`);
 
-    // Check if user already exists
+    const chainId = this.getChainId(dto.network);
+
+    // Check if user already exists on this chain
     const existingUser = await this.userRepo.findOne({
-      where: { address: dto.address.toLowerCase() },
+      where: {
+        address: dto.address.toLowerCase(),
+        chainId,
+      },
     });
 
     if (existingUser) {
       throw new HttpException(
-        { success: false, error: 'User already registered' },
+        { success: false, error: 'User already registered on this chain' },
         HttpStatus.CONFLICT,
       );
     }
 
     // Verify transaction on chain
     await this.verifyActivationTransaction(
-      dto.network,
+      chainId.toString(),
       dto.activationTxHash,
       dto.address,
     );
@@ -72,7 +116,7 @@ export class UserService {
       address: dto.address.toLowerCase(),
       safeOwner: dto.safeOwner.toLowerCase(),
       activationTxHash: dto.activationTxHash.toLowerCase(),
-      chainId: dto.network,
+      chainId,
     });
 
     await this.userRepo.save(user);
@@ -91,7 +135,7 @@ export class UserService {
   ): Promise<void> {
     this.logger.log(`Verifying transaction ${txHash} on ${chainId}`);
 
-    const rpcUrl = this.rpcEndpoints[chainId.toLowerCase()];
+    const rpcUrl = RPC_ENDPOINTS[chainId];
     if (!rpcUrl) {
       throw new HttpException(
         { success: false, error: `Unsupported chain: ${chainId}` },
@@ -124,7 +168,7 @@ export class UserService {
       }
 
       // Verify logs contain module activation
-      const hasModuleActivation = this.checkModuleActivation(receipt);
+      const hasModuleActivation = this.checkModuleActivation(receipt, chainId);
       if (!hasModuleActivation) {
         throw new HttpException(
           {
@@ -198,7 +242,13 @@ export class UserService {
   /**
    * Check if transaction logs contain module activation for the required module
    */
-  private checkModuleActivation(receipt: TransactionReceipt): boolean {
+  private checkModuleActivation(receipt: TransactionReceipt, chainId: string): boolean {
+    const requiredModuleAddress = this.REQUIRED_MODULE_ADDRESSES[chainId];
+    if (!requiredModuleAddress) {
+      this.logger.warn(`No required module address configured for chain ${chainId}`);
+      return false;
+    }
+
     return receipt.logs.some((log) => {
       if (log.topics[0]?.toLowerCase() !== this.ENABLED_MODULE_TOPIC.toLowerCase()) {
         return false;
@@ -208,20 +258,24 @@ export class UserService {
 
       // EnabledModule event has the module address as topics[1]
       // topics[1] is padded to 32 bytes, so we need to extract the address
-      const moduleAddress = log.data
-        ? '0x' + log.data.slice(-40).toLowerCase()
+      const moduleAddress = log.topics[1]
+        ? '0x' + log.topics[1].slice(-40).toLowerCase()
         : null;
 
-      return moduleAddress === this.REQUIRED_MODULE_ADDRESS;
+      return moduleAddress === requiredModuleAddress;
     });
   }
 
   /**
-   * Get user by address
+   * Get user by address and chainId
    */
-  async getUserByAddress(address: string): Promise<User | null> {
+  async getUserByAddress(address: string, chainId: string): Promise<User | null> {
+    const numericChainId = this.getChainId(chainId);
     return this.userRepo.findOne({
-      where: { address: address.toLowerCase() },
+      where: {
+        address: address.toLowerCase(),
+        chainId: numericChainId,
+      },
     });
   }
 

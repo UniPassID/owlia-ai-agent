@@ -20,7 +20,6 @@ export class InitialSchema1760094539307 implements MigrationInterface {
                         name: 'address',
                         type: 'varchar',
                         length: '255',
-                        isUnique: true,
                     },
                     {
                         name: 'safeOwner',
@@ -34,8 +33,7 @@ export class InitialSchema1760094539307 implements MigrationInterface {
                     },
                     {
                         name: 'chainId',
-                        type: 'varchar',
-                        length: '255',
+                        type: 'int',
                     },
                     {
                         name: 'createdAt',

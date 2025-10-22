@@ -455,7 +455,7 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
       let tokenAddress = opp.assetAddress || opp.asset_address || opp.tokenAddress || '';
       const tokenSymbol = opp.asset || opp.tokenSymbol || '';
 
-      if ((!tokenAddress || tokenAddress === '') && ['aave', 'venus'].includes(protocol) && tokenSymbol) {
+      if ((!tokenAddress || tokenAddress === '') && tokenSymbol) {
         tokenAddress = lookupTokenAddress(tokenSymbol, chainId);
         if (tokenAddress) {
           this.logger.log(`Filled missing token address for ${protocol} ${tokenSymbol}: ${tokenAddress}`);
@@ -1142,6 +1142,7 @@ export class AgentService implements OnModuleInit, OnModuleDestroy {
           lpPoolsContext,
         );
         const bestLpOpportunity = this.selectBestLpOpportunity(lpCandidates);
+        this.logger.log(`bestLpOpportunity: ${JSON.stringify(bestLpOpportunity)}`)
 
         const supplyInput = {
           chain_id: chainIdEnum,

@@ -85,6 +85,13 @@ export class TriggerRebalanceDto {
   @IsString()
   address: string;
 
+  @ApiProperty({
+    description: 'Blockchain network (name or chain ID)',
+    example: 'base',
+  })
+  @IsString()
+  network: string;
+
   @ApiPropertyOptional({
     description: 'Trigger reason',
     example: 'manual_trigger',

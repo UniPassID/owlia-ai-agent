@@ -10,6 +10,10 @@ import {
   GetSupplyOpportunitiesResponse,
   CalculateRebalanceCostBatchRequest,
   CalculateRebalanceCostBatchResponse,
+  LendingPosition,
+  TargetLiquidityPosition,
+  ProtocolType,
+  GetDexPoolsResponse,
 } from '../agent/types/mcp.types';
 import { lookupTokenAddress } from '../agent/token-utils';
 
@@ -29,18 +33,17 @@ export interface RebalancePrecheckResult {
 @Injectable()
 export class RebalancePrecheckService {
   private readonly logger = new Logger(RebalancePrecheckService.name);
-  private readonly lpSimulationAmountUsd = 1000;
   private readonly lpSimulationTimeHorizonMinutes = 30;
 
   constructor(private readonly agentService: AgentService) {}
 
   async evaluate(user: User, policy: UserPolicy | null): Promise<RebalancePrecheckResult> {
-    const chainId = this.normalizeChainId(user.chainId) as ChainId;
+    const chainId = user.chainId.toString() as ChainId;
 
     const lpSimulationResults: GetLpSimulateResponse[] = [];
     const supplyOpportunitiesByChain: GetSupplyOpportunitiesResponse[] = [];
     let yieldSummary: AccountYieldSummaryResponse | null = null;
-    let dexPools: Record<string, any> = {};
+    let dexPools: GetDexPoolsResponse = {};
 
     try {
       yieldSummary = await this.agentService.callMcpTool<AccountYieldSummaryResponse>('get_account_yield_summary', {
@@ -81,9 +84,10 @@ export class RebalancePrecheckService {
     }
 
     try {
-      dexPools = await this.agentService.callMcpTool<Record<string, any>>('get_dex_pools', {
+      dexPools = await this.agentService.callMcpTool<GetDexPoolsResponse>('get_dex_pools', {
         chain_id: chainId,
       });
+      this.logger.log(`get_dex_pools ret: ${JSON.stringify(dexPools)}`)
       const lpRequests = this.buildLpSimulateRequests(chainId, dexPools, totalAssetsUsd);
       if (lpRequests.length > 0) {
         this.logger.log(`Simulating ${lpRequests.length} LP pools for user ${user.id}`);
@@ -118,6 +122,7 @@ export class RebalancePrecheckService {
       supplyOpportunitiesByChain,
       totalAssetsUsd,
       chainId,
+      dexPools,
     );
 
     if (allStrategies.length === 0) {
@@ -134,6 +139,7 @@ export class RebalancePrecheckService {
     }
 
     this.logger.log(`Built ${allStrategies.length} strategies for user ${user.id}`);
+    this.logger.log(`${JSON.stringify(allStrategies, null, 2)}`);
 
     // Step 2: Calculate rebalance cost for all strategies in batch
     let gasEstimate = 0;
@@ -149,6 +155,7 @@ export class RebalancePrecheckService {
       );
 
       const request: CalculateRebalanceCostBatchRequest = {
+        safeAddress: user.address,
         wallet_address: user.address,
         chain_id: chainId as ChainId,
         target_positions_batch: targetPositionsBatch,
@@ -241,7 +248,7 @@ export class RebalancePrecheckService {
     }
 
     // Step 3: Check break-even time condition
-    const maxBreakEvenHours = 4;
+    const maxBreakEvenHours = 24;
     const breakEvenConditionSatisfied = breakEvenTimeHours <= maxBreakEvenHours;
 
     if (!breakEvenConditionSatisfied) {
@@ -331,60 +338,78 @@ export class RebalancePrecheckService {
     strategy: any,
     lpSimulations: GetLpSimulateResponse[],
     supplyData: GetSupplyOpportunitiesResponse[],
-    dexPools: Record<string, any>,
+    dexPools: GetDexPoolsResponse,
     chainId: string,
-  ): { target_positions: { token: string; amount: string }[] } {
-    const targetPositions: { token: string; amount: string }[] = [];
+  ): {
+    targetLendingSupplyPositions?: LendingPosition[];
+    targetLiquidityPositions?: TargetLiquidityPosition[];
+  } {
+    const targetLendingSupplyPositions: LendingPosition[] = [];
+    const targetLiquidityPositions: TargetLiquidityPosition[] = [];
 
     if (!strategy || !strategy.positions || !Array.isArray(strategy.positions)) {
-      return { target_positions: [] };
+      return {};
     }
 
     for (const position of strategy.positions) {
       if (position.type === 'supply') {
-        // For supply positions, add the single token
-        const tokenAddress = this.findTokenAddressForSupply(position.asset, supplyData, chainId);
-        if (tokenAddress) {
-          targetPositions.push({
-            token: tokenAddress,
+        // For supply positions, create LendingPosition
+        const supplyInfo = this.findSupplyPositionInfo(position.asset, supplyData, position.protocol, chainId);
+        if (supplyInfo) {
+          targetLendingSupplyPositions.push({
+            protocol: this.normalizeProtocolType(position.protocol),
+            token: supplyInfo.tokenAddress,
+            vToken: supplyInfo.vTokenAddress,
             amount: position.amount.toString(),
           });
         }
       } else if (position.type === 'lp') {
-        // For LP positions, add both token0 and token1
-        const lpInfo = this.findLpTokensFromSimulations(position.poolAddress, lpSimulations, dexPools);
+        // For LP positions, create TargetLiquidityPosition
+        const lpInfo = this.findLpPositionInfo(position.poolAddress, lpSimulations, dexPools);
         if (lpInfo) {
-          if (lpInfo.token0Amount > 0) {
-            targetPositions.push({
-              token: lpInfo.token0Address,
-              amount: lpInfo.token0Amount.toString(),
-            });
-          }
-          if (lpInfo.token1Amount > 0) {
-            targetPositions.push({
-              token: lpInfo.token1Address,
-              amount: lpInfo.token1Amount.toString(),
-            });
-          }
+          // Calculate the allocation ratio: position.amount / simulation total amount
+          // The simulation is based on lpInfo.totalSimulatedAmount (token0 + token1 in USD)
+          const allocationRatio = position.allocation ? position.allocation / 100 : 1;
+
+          targetLiquidityPositions.push({
+            protocol: this.normalizeLpProtocol(position.protocol),
+            poolAddress: position.poolAddress,
+            token0Address: lpInfo.token0Address,
+            token1Address: lpInfo.token1Address,
+            targetTickLower: lpInfo.tickLower,
+            targetTickUpper: lpInfo.tickUpper,
+            targetAmount0: (lpInfo.token0Amount * allocationRatio).toString(),
+            targetAmount1: (lpInfo.token1Amount * allocationRatio).toString(),
+          });
         }
       }
     }
 
-    return { target_positions: targetPositions };
+    const result: {
+      targetLendingSupplyPositions?: LendingPosition[];
+      targetLiquidityPositions?: TargetLiquidityPosition[];
+    } = {};
+
+    if (targetLendingSupplyPositions.length > 0) {
+      result.targetLendingSupplyPositions = targetLendingSupplyPositions;
+    }
+
+    if (targetLiquidityPositions.length > 0) {
+      result.targetLiquidityPositions = targetLiquidityPositions;
+    }
+
+    return result;
   }
 
   /**
-   * Find token address for a supply position from supply opportunities data
-   * Tries to get token address from:
-   * 1. vault_address from supply opportunities
-   * 2. lookupTokenAddress mapping
-   * 3. Falls back to asset symbol
+   * Find supply position info including token address and vToken address
    */
-  private findTokenAddressForSupply(
+  private findSupplyPositionInfo(
     assetSymbol: string,
     supplyData: GetSupplyOpportunitiesResponse[],
+    protocol: string,
     chainId: string,
-  ): string | null {
+  ): { tokenAddress: string; vTokenAddress: string | null } | null {
     // First try to find it in supply opportunities data
     for (const data of supplyData) {
       if (!data.opportunities || !Array.isArray(data.opportunities)) {
@@ -393,9 +418,12 @@ export class RebalancePrecheckService {
 
       for (const opp of data.opportunities) {
         if (opp.asset === assetSymbol) {
-          // Use vault_address if available
-          if (opp.vault_address) {
-            return opp.vault_address;
+          const tokenAddress = lookupTokenAddress(assetSymbol, chainId);
+          if (tokenAddress) {
+            return {
+              tokenAddress,
+              vTokenAddress: opp.vault_address || null,
+            };
           }
         }
       }
@@ -405,33 +433,51 @@ export class RebalancePrecheckService {
     const tokenAddress = lookupTokenAddress(assetSymbol, chainId);
     if (tokenAddress) {
       this.logger.log(`Resolved token address for ${assetSymbol} on chain ${chainId}: ${tokenAddress}`);
-      return tokenAddress;
+      return {
+        tokenAddress,
+        vTokenAddress: null,
+      };
     }
 
     // Fall back to the symbol itself
     this.logger.warn(`Could not find token address for ${assetSymbol} on chain ${chainId}, using symbol as fallback`);
-    return assetSymbol;
+    return {
+      tokenAddress: assetSymbol,
+      vTokenAddress: null,
+    };
   }
 
   /**
-   * Find LP token info from simulations and dexPools
-   * Extract token amounts from simulation and token addresses from dexPools
+   * Find LP position info from simulations and dexPools
+   * Extract token amounts, tick range, and addresses
    */
-  private findLpTokensFromSimulations(
+  private findLpPositionInfo(
     poolAddress: string,
     lpSimulations: GetLpSimulateResponse[],
     dexPools: Record<string, any>,
-  ): { token0Address: string; token1Address: string; token0Amount: number; token1Amount: number } | null {
+  ): {
+    token0Address: string;
+    token1Address: string;
+    token0Amount: number;
+    token1Amount: number;
+    tickLower: number;
+    tickUpper: number;
+  } | null {
     const normalizedPoolAddress = poolAddress.toLowerCase();
 
     // Find the simulation for this pool
     let token0Amount = 0;
     let token1Amount = 0;
+    let tickLower = 0;
+    let tickUpper = 0;
+
     for (const sim of lpSimulations) {
       const simPoolAddress = sim.pool?.poolAddress?.toLowerCase();
       if (simPoolAddress === normalizedPoolAddress) {
         token0Amount = this.parseNumber(sim.summary?.requiredTokens?.token0?.amount) || 0;
         token1Amount = this.parseNumber(sim.summary?.requiredTokens?.token1?.amount) || 0;
+        tickLower = sim.pool?.position?.tickLower ?? 0;
+        tickUpper = sim.pool?.position?.tickUpper ?? 0;
         break;
       }
     }
@@ -458,6 +504,8 @@ export class RebalancePrecheckService {
       token1Address,
       token0Amount,
       token1Amount,
+      tickLower,
+      tickUpper,
     };
   }
 
@@ -474,6 +522,7 @@ export class RebalancePrecheckService {
     supplyData: GetSupplyOpportunitiesResponse[],
     totalCapital: number,
     chainId: string,
+    dexPools: Record<string, any>,
   ): Array<{ name: string; apy: number; strategy: any }> {
     // Find best LP opportunity
     const bestLp = lpSimulations.reduce<{ apy: number; sim: GetLpSimulateResponse | null }>(
@@ -527,6 +576,9 @@ export class RebalancePrecheckService {
 
     // Strategy B: 100% LP
     if (bestLp.sim) {
+      const poolAddress = bestLp.sim.pool?.poolAddress || '';
+      const protocol = this.extractLpProtocol(poolAddress, dexPools);
+
       strategies.push({
         name: 'Strategy B: 100% LP',
         apy: bestLp.apy,
@@ -535,8 +587,8 @@ export class RebalancePrecheckService {
           positions: [
             {
               type: 'lp',
-              protocol: 'aerodromeSlipstream', // or extract from sim
-              poolAddress: bestLp.sim.pool?.poolAddress || '',
+              protocol,
+              poolAddress,
               amount: totalCapital,
               allocation: 100,
             },
@@ -548,6 +600,9 @@ export class RebalancePrecheckService {
     // Strategy C: 50% supply / 50% LP
     if (bestSupply.opp && bestLp.sim) {
       const combinedApy = (bestSupply.apy + bestLp.apy) / 2;
+      const poolAddress = bestLp.sim.pool?.poolAddress || '';
+      const lpProtocol = this.extractLpProtocol(poolAddress, dexPools);
+
       strategies.push({
         name: 'Strategy C: 50% Supply + 50% LP',
         apy: combinedApy,
@@ -563,8 +618,8 @@ export class RebalancePrecheckService {
             },
             {
               type: 'lp',
-              protocol: 'aerodromeSlipstream',
-              poolAddress: bestLp.sim.pool?.poolAddress || '',
+              protocol: lpProtocol,
+              poolAddress,
               amount: totalCapital * 0.5,
               allocation: 50,
             },
@@ -586,6 +641,61 @@ export class RebalancePrecheckService {
       venus: 'venus',
     };
     return protocolMap[protocol.toLowerCase()] || protocol;
+  }
+
+  /**
+   * Extract protocol name from dexPools data for a given pool address
+   */
+  private extractLpProtocol(poolAddress: string, dexPools: Record<string, any>): string {
+    if (!poolAddress || !dexPools) {
+      return 'aerodromeSlipstream'; // fallback
+    }
+
+    const normalizedPoolAddress = poolAddress.toLowerCase();
+
+    for (const [poolAddr, poolData] of Object.entries(dexPools)) {
+      // Skip _dataSource field
+      if (poolAddr === '_dataSource') continue;
+
+      if (poolAddr.toLowerCase() === normalizedPoolAddress) {
+        // Try to extract protocol from pool data
+        // Check currentSnapshot.dexKey first (most reliable)
+        const dexKey = poolData?.currentSnapshot?.dexKey;
+        if (dexKey) {
+          return this.normalizeProtocolName(dexKey);
+        }
+
+        // Fallback: try other fields
+        const protocol = poolData?.protocol || poolData?.dex || poolData?.type;
+        if (protocol) {
+          return this.normalizeProtocolName(protocol);
+        }
+        break;
+      }
+    }
+
+    // Fallback: default to aerodromeSlipstream for Base chain
+    return 'aerodromeSlipstream';
+  }
+
+  private normalizeProtocolType(protocol: string): ProtocolType {
+    const normalized = protocol.toLowerCase();
+    if (normalized === 'aave' || normalized === 'aavev3') return 'aave';
+    if (normalized === 'euler' || normalized === 'eulerv2') return 'euler';
+    if (normalized === 'venus' || normalized === 'venusv4') return 'venus';
+    return 'aave'; // default fallback
+  }
+
+  private normalizeLpProtocol(protocol: string | undefined): 'uniswapV3' | 'aerodromeSlipstream' {
+    if (!protocol) {
+      throw new Error('LP protocol is required but not provided. Cannot proceed without valid protocol information.');
+    }
+
+    const normalized = protocol.toLowerCase();
+    if (normalized.includes('uniswap')) return 'uniswapV3';
+    if (normalized.includes('aerodrome')) return 'aerodromeSlipstream';
+
+    throw new Error(`Invalid LP protocol: "${protocol}". Must be "uniswapV3" or "aerodromeSlipstream".`);
   }
 
   private normalizeChainId(chain: string): string {
@@ -619,7 +729,7 @@ export class RebalancePrecheckService {
     }
 
     const requests: GetLpSimulateRequest[] = [];
-    const notional = Math.max(amount, this.lpSimulationAmountUsd);
+    const notional = amount;
 
     for (const [poolAddress, poolData] of Object.entries(dexPools)) {
       const currentTickValue =

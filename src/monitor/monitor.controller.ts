@@ -6,7 +6,10 @@ export class MonitorController {
   constructor(private readonly monitorService: MonitorService) {}
 
   @Get('precheck')
-  async precheck(@Query('address') address: string) {
-    return this.monitorService.evaluateUserPrecheckByAddress(address);
+  async precheck(
+    @Query('address') address: string,
+    @Query('network') network: string,
+  ) {
+    return this.monitorService.evaluateUserPrecheckByAddress(address, network);
   }
 }

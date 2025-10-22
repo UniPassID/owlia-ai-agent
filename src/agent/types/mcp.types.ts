@@ -257,6 +257,7 @@ export interface GetLpSimulateResponse {
   };
   pool: {
     poolAddress: string;                // Pool contract address
+    protocol: string; 
     inputAmountUSD: number;             // Amount added/removed in USD
 
     position: {
@@ -299,15 +300,34 @@ export interface AccountYieldSummaryResponse {
 
 // Calculate Rebalance Cost Batch Request
 export interface CalculateRebalanceCostBatchRequest {
+  safeAddress: string;
   wallet_address: string;
   chain_id: ChainId;
   target_positions_batch: {
-    target_positions: {
-      token: string;
-      amount: string;
-    }[];
+    targetLendingSupplyPositions?: LendingPosition[];
+    targetLiquidityPositions?: TargetLiquidityPosition[];
   }[];
 }
+
+export interface LendingPosition {
+  protocol: ProtocolType; // Lending protocol
+  token: string; // Token contract address
+  vToken: string | null;
+  amount: string; // Supply amount (wei unit string)
+}
+
+export interface TargetLiquidityPosition {
+  protocol: "uniswapV3" | "aerodromeSlipstream";
+  poolAddress: string; // Target pool address
+  token0Address: string; // Target token0 address
+  token1Address: string; // Target token1 address
+  targetTickLower: number; // Target range lower bound
+  targetTickUpper: number; // Target range upper bound
+  targetAmount0: string; // Target token0 amount (wei string)
+  targetAmount1: string; // Target token1 amount (wei string)
+}
+
+export type ProtocolType = "aave" | "euler" | "venus";
 
 // Calculate Rebalance Cost Batch Response
 // Note: The actual response is a dictionary with numeric keys ("0", "1", "2"), not an array
@@ -328,4 +348,88 @@ export interface CalculateRebalanceCostResult {
   // net_gain_usd?: string | number;
   // estimated_cost?: string | number;
   // total_cost_usd?: string | number;
+}
+
+// Get DEX Pools Response
+// Dictionary response where keys are pool addresses
+export interface GetDexPoolsResponse {
+  [poolAddress: string]: DexPoolData | string; // string for "_dataSource"
+  _dataSource?: string;
+}
+
+export interface DexPoolData {
+  currentSnapshot: DexPoolSnapshot;
+  pricePosition: DexPoolPricePosition;
+  recentActiveTicks: DexPoolActiveTick[];
+  totalTVL: string;
+  fee: string;
+  tickSpacing: string;
+}
+
+export interface DexPoolSnapshot {
+  dexKey: string; // e.g., "UniswapV3"
+  timestampMs: string;
+  poolAddress: string;
+  token0: string;
+  token1: string;
+  token0Symbol: string;
+  token1Symbol: string;
+  fee: string;
+  currentTick: string;
+  tickSpacing: string;
+  currentPrice: string;
+  startTick: string;
+  tvl: string;
+}
+
+export interface DexPoolPricePosition {
+  currentTick: number;
+  tickSpacing: number;
+  currentTickSpacingRange: {
+    lowerBound: number;
+    upperBound: number;
+    tickPositionInSpacing: string;
+    description: string;
+  };
+  priceInfo: {
+    currentPrice: string;
+    currentPriceNumber: number;
+    lowerBoundPrice: string;
+    upperBoundPrice: string;
+    priceRange: string;
+    pricePositionInRange: string;
+  };
+  feeContext: {
+    tickSpacingInBps: number;
+    approximateFeePercentage: string;
+  };
+  activeTicksContext: {
+    [timeframe: string]: DexPoolActiveTicksTimeframe;
+  };
+}
+
+export interface DexPoolActiveTicksTimeframe {
+  totalActiveTicks: number;
+  totalVolume: string;
+  range: {
+    min: number;
+    max: number;
+    span: number;
+  };
+  nearestActiveTicks: {
+    lower: number;
+    upper: number;
+  };
+  ticksWithVolume: Array<{
+    tick: number;
+    volume: string;
+  }>;
+}
+
+export interface DexPoolActiveTick {
+  tick: string;
+  tradingVolume: string;
+  apy: string;
+  token0AmountUsd: string;
+  token1AmountUsd: string;
 }

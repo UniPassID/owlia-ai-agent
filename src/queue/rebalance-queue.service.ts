@@ -238,7 +238,7 @@ export class RebalanceQueueService implements OnModuleInit, OnModuleDestroy {
         userAddress: user.address,
         jobId: job.id,
         userPolicy: {
-          chains: policy?.chains || [user.chainId],
+          chains: policy?.chains || [user.chainId.toString()],
           assetWhitelist: policy?.assetWhitelist || [],
           minAprLiftBps: policy?.minAprLiftBps || 50,
           minNetUsd: policy ? Number(policy.minNetUsd) : 10,
@@ -282,7 +282,7 @@ export class RebalanceQueueService implements OnModuleInit, OnModuleDestroy {
             shouldRebalance: false,
             currentPositions: Array.isArray(currentPositions) ? currentPositions : [currentPositions],
             opportunities: [],
-            chainId: user.chainId || (policy?.chains?.[0] ?? '8453'),
+            chainId: user.chainId.toString() || (policy?.chains?.[0] ?? '8453'),
             userAddress: user.address,
             costEstimates: [],
           },

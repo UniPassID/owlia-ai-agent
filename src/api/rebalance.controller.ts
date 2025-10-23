@@ -159,6 +159,9 @@ export class RebalanceController {
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ) {
+    if(!network) {
+      network = 'base'
+    }
     // Find user by address (using UserService to handle chainId conversion)
     const user = await this.userService.getUserByAddress(address, network);
     if (!user) {

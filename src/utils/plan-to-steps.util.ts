@@ -269,7 +269,7 @@ function getOpportunityName(opportunity: RebalanceOpportunity): string {
 function resolveGasEstimate(costEstimate?: RebalanceCostEstimate): number {
   console.log(`costEstimate`, costEstimate)
   if (!costEstimate) {
-    return 0.00035;
+    throw new Error('Cost estimate is required to compute gas usage.');
   }
   if (typeof costEstimate.netGasUsd === 'number' && costEstimate.netGasUsd > 0) {
     return costEstimate.netGasUsd;
@@ -277,7 +277,7 @@ function resolveGasEstimate(costEstimate?: RebalanceCostEstimate): number {
   if (typeof costEstimate.gasEstimate === 'number' && costEstimate.gasEstimate > 0) {
     return costEstimate.gasEstimate;
   }
-  return 0.00035;
+  throw new Error('Cost estimate missing valid gas information.');
 }
 
 function toNumber(value: any): number {
@@ -290,4 +290,3 @@ function toNumber(value: any): number {
   }
   return 0;
 }
-

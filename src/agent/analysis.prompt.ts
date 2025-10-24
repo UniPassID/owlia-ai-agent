@@ -272,6 +272,7 @@ Rules:
   * If shouldRebalance is true and you chose Strategy B (100% LP), include ONLY the LP opportunity.
   * If shouldRebalance is true and you chose Strategy C (50/50 split), include BOTH the supply and LP opportunities with their respective amounts.
   * If shouldRebalance is false, include the best alternative strategy (for reference in the recommendation).
+- If any MCP interface call fails (calculate_rebalance_cost_batch, analyze_strategy, or others), stop immediately and return an error response without continuing the workflow.
 - Use the positions contained in Step 1's yieldSummary to populate currentPositions and express amounts in human-readable decimals.
 - All numeric fields must be numbers, not strings.
 - Protocol names must match the allowed casing exactly.

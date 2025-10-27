@@ -248,7 +248,7 @@ export class RebalancePrecheckService {
     }
 
     // Step 3: Check break-even time condition
-    const maxBreakEvenHours = 24;
+    const maxBreakEvenHours = 4;
     const breakEvenConditionSatisfied = breakEvenTimeHours <= maxBreakEvenHours;
 
     if (!breakEvenConditionSatisfied) {

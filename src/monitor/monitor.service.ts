@@ -48,7 +48,7 @@ export class MonitorService {
   /**
    * Scheduled task to monitor all users with auto-enabled
    */
-  // @Cron(CronExpression.EVERY_5_MINUTES)
+  @Cron(CronExpression.EVERY_5_MINUTES)
   async monitorAllUsers() {
     if (this.monitoringInProgress) {
       this.logger.warn('Skipping scheduled monitoring - previous run still in progress');

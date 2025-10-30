@@ -5,7 +5,6 @@ import { Repository } from 'typeorm';
 import { UserPolicy } from '../entities/user-policy.entity';
 import { User } from '../entities/user.entity';
 import { RebalanceJob, JobStatus } from '../entities/rebalance-job.entity';
-import { RebalanceQueueService } from '../queue/rebalance-queue.service';
 import {
   RebalancePrecheckService,
   RebalancePrecheckResult,
@@ -15,6 +14,7 @@ import { UserService } from '../api/user.service';
 import { AgentService } from '../agent/agent.service';
 import { lookupTokenAddress } from '../agent/token-utils';
 import { extractTxHashFromOutput, verifyTransactionOnChain } from '../utils/chain-verifier.util';
+import { RebalanceLoggerService } from '../utils/rebalance-logger.service';
 import type {
   ProtocolType,
   AccountYieldSummaryResponse,
@@ -35,10 +35,10 @@ export class MonitorService {
     private userPolicyRepo: Repository<UserPolicy>,
     @InjectRepository(RebalanceJob)
     private jobRepo: Repository<RebalanceJob>,
-    private queueService: RebalanceQueueService,
     private precheckService: RebalancePrecheckService,
     private userService: UserService,
     private agentService: AgentService,
+    private rebalanceLogger: RebalanceLoggerService,
   ) {
 
     setTimeout(() => {
@@ -87,21 +87,73 @@ export class MonitorService {
   async checkUserPositions(user: User, policy: UserPolicy | null): Promise<void> {
     this.logger.log(`Checking positions for user ${user.id}`);
 
-    // Trigger rebalance check - let agent decide
+    // Generate a temporary session ID for logging
+    const sessionId = `check_${user.id}_${Date.now()}`;
+
+    // Start log capture
+    this.rebalanceLogger.startCapture(sessionId, {
+      userId: user.id,
+      userAddress: user.address,
+      chainId: user.chainId?.toString(),
+      trigger: 'scheduled_monitor',
+    });
+
+    // Start global log interception to capture nested function logs
+    this.rebalanceLogger.startInterception(sessionId);
+
     try {
+      this.logger.log(`Checking positions for user ${user.id}`);
+      this.logger.log('Starting precheck evaluation...');
+
       const precheck = await this.precheckService.evaluate(user, policy);
+
+      // Log precheck results (these will also be captured by interception)
+      this.logger.log(`Precheck completed: shouldTrigger=${precheck.shouldTrigger}`);
+      this.logger.log(`Portfolio APY: ${precheck.portfolioApy.toFixed(2)}%`);
+      this.logger.log(`Opportunity APY: ${precheck.opportunityApy.toFixed(2)}%`);
+      this.logger.log(`Difference: ${precheck.differenceBps.toFixed(2)} bps`);
+
       if (!precheck.shouldTrigger) {
         this.logger.log(
-          `Skipped rebalance for user ${user.id}: portfolio APY ${precheck.portfolioApy.toFixed(2)}% ` +
-          `vs opportunity APY ${precheck.opportunityApy.toFixed(2)}% (diff ${precheck.differenceBps.toFixed(2)} bps) ret: ${JSON.stringify(precheck)}`,);
-        return; 
-      } 
+          `Skipped rebalance: portfolio APY ${precheck.portfolioApy.toFixed(2)}% ` +
+          `vs opportunity APY ${precheck.opportunityApy.toFixed(2)}% (diff ${precheck.differenceBps.toFixed(2)} bps)`,
+        );
+        this.logger.log('Rebalance not triggered - conditions not met');
+        // Don't save log file for skipped rebalances
+        return;
+      }
+
+      this.logger.log('Proceeding with rebalance...');
+      if (precheck.bestStrategy) {
+        this.logger.log(`Selected strategy: ${precheck.bestStrategy.name}`);
+      }
+
+      // Update metadata with precheck result
+      this.rebalanceLogger.updateMetadata(sessionId, {
+        precheckResult: {
+          shouldTrigger: precheck.shouldTrigger,
+          portfolioApy: precheck.portfolioApy,
+          opportunityApy: precheck.opportunityApy,
+          differenceBps: precheck.differenceBps,
+          totalPortfolioValueUsd: precheck.totalPortfolioValueUsd,
+          gasEstimate: precheck.gasEstimate,
+          breakEvenTimeHours: precheck.breakEvenTimeHours,
+          netGainUsd: precheck.netGainUsd,
+          bestStrategy: precheck.bestStrategy,
+        },
+      });
+
       // Trigger rebalance with precheck result
-      await this.triggerRebalance(user, policy, 'scheduled_monitor', precheck);
+      await this.triggerRebalance(user, policy, 'scheduled_monitor', precheck, sessionId);
     } catch (error) {
       this.logger.error(
         `Failed to check/trigger rebalance for user ${user.id}: ${error.message}`,
       );
+      // Save log even on error if evaluation was attempted
+      await this.rebalanceLogger.saveToFile(sessionId, 'FAILED');
+    } finally {
+      // Always stop interception
+      this.rebalanceLogger.stopInterception();
     }
   }
 
@@ -123,6 +175,7 @@ export class MonitorService {
     policy: UserPolicy | null,
     trigger: string,
     precheckResult: RebalancePrecheckResult,
+    sessionId?: string,
   ): Promise<RebalanceJob> {
     const latestJob = await this.jobRepo.findOne({
       where: { userId: user.id },
@@ -187,19 +240,44 @@ export class MonitorService {
 
     this.logger.log(`Created rebalance job ${job.id} for user ${user.id}`);
 
+    // Use existing session or create new one
+    const logSessionId = sessionId || `job_${job.id}`;
+
+    // If no sessionId provided (e.g., manual trigger), start new capture and interception
+    if (!sessionId) {
+      this.rebalanceLogger.startCapture(logSessionId, {
+        userId: user.id,
+        userAddress: user.address,
+        chainId: user.chainId?.toString(),
+        trigger,
+        precheckResult: job.inputContext.precheckResult,
+      });
+      this.rebalanceLogger.startInterception(logSessionId);
+    }
+
     try {
-      // Execute rebalance directly
-      await this.executeRebalance(user, precheckResult, job);
+      // Execute rebalance directly (logs will be auto-captured)
+      await this.executeRebalance(user, precheckResult, job, logSessionId);
 
       job.status = JobStatus.COMPLETED;
-      await this.jobRepo.save(job);
       this.logger.log(`Job ${job.id} completed successfully`);
     } catch (error) {
       job.status = JobStatus.FAILED;
       job.errorMessage = error.message;
-      await this.jobRepo.save(job);
       this.logger.error(`Job ${job.id} failed: ${error.message}`);
-      throw error;
+    } finally {
+      // Save logs to file (only if triggered by shouldTrigger=true)
+      await this.rebalanceLogger.saveToFile(logSessionId, job.status);
+      await this.jobRepo.save(job);
+
+      // Stop interception if we started it
+      if (!sessionId) {
+        this.rebalanceLogger.stopInterception();
+      }
+
+      if (job.status === JobStatus.FAILED && job.errorMessage) {
+        throw new Error(job.errorMessage);
+      }
     }
 
     return job;
@@ -209,6 +287,7 @@ export class MonitorService {
     user: User,
     precheckResult: RebalancePrecheckResult,
     job: RebalanceJob,
+    sessionId: string,
   ): Promise<void> {
     if (!precheckResult.bestStrategy) {
       throw new Error('No strategy available for rebalance');
@@ -228,7 +307,7 @@ export class MonitorService {
 
     for (const position of strategy.positions) {
       if (position.type === 'supply') {
-        this.logger.log(`Processing supply position: ${JSON.stringify(position)}`);
+        this.logger.log(`Processing supply position: ${position.asset} on ${position.protocol}`);
 
         const tokenAddress = this.extractSupplyTokenAddress(position, chainId);
         const vTokenAddress = this.extractSupplyVTokenAddress(
@@ -246,11 +325,11 @@ export class MonitorService {
           amount: position.amount.toString(),
         });
       } else if (position.type === 'lp') {
-        this.logger.log(`Processing LP position: ${JSON.stringify(position)}`);
+        this.logger.log(`Processing LP position on ${position.protocol}`);
 
         const lpPosition = this.extractLpPosition(position, chainId);
 
-        this.logger.log(`Extracted LP position: ${JSON.stringify(lpPosition)}`);
+        this.logger.log(`Extracted LP position, pool: ${lpPosition.poolAddress}`);
 
         targetLiquidityPositions.push(lpPosition);
       }
@@ -270,12 +349,18 @@ export class MonitorService {
     };
 
     this.logger.log(
-      `Calling rebalance_position with ${targetLendingSupplyPositions.length} supply positions ` +
-      `and ${targetLiquidityPositions.length} LP positions: ${JSON.stringify(payload)}`,
+      `Calling rebalance_position with ${targetLendingSupplyPositions.length} supply + ${targetLiquidityPositions.length} LP positions`,
     );
 
+    // Store payload in metadata for log file
+    this.rebalanceLogger.updateMetadata(sessionId, { payload });
 
     const rebalanceResult = await this.agentService.callMcpTool<any>('rebalance_position', payload);
+
+    this.logger.log(`Rebalance MCP tool returned successfully`);
+
+    // Store result in metadata
+    this.rebalanceLogger.updateMetadata(sessionId, { mcpResult: rebalanceResult });
 
     // Extract transaction hash
     const txHash = rebalanceResult?.txHash ||
@@ -290,10 +375,12 @@ export class MonitorService {
 
     // Verify transaction on chain
     this.logger.log(`Verifying transaction ${txHash} on chain ${chainId}`);
+
     const verification = await verifyTransactionOnChain(txHash, chainId);
 
     if (verification.success && verification.confirmed) {
       this.logger.log(`Transaction ${txHash} confirmed successfully at block ${verification.blockNumber}`);
+
       job.execResult = {
         txHash,
         transactionHash: txHash,
@@ -309,6 +396,7 @@ export class MonitorService {
     if (verification.success && !verification.confirmed) {
       const errorMsg = `Transaction ${txHash} failed on chain: ${verification.error || 'Transaction not confirmed'}`;
       this.logger.error(errorMsg);
+
       job.execResult = {
         txHash,
         transactionHash: txHash,

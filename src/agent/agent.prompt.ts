@@ -16,66 +16,53 @@ Rules:
 
 Output: Be concise, provide numerical evidence, explain reasoning in a friendly, accessible way.`;
 
-// Chain name to ID mapping
-const getChainId = (chainName: string): string => {
-  const chainMap: Record<string, string> = {
-    'base': '8453',
-    'ethereum': '1',
-    'eth': '1',
-    'mainnet': '1',
-    'arbitrum': '42161',
-    'optimism': '10',
-    'polygon': '137',
-    'bsc': '56',
-    'avalanche': '43114',
-  };
-  return chainMap[chainName.toLowerCase()] || chainName;
-};
+export const getRebalanceSummaryPrompt = (rebalanceRecord: string) => `You are an AI assistant specialized in analyzing DeFi portfolio rebalancing operations and summarizing them for end users.
 
-const convertChainsToIds = (chains: string[]): string => {
-  return chains.map(chain => getChainId(chain)).join(',');
-};
+Your Task:
+Analyze the complete rebalancing process record below and generate a clear, concise summary that non-technical users can easily understand.
 
-export const buildUserContext = (context: any): string => {
-  const chainIds = convertChainsToIds(context.userPolicy.chains);
+## Rebalancing Record and Logs:
+${rebalanceRecord}
 
-  // For fetch_positions trigger, use simplified context
-  if (context.trigger === 'fetch_positions') {
-    return `
-**Task**: Fetch user positions
+## Output Requirements:
 
-Please call these two tools to get the user's complete position data:
-1. get_idle_assets - Get idle/uninvested assets for address: ${context.userAddress} on chain_ids: ${chainIds}
-2. get_active_investments - Get active investment positions for address: ${context.userAddress} on chain_ids: ${chainIds}
+Generate a friendly, easy-to-understand summary with the following structure:
 
-**IMPORTANT**: Use "chain_ids" parameter (not "chains"), and pass numeric chain IDs: ${chainIds}
+**📊 Rebalancing Summary**
 
-Return the combined results in JSON format.
-`;
-  }
+**What Happened:**
+[1-2 sentences explaining what positions changed in plain language]
 
-  // For manual_trigger and manual_preview, the prompt will be fetched from MCP server
-  // This is handled in agent.service.ts, not here
+**Reason:**
+[Why this rebalancing was recommended - focus on the benefit]
 
-  // For other rebalancing tasks, use full context
-  return `
-**Current Task Context**:
-- User ID: ${context.userId}
-- Job ID: ${context.jobId}
-- Trigger: ${context.trigger}
-- Allowed Chain IDs: ${chainIds}
-- Asset Whitelist: ${context.userPolicy.assetWhitelist.length > 0 ? context.userPolicy.assetWhitelist.join(', ') : 'None (all assets allowed)'}
+**Details:**
+- From: [Source protocol and position details]
+- To: [Target protocol and position details]
+- APR Change: [Old APR] → [New APR] (+X.XX%)
+- Estimated Annual Gain: $XXX
 
-**IMPORTANT**: When calling tools, use numeric chain IDs (${chainIds}), not chain names.
+**Costs:**
+- Gas Fee: $XX.XX
+- Slippage: $XX.XX
+- Total Cost: $XX.XX
+- Net Benefit: $XXX.XX/year
 
-**User Risk Thresholds**:
-- Minimum APR Lift: ${context.userPolicy.minAprLiftBps} bps
-- Minimum Net Gain: $${context.userPolicy.minNetUsd} USD
-- Minimum Health Factor: ${context.userPolicy.minHealthFactor}
-- Max Slippage: ${context.userPolicy.maxSlippageBps} bps
-- Max Gas Cost: $${context.userPolicy.maxGasUsd} USD
-- Max Per-Trade Size: $${context.userPolicy.maxPerTradeUsd} USD
+**Status:** ✅ Completed / ⏳ In Progress / ❌ Failed
+[Transaction hash if completed]
 
-**Your Task**: Analyze the user's positions and determine if rebalancing would provide meaningful yield improvement while staying within all risk parameters.
-`;
-};
+## Key Guidelines:
+1. Use simple, non-jargon language (avoid technical terms like "liquidity pool", "health factor" unless necessary)
+2. Focus on numbers that matter to users: returns, costs, and net benefits
+3. Explain "why" not just "what" - make the value clear
+4. Use emojis sparingly for visual clarity
+5. Keep it concise - aim for 150-200 words maximum
+6. If the operation failed or was skipped, clearly explain why
+7. Convert all amounts to USD when possible
+8. Express APR changes in both absolute and relative terms
+
+## Tone:
+- Professional yet friendly
+- Reassuring and transparent
+- Data-driven but accessible`;
+

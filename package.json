@@ -20,6 +20,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "test:agent": "npx ts-node scripts/test-manual-trigger.ts",
     "test:precheck": "npx ts-node scripts/test-precheck.ts",
+    "test:summary": "npx ts-node scripts/test-rebalance-summary.ts",
     "typeorm": "typeorm-ts-node-commonjs",
     "migration:generate": "npm run typeorm -- migration:generate -d ormconfig.ts",
     "migration:create": "npm run typeorm -- migration:create",

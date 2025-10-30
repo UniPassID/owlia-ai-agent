@@ -7,7 +7,6 @@ import { AgentModule } from './agent/agent.module';
 import { GuardModule } from './guard/guard.module';
 import { MonitorModule } from './monitor/monitor.module';
 import { ApiModule } from './api/api.module';
-import { QueueModule } from './queue/queue.module';
 import { UserModule } from './api/user.module';
 
 @Module({
@@ -31,7 +30,6 @@ import { UserModule } from './api/user.module';
     // Application modules
     AgentModule,
     GuardModule,
-    QueueModule,
     UserModule,
     MonitorModule,
     ApiModule,

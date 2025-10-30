@@ -198,6 +198,16 @@ export class MonitorService {
         return latestJob;
       }
 
+      if (latestJob.status === JobStatus.COMPLETED &&
+        jobAgeMs <= oneMinuteMs * 30)
+       {
+        this.logger.log(
+          `Skipping new job for user ${user.id}: recent ${latestJob.status} job ${latestJob.id} (age ${Math.round(jobAgeMs / 1000)}s, minimum 60s)`,
+        );
+        return latestJob;
+      }
+
+
       // For FAILED or COMPLETED jobs, only wait 1 minute before allowing retry
       if (
         (latestJob.status === JobStatus.FAILED || latestJob.status === JobStatus.COMPLETED) &&

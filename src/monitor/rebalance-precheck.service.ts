@@ -766,15 +766,13 @@ export class RebalancePrecheckService {
 
     for (const position of strategy.positions) {
       if (position.type === 'supply') {
-        const supplyInfo = this.findSupplyPositionInfo(position.asset, supplyData, position.protocol, chainId);
-        if (supplyInfo) {
+        const supplyTokenAddress = lookupTokenAddress(position.asset, chainId);
           targetLendingSupplyPositions.push({
             protocol: this.normalizeProtocolType(position.protocol),
-            token: supplyInfo.tokenAddress,
-            vToken: supplyInfo.vTokenAddress,
+            token: supplyTokenAddress,
+            vToken: position.vaultAddress,
             amount: position.amount.toString(),
           });
-        }
       } else if (position.type === 'lp') {
         const lpInfo = this.findLpPositionInfo(position.poolAddress, lpSimulations, dexPools);
         if (lpInfo) {
@@ -799,27 +797,6 @@ export class RebalancePrecheckService {
     return result;
   }
 
-  private findSupplyPositionInfo(
-    assetSymbol: string,
-    supplyData: GetSupplyOpportunitiesResponse[],
-    protocol: string,
-    chainId: string,
-  ): { tokenAddress: string; vTokenAddress: string | null } | null {
-    for (const data of supplyData) {
-      if (!data.opportunities || !Array.isArray(data.opportunities)) continue;
-      for (const opp of data.opportunities) {
-        if (opp.asset === assetSymbol) {
-          const tokenAddress = lookupTokenAddress(assetSymbol, chainId);
-          if (tokenAddress) {
-            return { tokenAddress, vTokenAddress: opp.vault_address || null };
-          }
-        }
-      }
-    }
-
-    const tokenAddress = lookupTokenAddress(assetSymbol, chainId);
-    return tokenAddress ? { tokenAddress, vTokenAddress: null } : { tokenAddress: assetSymbol, vTokenAddress: null };
-  }
 
   private findLpPositionInfo(
     poolAddress: string,

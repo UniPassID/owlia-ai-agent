@@ -1,0 +1,808 @@
+{
+  "jobId": "check_d8c4f4a6-efe1-4e8f-8d9a-6eca3f62cb7e_1761816309481",
+  "userId": "d8c4f4a6-efe1-4e8f-8d9a-6eca3f62cb7e",
+  "userAddress": "0xc5de8e48f7897b926e2c4d129ba68af1df811229",
+  "chainId": "56",
+  "trigger": "scheduled_monitor",
+  "startTime": "2025-10-30T09:25:09.481Z",
+  "endTime": "2025-10-30T09:25:14.331Z",
+  "duration": 4.85,
+  "status": "completed",
+  "metadata": {
+    "precheckResult": {
+      "shouldTrigger": true,
+      "portfolioApy": 37.7714,
+      "opportunityApy": 65.20492821813572,
+      "differenceBps": 2743.352821813572,
+      "totalPortfolioValueUsd": 10018.4547,
+      "gasEstimate": 0,
+      "breakEvenTimeHours": 0,
+      "netGainUsd": 7.5299057456045055,
+      "bestStrategy": {
+        "name": "Strategy Conservative: Marginal Optimized",
+        "apy": 65.20492821813572,
+        "strategy": {
+          "name": "marginal_conservative",
+          "positions": [
+            {
+              "type": "lp",
+              "protocol": "uniswapV3",
+              "amount": 10018.4547,
+              "allocation": 100,
+              "poolAddress": "0xfdfc89d953e044f84faa2ed4953190a066328ee0",
+              "token0Address": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+              "token1Address": "0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d",
+              "token0Amount": 2742.0780040694317,
+              "token1Amount": 7276.376695930569,
+              "tickLower": -4,
+              "tickUpper": -3
+            }
+          ],
+          "metadata": {
+            "totalInvested": 10018.4547,
+            "totalSwapCost": 0.04132023555207367,
+            "allocationHistory": [
+              {
+                "oppId": "lp-0xfdfc89d953e044f84faa2ed4953190a066328ee0",
+                "amount": 5009.22735,
+                "netAPY": 49.709740917426,
+                "totalAllocated": 5009.22735,
+                "swapCost": 0.02040105670382214
+              },
+              {
+                "oppId": "lp-0xfdfc89d953e044f84faa2ed4953190a066328ee0",
+                "amount": 5009.22735,
+                "netAPY": 46.81452334760689,
+                "totalAllocated": 10018.4547,
+                "swapCost": 0.020919178848251528
+              }
+            ]
+          }
+        }
+      }
+    },
+    "payload": {
+      "safeAddress": "0xc5de8e48f7897b926e2c4d129ba68af1df811229",
+      "walletAddress": "0xc5de8e48f7897b926e2c4d129ba68af1df811229",
+      "chainId": "56",
+      "idempotencyKey": "rebalance_9729d588-a163-47e0-98ab-e1da74107cb3_1761816310880",
+      "targetLendingSupplyPositions": [],
+      "targetLiquidityPositions": [
+        {
+          "protocol": "uniswapV3",
+          "poolAddress": "0xfdfc89d953e044f84faa2ed4953190a066328ee0",
+          "token0Address": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d",
+          "token1Address": "0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d",
+          "targetTickLower": -4,
+          "targetTickUpper": -3,
+          "targetAmount0": "2742.0780040694317",
+          "targetAmount1": "7276.376695930569"
+        }
+      ]
+    },
+    "mcpResult": {
+      "success": true,
+      "txHashes": [
+        "0xc0fd5eca1d5615136cb62ea76482963433b820a260af95b80c45eb5c5ca255fc"
+      ],
+      "message": "Position rebalanced successfully",
+      "_dataSource": "api"
+    }
+  },
+  "logs": [
+    {
+      "timestamp": "2025-10-30T09:25:09.481Z",
+      "level": "log",
+      "message": "Started global log interception for session check_d8c4f4a6-efe1-4e8f-8d9a-6eca3f62cb7e_1761816309481",
+      "context": "RebalanceLoggerService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:09.481Z",
+      "level": "log",
+      "message": "Checking positions for user d8c4f4a6-efe1-4e8f-8d9a-6eca3f62cb7e",
+      "context": "MonitorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:09.481Z",
+      "level": "log",
+      "message": "Starting precheck evaluation...",
+      "context": "MonitorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:09.481Z",
+      "level": "log",
+      "message": "Calling MCP tool get_account_yield_summary with input {\"wallet_address\":\"0xc5de8e48f7897b926e2c4d129ba68af1df811229\",\"chain_id\":\"56\"}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.233Z",
+      "level": "log",
+      "message": "Tool get_account_yield_summary returned keys: idleAssets, activeInvestments, totalAssetsUsd, portfolioApy, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.233Z",
+      "level": "log",
+      "message": "Portfolio for user d8c4f4a6-efe1-4e8f-8d9a-6eca3f62cb7e: totalAssets=$10018.4547, APY=37.7714%, holdings={\"USDC\":15.2595,\"USD1\":9999.3876}",
+      "context": "RebalancePrecheckService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.233Z",
+      "level": "log",
+      "message": "Calling MCP tool get_dex_pools with input {\"chain_id\":\"56\"}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.234Z",
+      "level": "log",
+      "message": "Tool get_dex_pools returned keys: 0x2c3c320d49019d4f9a92352e947c7e5acfe47d68, 0xfdfc89d953e044f84faa2ed4953190a066328ee0, 0xf150d29d92e7460a1531cbc9d1abeab33d6998e4, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.234Z",
+      "level": "log",
+      "message": "get_dex_pools response: {\"0x2c3c320d49019d4f9a92352e947c7e5acfe47d68\":{\"currentSnapshot\":{\"dexKey\":\"UniswapV3\",\"timestampMs\":\"1761816255\",\"poolAddress\":\"0x2c3c320d49019d4f9a92352e947c7e5acfe47d68\",\"token0\":\"0x55d398326f99059ff775485246999027b3197955\",\"token1\":\"0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d\",\"token0Symbol\":\"USDT\",\"token1Symbol\":\"USDC\",\"fee\":\"100\",\"currentTick\":\"1\",\"tickSpacing\":\"1\",\"currentPrice\":\"79234037053288915932944966504\",\"startTick\":\"1\",\"tvl\":\"1590282.129722845294\"},\"pricePosition\":{\"currentTick\":1,\"tickSpacing\":1,\"currentTickSpacingRange\":{\"lowerBound\":1,\"upperBound\":2,\"tickPositionInSpacing\":\"0.00%\",\"description\":\"At lower bound\"},\"priceInfo\":{\"currentPrice\":\"1.000148299711319362\",\"currentPriceNumber\":1.0001482997113194,\"lowerBoundPrice\":\"1.000099999999999989\",\"upperBoundPrice\":\"1.000200009999999917\",\"priceRange\":\"0.000100009999999928\",\"pricePositionInRange\":\"48.29%\"},\"feeContext\":{\"tickSpacingInBps\":1,\"approximateFeePercentage\":\"0.01%\"},\"activeTicksContext\":{\"5min\":{\"totalActiveTicks\":1,\"totalVolume\":\"1251.52\",\"range\":{\"min\":1,\"max\":1,\"span\":0},\"nearestActiveTicks\":{\"lower\":1,\"upper\":2},\"ticksWithVolume\":[{\"tick\":1,\"volume\":\"1251.52\"}]},\"15min\":{\"totalActiveTicks\":1,\"totalVolume\":\"5226.07\",\"range\":{\"min\":1,\"max\":1,\"span\":0},\"nearestActiveTicks\":{\"lower\":1,\"upper\":2},\"ticksWithVolume\":[{\"tick\":1,\"volume\":\"5226.07\"}]},\"30min\":{\"totalActiveTicks\":1,\"totalVolume\":\"18491.77\",\"range\":{\"min\":1,\"max\":1,\"span\":0},\"nearestActiveTicks\":{\"lower\":1,\"upper\":2},\"ticksWithVolume\":[{\"tick\":1,\"volume\":\"18491.77\"}]},\"1hr\":{\"totalActiveTicks\":1,\"totalVolume\":\"45205.11\",\"range\":{\"min\":1,\"max\":1,\"span\":0},\"nearestActiveTicks\":{\"lower\":1,\"upper\":2},\"ticksWithVolume\":[{\"tick\":1,\"volume\":\"45205.11\"}]},\"6hr\":{\"totalActiveTicks\":1,\"totalVolume\":\"46381.25\",\"range\":{\"min\":1,\"max\":1,\"span\":0},\"nearestActiveTicks\":{\"lower\":1,\"upper\":2},\"ticksWithVolume\":[{\"tick\":1,\"volume\":\"46381.25\"}]}}},\"recentActiveTicks\":[{\"tick\":\"1\",\"tradingVolume\":\"3989.37\",\"apy\":\"0.0021127494949489154114\",\"token0AmountUsd\":\"291856.00956391679996\",\"token1AmountUsd\":\"273790.2825298858482\"}],\"totalTVL\":\"1590282.129722845294\",\"fee\":\"100\",\"tickSpacing\":\"1\"},\"0xfdfc89d953e044f84faa2ed4953190a066328ee0\":{\"currentSnapshot\":{\"dexKey\":\"UniswapV3\",\"timestampMs\":\"1761816249\",\"poolAddress\":\"0xfdfc89d953e044f84faa2ed4953190a066328ee0\",\"token0\":\"0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d\",\"token1\":\"0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d\",\"token0Symbol\":\"USDC\",\"token1Symbol\":\"USD1\",\"fee\":\"100\",\"currentTick\":\"-4\",\"tickSpacing\":\"1\",\"currentPrice\":\"79215195513344481425442795188\",\"startTick\":\"-4\",\"tvl\":\"140855.7623526445318\"},\"pricePosition\":{\"currentTick\":-4,\"tickSpacing\":1,\"currentTickSpacingRange\":{\"lowerBound\":-4,\"upperBound\":-3,\"tickPositionInSpacing\":\"0.00%\",\"description\":\"At lower bound\"},\"priceInfo\":{\"currentPrice\":\"0.999672693664066838\",\"currentPriceNumber\":0.9996726936640669,\"lowerBoundPrice\":\"0.999600099980003542\",\"upperBoundPrice\":\"0.999700059990001555\",\"priceRange\":\"0.000099960009998012\",\"pricePositionInRange\":\"72.62%\"},\"feeContext\":{\"tickSpacingInBps\":1,\"approximateFeePercentage\":\"0.01%\"},\"activeTicksContext\":{\"5min\":{\"totalActiveTicks\":2,\"totalVolume\":\"50417.39\",\"range\":{\"min\":-5,\"max\":-4,\"span\":1},\"nearestActiveTicks\":{\"lower\":-5,\"upper\":-3},\"ticksWithVolume\":[{\"tick\":-5,\"volume\":\"17338.21\"},{\"tick\":-4,\"volume\":\"33079.18\"}]},\"15min\":{\"totalActiveTicks\":2,\"totalVolume\":\"52339.73\",\"range\":{\"min\":-5,\"max\":-4,\"span\":1},\"nearestActiveTicks\":{\"lower\":-5,\"upper\":-3},\"ticksWithVolume\":[{\"tick\":-5,\"volume\":\"19260.55\"},{\"tick\":-4,\"volume\":\"33079.18\"}]},\"30min\":{\"totalActiveTicks\":2,\"totalVolume\":\"56352.70\",\"range\":{\"min\":-5,\"max\":-4,\"span\":1},\"nearestActiveTicks\":{\"lower\":-5,\"upper\":-3},\"ticksWithVolume\":[{\"tick\":-5,\"volume\":\"23273.52\"},{\"tick\":-4,\"volume\":\"33079.18\"}]},\"1hr\":{\"totalActiveTicks\":2,\"totalVolume\":\"61245.49\",\"range\":{\"min\":-5,\"max\":-4,\"span\":1},\"nearestActiveTicks\":{\"lower\":-5,\"upper\":-3},\"ticksWithVolume\":[{\"tick\":-5,\"volume\":\"28166.31\"},{\"tick\":-4,\"volume\":\"33079.18\"}]},\"6hr\":{\"totalActiveTicks\":2,\"totalVolume\":\"61248.99\",\"range\":{\"min\":-5,\"max\":-4,\"span\":1},\"nearestActiveTicks\":{\"lower\":-5,\"upper\":-3},\"ticksWithVolume\":[{\"tick\":-5,\"volume\":\"28169.81\"},{\"tick\":-4,\"volume\":\"33079.18\"}]}}},\"recentActiveTicks\":[{\"tick\":\"-4\",\"tradingVolume\":\"33079.18\",\"apy\":\"3.8718147484516894843\",\"token0AmountUsd\":\"23111.759117910125854\",\"token1AmountUsd\":\"55751.566454631612798\"},{\"tick\":\"-5\",\"tradingVolume\":\"18341.53\",\"apy\":\"22.501389874696248915\",\"token0AmountUsd\":\"0\",\"token1AmountUsd\":\"38136.164680475397096\"}],\"totalTVL\":\"140855.7623526445318\",\"fee\":\"100\",\"tickSpacing\":\"1\"},\"0xf150d29d92e7460a1531cbc9d1abeab33d6998e4\":{\"currentSnapshot\":{\"dexKey\":\"UniswapV3\",\"timestampMs\":\"1761816267\",\"poolAddress\":\"0xf150d29d92e7460a1531cbc9d1abeab33d6998e4\",\"token0\":\"0x55d398326f99059ff775485246999027b3197955\",\"token1\":\"0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d\",\"token0Symbol\":\"USDT\",\"token1Symbol\":\"USD1\",\"fee\":\"100\",\"currentTick\":\"-3\",\"tickSpacing\":\"1\",\"currentPrice\":\"79219976553073079334319891487\",\"startTick\":\"-3\",\"tvl\":\"540677.18886252961078\"},\"pricePosition\":{\"currentTick\":-3,\"tickSpacing\":1,\"currentTickSpacingRange\":{\"lowerBound\":-3,\"upperBound\":-2,\"tickPositionInSpacing\":\"0.00%\",\"description\":\"At lower bound\"},\"priceInfo\":{\"currentPrice\":\"0.999793367963128541\",\"currentPriceNumber\":0.9997933679631286,\"lowerBoundPrice\":\"0.999700059990001555\",\"upperBoundPrice\":\"0.999800029996000483\",\"priceRange\":\"0.000099970005998928\",\"pricePositionInRange\":\"93.34%\"},\"feeContext\":{\"tickSpacingInBps\":1,\"approximateFeePercentage\":\"0.01%\"},\"activeTicksContext\":{\"5min\":{\"totalActiveTicks\":1,\"totalVolume\":\"88803.35\",\"range\":{\"min\":-3,\"max\":-3,\"span\":0},\"nearestActiveTicks\":{\"lower\":-3,\"upper\":-2},\"ticksWithVolume\":[{\"tick\":-3,\"volume\":\"88803.35\"}]},\"15min\":{\"totalActiveTicks\":1,\"totalVolume\":\"102726.39\",\"range\":{\"min\":-3,\"max\":-3,\"span\":0},\"nearestActiveTicks\":{\"lower\":-3,\"upper\":-2},\"ticksWithVolume\":[{\"tick\":-3,\"volume\":\"102726.39\"}]},\"30min\":{\"totalActiveTicks\":1,\"totalVolume\":\"108841.65\",\"range\":{\"min\":-3,\"max\":-3,\"span\":0},\"nearestActiveTicks\":{\"lower\":-3,\"upper\":-2},\"ticksWithVolume\":[{\"tick\":-3,\"volume\":\"108841.65\"}]},\"1hr\":{\"totalActiveTicks\":1,\"totalVolume\":\"119193.15\",\"range\":{\"min\":-3,\"max\":-3,\"span\":0},\"nearestActiveTicks\":{\"lower\":-3,\"upper\":-2},\"ticksWithVolume\":[{\"tick\":-3,\"volume\":\"119193.15\"}]},\"6hr\":{\"totalActiveTicks\":1,\"totalVolume\":\"119212.52\",\"range\":{\"min\":-3,\"max\":-3,\"span\":0},\"nearestActiveTicks\":{\"lower\":-3,\"upper\":-2},\"ticksWithVolume\":[{\"tick\":-3,\"volume\":\"119212.52\"}]}}},\"recentActiveTicks\":[{\"tick\":\"-3\",\"tradingVolume\":\"93857.14\",\"apy\":\"14.053170968339852564\",\"token0AmountUsd\":\"19578.75529091049389\",\"token1AmountUsd\":\"272375.23238554456217\"}],\"totalTVL\":\"540677.18886252961078\",\"fee\":\"100\",\"tickSpacing\":\"1\"},\"_dataSource\":\"api\"}",
+      "context": "RebalancePrecheckService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.234Z",
+      "level": "log",
+      "message": "Calling MCP tool get_lp_simulate_batch with input {\"reqs\":[{\"chain_id\":\"56\",\"poolOperation\":{\"poolAddress\":\"0x2c3c320d49019d4f9a92352e947c7e5acfe47d68\",\"operation\":\"add\",\"amountUSD\":10018.4547,\"tickLower\":1,\"tickUpper\":2,\"timeHorizon\":30},\"priceImpact\":false,\"includeIL\":true},{\"chain_id\":\"56\",\"poolOperation\":{\"poolAddress\":\"0xfdfc89d953e044f84faa2ed4953190a066328ee0\",\"operation\":\"add\",\"amountUSD\":10018.4547,\"tickLower\":-4,\"tickUpper\":-3,\"timeHorizon\":30},\"priceImpact\":false,\"includeIL\":true},{\"chain_id\":\"56\",\"poolOperation\":{\"poolAddress\":\"0xf150d29d92e7460a1531cbc9d1abeab33d6998e4\",\"operation\":\"add\",\"amountUSD\":10018.4547,\"tickLower\":-3,\"tickUpper\":-2,\"timeHorizon\":30},\"priceImpact\":false,\"includeIL\":true}]}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.236Z",
+      "level": "log",
+      "message": "Tool get_lp_simulate_batch returned keys: 0, 1, 2, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.236Z",
+      "level": "log",
+      "message": "get_lp_simulate_batch response: {\"0\":{\"timestamp\":1761816310235,\"summary\":{\"totalLiquidityUSD\":10018.4547,\"totalExpectedAPY\":5.904162755136527,\"totalExpectedDailyReturn\":162.0564030240068,\"requiredTokens\":{\"token0\":{\"amount\":5180.3622752663805,\"amountUSD\":5180.3622752663805,\"percentage\":51.7081968266661},\"token1\":{\"amount\":4838.09242473362,\"amountUSD\":4838.09242473362,\"percentage\":48.2918031733339}}},\"pool\":{\"poolAddress\":\"0x2c3c320d49019d4f9a92352e947c7e5acfe47d68\",\"inputAmountUSD\":10018.4547,\"position\":{\"tickLower\":1,\"tickUpper\":2,\"currentTick\":1,\"inRange\":true,\"priceRange\":{\"lower\":1.0001,\"upper\":1.00020001,\"current\":1.0001482997113194},\"token0Amount\":5180.3622752663805,\"token1Amount\":4838.09242473362},\"before\":{\"totalLiquidityUSD\":1533807.4389662575,\"apy\":6.008734478213346,\"tvl\":1533807.4389662575},\"after\":{\"totalLiquidityUSD\":1543825.8936662574,\"estimatedAPY\":5.904162755136527,\"tvl\":1543825.8936662574,\"yourShare\":0.6489368225459871}}},\"1\":{\"timestamp\":1761816310235,\"summary\":{\"totalLiquidityUSD\":10018.4547,\"totalExpectedAPY\":65.20492821813572,\"totalExpectedDailyReturn\":1789.7332043017655,\"requiredTokens\":{\"token0\":{\"amount\":2742.0780040694317,\"amountUSD\":2742.0780040694317,\"percentage\":27.370269030306954},\"token1\":{\"amount\":7276.376695930569,\"amountUSD\":7276.376695930569,\"percentage\":72.62973096969306}}},\"pool\":{\"poolAddress\":\"0xfdfc89d953e044f84faa2ed4953190a066328ee0\",\"inputAmountUSD\":10018.4547,\"position\":{\"tickLower\":-4,\"tickUpper\":-3,\"currentTick\":-4,\"inRange\":true,\"priceRange\":{\"lower\":0.9996000999800035,\"upper\":0.9997000599900016,\"current\":0.9996726936640669},\"token0Amount\":2742.0780040694317,\"token1Amount\":7276.376695930569},\"before\":{\"totalLiquidityUSD\":127702.00521925522,\"apy\":73.48837223825298,\"tvl\":127702.00521925522},\"after\":{\"totalLiquidityUSD\":137720.45991925523,\"estimatedAPY\":65.20492821813572,\"tvl\":137720.45991925523,\"yourShare\":7.274485363956646}}},\"2\":{\"timestamp\":1761816310235,\"summary\":{\"totalLiquidityUSD\":10018.4547,\"totalExpectedAPY\":63.40526055991049,\"totalExpectedDailyReturn\":1740.3362483867393,\"requiredTokens\":{\"token0\":{\"amount\":667.4886577672237,\"amountUSD\":667.4886577672237,\"percentage\":6.662590965922356},\"token1\":{\"amount\":9350.966042232776,\"amountUSD\":9350.966042232776,\"percentage\":93.33740903407764}}},\"pool\":{\"poolAddress\":\"0xf150d29d92e7460a1531cbc9d1abeab33d6998e4\",\"inputAmountUSD\":10018.4547,\"position\":{\"tickLower\":-3,\"tickUpper\":-2,\"currentTick\":-3,\"inRange\":true,\"priceRange\":{\"lower\":0.9997000599900016,\"upper\":0.9998000299960005,\"current\":0.9997933679631286},\"token0Amount\":667.4886577672237,\"token1Amount\":9350.966042232776},\"before\":{\"totalLiquidityUSD\":528276.7198898764,\"apy\":65.58102399571963,\"tvl\":528276.7198898764},\"after\":{\"totalLiquidityUSD\":538295.1745898764,\"estimatedAPY\":63.40526055991049,\"tvl\":538295.1745898764,\"yourShare\":1.8611451807334134}}},\"_dataSource\":\"api\"}",
+      "context": "RebalancePrecheckService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.236Z",
+      "level": "log",
+      "message": "Calling MCP tool get_supply_opportunities with input {\"chain_id\":\"56\",\"amount\":10018.4547}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.238Z",
+      "level": "log",
+      "message": "Tool get_supply_opportunities returned keys: opportunities, summary, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.239Z",
+      "level": "log",
+      "message": "get_supply_opportunities response: {\"opportunities\":[{\"protocol\":\"euler\",\"asset\":\"USD1\",\"vault_address\":\"0xC41f2Ba7102e9F9F2d603eb951F955aE205ed272\",\"before\":{\"supplyAPY\":37.94719043803546,\"totalSupplyUSD\":6368968.995888612,\"utilization\":95.50105886289025},\"after\":{\"supplyAPY\":34.98298044882484,\"totalSupplyUSD\":6378987.450589051,\"utilization\":95.35107063364963},\"changes\":{\"apyDelta\":-2.964209989210623,\"apyDeltaPercent\":-7.811408315065976,\"expectedAnnualReturn\":3504.7540489753733}},{\"protocol\":\"euler\",\"asset\":\"USDT\",\"vault_address\":\"0x69A93DbAB609266af96f05658b2e22d020de2E19\",\"before\":{\"supplyAPY\":18.81231502981595,\"totalSupplyUSD\":3702441.100390663,\"utilization\":92.74970322446386},\"after\":{\"supplyAPY\":16.73244015970279,\"totalSupplyUSD\":3712459.5550904353,\"utilization\":92.49940859192098},\"changes\":{\"apyDelta\":-2.0798748701131586,\"apyDeltaPercent\":-11.055921968225233,\"expectedAnnualReturn\":1676.331937604432}},{\"protocol\":\"euler\",\"asset\":\"USDT\",\"vault_address\":\"0x95C5Fd8618C68D6156A739C1EAb5aA7c807ff148\",\"before\":{\"supplyAPY\":18.87026945336901,\"totalSupplyUSD\":1485635.5059560987,\"utilization\":90.68839917616232},\"after\":{\"supplyAPY\":12.711253290548807,\"totalSupplyUSD\":1495653.9606565747,\"utilization\":90.0809340519392},\"changes\":{\"apyDelta\":-6.159016162820201,\"apyDeltaPercent\":-32.63872928810033,\"expectedAnnualReturn\":1273.4711527158918}},{\"protocol\":\"euler\",\"asset\":\"USDT\",\"vault_address\":\"0xca522ECab584b5430ADb946edEE4224A63628362\",\"before\":{\"supplyAPY\":6.235660366082638,\"totalSupplyUSD\":5309320.58835663,\"utilization\":81.20154854421534},\"after\":{\"supplyAPY\":6.137282406116729,\"totalSupplyUSD\":5319339.0430571055,\"utilization\":81.04861337142154},\"changes\":{\"apyDelta\":-0.09837795996590959,\"apyDeltaPercent\":-1.5776670663625723,\"expectedAnnualReturn\":614.8608576678745}},{\"protocol\":\"aave\",\"asset\":\"USDT\",\"before\":{\"supplyAPY\":3.0456632102434433,\"totalSupplyUSD\":87739443.49894896,\"utilization\":0.7071201760033945},\"after\":{\"supplyAPY\":3.0448644388769264,\"totalSupplyUSD\":87749462.3054971,\"utilization\":70.70394404631016},\"changes\":{\"apyDelta\":-0.0007987713665169593,\"apyDeltaPercent\":-0.026226516570527596,\"expectedAnnualReturn\":305.0483644852941}},{\"protocol\":\"aave\",\"asset\":\"USDC\",\"before\":{\"supplyAPY\":2.890664681712929,\"totalSupplyUSD\":27376989.113862302,\"utilization\":0.6891355347423276},\"after\":{\"supplyAPY\":2.888287120391886,\"totalSupplyUSD\":27387006.787723947,\"utilization\":68.88834613745794},\"changes\":{\"apyDelta\":-0.0023775613210430535,\"apyDeltaPercent\":-0.08224964092459786,\"expectedAnnualReturn\":289.36173676239554}},{\"protocol\":\"euler\",\"asset\":\"USDC\",\"vault_address\":\"0xc27d44A8aEA0CDa482600136c0d0876e807f6C1a\",\"before\":{\"supplyAPY\":1.4436699001618816,\"totalSupplyUSD\":10286.37915308562,\"utilization\":35.003957589924575},\"after\":{\"supplyAPY\":0.5191204489946699,\"totalSupplyUSD\":20304.833852863034,\"utilization\":17.73291927615174},\"changes\":{\"apyDelta\":-0.9245494511672117,\"apyDeltaPercent\":-64.04161027832886,\"expectedAnnualReturn\":52.00784702096761}},{\"protocol\":\"euler\",\"asset\":\"USDC\",\"vault_address\":\"0xA9cA5c4bfF689afcFB249AE81565422fa78F82b4\",\"before\":{\"supplyAPY\":1.6004263228962545,\"totalSupplyUSD\":3511.0983870932787,\"utilization\":42.65890026502745},\"after\":{\"supplyAPY\":0.10559095897793025,\"totalSupplyUSD\":13529.553086870692,\"utilization\":11.070550147074673},\"changes\":{\"apyDelta\":-1.4948353639183243,\"apyDeltaPercent\":-93.40232302685169,\"expectedAnnualReturn\":10.578582392499525}},{\"protocol\":\"euler\",\"asset\":\"USDT\",\"vault_address\":\"0x5fd02479F938929F6b9fE1b7Af6430cfD4afa6Aa\",\"before\":{\"supplyAPY\":1.9210947401841143,\"totalSupplyUSD\":3062.84771091716,\"utilization\":46.692231237589404},\"after\":{\"supplyAPY\":0.10293568477182102,\"totalSupplyUSD\":13081.302410689745,\"utilization\":10.932488912327255},\"changes\":{\"apyDelta\":-1.8181590554122933,\"apyDeltaPercent\":-94.64182152922058,\"expectedAnnualReturn\":10.312564948999688}},{\"protocol\":\"euler\",\"asset\":\"USDC\",\"vault_address\":\"0xD98125a23fAeb48180e33cA6Eef8F128E07418d1\",\"before\":{\"supplyAPY\":2.785577074508373,\"totalSupplyUSD\":910.2199234669124,\"utilization\":50.214973954278285},\"after\":{\"supplyAPY\":0.018690448232727697,\"totalSupplyUSD\":10928.674623244327,\"utilization\":4.182270158573679},\"changes\":{\"apyDelta\":-2.7668866262756455,\"apyDeltaPercent\":-99.32902778373037,\"expectedAnnualReturn\":1.8724940894227748}},{\"protocol\":\"euler\",\"asset\":\"USDT\",\"vault_address\":\"0xe54DFfd36177975938A3873e522dEE535ADebe01\",\"before\":{\"supplyAPY\":3.145252961674087,\"totalSupplyUSD\":316.83234607217724,\"utilization\":53.30416708659767},\"after\":{\"supplyAPY\":0.0028416137496822813,\"totalSupplyUSD\":10335.287045844761,\"utilization\":1.6340604995833168},\"changes\":{\"apyDelta\":-3.142411347924405,\"apyDeltaPercent\":-99.90965388843733,\"expectedAnnualReturn\":0.28468578626089075}},{\"protocol\":\"euler\",\"asset\":\"USDT\",\"vault_address\":\"0x6078b5dE9d10587cb466ECbBF55C95898AFe99C2\",\"before\":{\"supplyAPY\":0,\"totalSupplyUSD\":616.2609725239473,\"utilization\":0},\"after\":{\"supplyAPY\":0,\"totalSupplyUSD\":10634.71567229653,\"utilization\":0},\"changes\":{\"apyDelta\":0,\"apyDeltaPercent\":0,\"expectedAnnualReturn\":0}},{\"protocol\":\"euler\",\"asset\":\"USDC\",\"vault_address\":\"0x8CE379f1e092f0afCef665529F0d86acf92E8Cd4\",\"before\":{\"supplyAPY\":0,\"totalSupplyUSD\":0,\"utilization\":0},\"after\":{\"supplyAPY\":0,\"totalSupplyUSD\":10018.45469967468,\"utilization\":0},\"changes\":{\"apyDelta\":0,\"apyDeltaPercent\":0,\"expectedAnnualReturn\":0}},{\"protocol\":\"euler\",\"asset\":\"USDC\",\"vault_address\":\"0xCB9c9FE7d1509955d8b860E6831d91bf3F0B6240\",\"before\":{\"supplyAPY\":0,\"totalSupplyUSD\":0,\"utilization\":0},\"after\":{\"supplyAPY\":0,\"totalSupplyUSD\":10018.454699777412,\"utilization\":0},\"changes\":{\"apyDelta\":0,\"apyDeltaPercent\":0,\"expectedAnnualReturn\":0}}],\"summary\":{\"total_opportunities\":14,\"average_apy_before\":7.049841727048867,\"average_apy_after\":5.517591929942057,\"best_opportunity\":{\"protocol\":\"euler\",\"asset\":\"USD1\",\"vault_address\":\"0xC41f2Ba7102e9F9F2d603eb951F955aE205ed272\",\"before\":{\"supplyAPY\":37.94719043803546,\"totalSupplyUSD\":6368968.995888612,\"utilization\":95.50105886289025},\"after\":{\"supplyAPY\":34.98298044882484,\"totalSupplyUSD\":6378987.450589051,\"utilization\":95.35107063364963},\"changes\":{\"apyDelta\":-2.964209989210623,\"apyDeltaPercent\":-7.811408315065976,\"expectedAnnualReturn\":3504.7540489753733}},\"input_amount\":10018.4547},\"_dataSource\":\"api\"}",
+      "context": "RebalancePrecheckService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.239Z",
+      "level": "log",
+      "message": "Found 17 opportunities for optimization",
+      "context": "RebalancePrecheckService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.239Z",
+      "level": "log",
+      "message": "Starting marginal optimization with 17 opportunities, total capital=$10018.4547, increment=$5009.22735, initial holdings={\"USDC\":15.2595,\"USD1\":9999.3876}",
+      "context": "MarginalOptimizerService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.239Z",
+      "level": "log",
+      "message": "Querying real-time Supply APY for USD1 at $2504.61",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.239Z",
+      "level": "log",
+      "message": "Calling MCP tool get_supply_opportunities with input {\"chain_id\":\"56\",\"amount\":2504.613675}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.241Z",
+      "level": "log",
+      "message": "Tool get_supply_opportunities returned keys: opportunities, summary, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.241Z",
+      "level": "log",
+      "message": "Got real-time APY: 35.76% (vs estimated: 34.98%)",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.241Z",
+      "level": "log",
+      "message": "Querying real-time Supply APY for USDT at $2504.61",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.241Z",
+      "level": "log",
+      "message": "Calling MCP tool get_supply_opportunities with input {\"chain_id\":\"56\",\"amount\":2504.613675}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.243Z",
+      "level": "log",
+      "message": "Tool get_supply_opportunities returned keys: opportunities, summary, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.243Z",
+      "level": "log",
+      "message": "Got real-time APY: 17.83% (vs estimated: 16.73%)",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.243Z",
+      "level": "log",
+      "message": "Querying real-time Supply APY for USDT at $2504.61",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.243Z",
+      "level": "log",
+      "message": "Calling MCP tool get_supply_opportunities with input {\"chain_id\":\"56\",\"amount\":2504.613675}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.245Z",
+      "level": "log",
+      "message": "Tool get_supply_opportunities returned keys: opportunities, summary, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.245Z",
+      "level": "log",
+      "message": "Got real-time APY: 17.83% (vs estimated: 12.71%)",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.245Z",
+      "level": "log",
+      "message": "Querying real-time Supply APY for USDT at $2504.61",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.245Z",
+      "level": "log",
+      "message": "Calling MCP tool get_supply_opportunities with input {\"chain_id\":\"56\",\"amount\":2504.613675}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.247Z",
+      "level": "log",
+      "message": "Tool get_supply_opportunities returned keys: opportunities, summary, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.247Z",
+      "level": "log",
+      "message": "Got real-time APY: 17.83% (vs estimated: 6.14%)",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.247Z",
+      "level": "log",
+      "message": "Querying real-time Supply APY for USDT at $2504.61",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.247Z",
+      "level": "log",
+      "message": "Calling MCP tool get_supply_opportunities with input {\"chain_id\":\"56\",\"amount\":2504.613675}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.249Z",
+      "level": "log",
+      "message": "Tool get_supply_opportunities returned keys: opportunities, summary, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.250Z",
+      "level": "log",
+      "message": "Got real-time APY: 17.83% (vs estimated: 3.04%)",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.250Z",
+      "level": "log",
+      "message": "Querying real-time Supply APY for USDC at $2504.61",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.250Z",
+      "level": "log",
+      "message": "Calling MCP tool get_supply_opportunities with input {\"chain_id\":\"56\",\"amount\":2504.613675}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.252Z",
+      "level": "log",
+      "message": "Tool get_supply_opportunities returned keys: opportunities, summary, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.252Z",
+      "level": "log",
+      "message": "Got real-time APY: 2.89% (vs estimated: 2.89%)",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.252Z",
+      "level": "log",
+      "message": "Querying real-time Supply APY for USDC at $2504.61",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.252Z",
+      "level": "log",
+      "message": "Calling MCP tool get_supply_opportunities with input {\"chain_id\":\"56\",\"amount\":2504.613675}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.254Z",
+      "level": "log",
+      "message": "Tool get_supply_opportunities returned keys: opportunities, summary, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.254Z",
+      "level": "log",
+      "message": "Got real-time APY: 2.89% (vs estimated: 0.52%)",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.254Z",
+      "level": "log",
+      "message": "Querying real-time Supply APY for USDC at $2504.61",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.254Z",
+      "level": "log",
+      "message": "Calling MCP tool get_supply_opportunities with input {\"chain_id\":\"56\",\"amount\":2504.613675}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.256Z",
+      "level": "log",
+      "message": "Tool get_supply_opportunities returned keys: opportunities, summary, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.256Z",
+      "level": "log",
+      "message": "Got real-time APY: 2.89% (vs estimated: 0.11%)",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.256Z",
+      "level": "log",
+      "message": "Querying real-time Supply APY for USDT at $2504.61",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.256Z",
+      "level": "log",
+      "message": "Calling MCP tool get_supply_opportunities with input {\"chain_id\":\"56\",\"amount\":2504.613675}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.260Z",
+      "level": "log",
+      "message": "Tool get_supply_opportunities returned keys: opportunities, summary, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.260Z",
+      "level": "log",
+      "message": "Got real-time APY: 17.83% (vs estimated: 0.10%)",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.261Z",
+      "level": "log",
+      "message": "Querying real-time Supply APY for USDC at $2504.61",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.261Z",
+      "level": "log",
+      "message": "Calling MCP tool get_supply_opportunities with input {\"chain_id\":\"56\",\"amount\":2504.613675}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.262Z",
+      "level": "log",
+      "message": "Tool get_supply_opportunities returned keys: opportunities, summary, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.262Z",
+      "level": "log",
+      "message": "Got real-time APY: 2.89% (vs estimated: 0.02%)",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.262Z",
+      "level": "log",
+      "message": "Querying real-time Supply APY for USDT at $2504.61",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.262Z",
+      "level": "log",
+      "message": "Calling MCP tool get_supply_opportunities with input {\"chain_id\":\"56\",\"amount\":2504.613675}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.263Z",
+      "level": "log",
+      "message": "Tool get_supply_opportunities returned keys: opportunities, summary, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.263Z",
+      "level": "log",
+      "message": "Got real-time APY: 17.83% (vs estimated: 0.00%)",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.263Z",
+      "level": "log",
+      "message": "Querying real-time Supply APY for USDT at $2504.61",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.263Z",
+      "level": "log",
+      "message": "Calling MCP tool get_supply_opportunities with input {\"chain_id\":\"56\",\"amount\":2504.613675}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.264Z",
+      "level": "log",
+      "message": "Tool get_supply_opportunities returned keys: opportunities, summary, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.264Z",
+      "level": "log",
+      "message": "Got real-time APY: 17.83% (vs estimated: 0.00%)",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.264Z",
+      "level": "log",
+      "message": "Querying real-time Supply APY for USDC at $2504.61",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.264Z",
+      "level": "log",
+      "message": "Calling MCP tool get_supply_opportunities with input {\"chain_id\":\"56\",\"amount\":2504.613675}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.265Z",
+      "level": "log",
+      "message": "Tool get_supply_opportunities returned keys: opportunities, summary, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.265Z",
+      "level": "log",
+      "message": "Got real-time APY: 2.89% (vs estimated: 0.00%)",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.265Z",
+      "level": "log",
+      "message": "Querying real-time Supply APY for USDC at $2504.61",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.265Z",
+      "level": "log",
+      "message": "Calling MCP tool get_supply_opportunities with input {\"chain_id\":\"56\",\"amount\":2504.613675}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.266Z",
+      "level": "log",
+      "message": "Tool get_supply_opportunities returned keys: opportunities, summary, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.266Z",
+      "level": "log",
+      "message": "Got real-time APY: 2.89% (vs estimated: 0.00%)",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.266Z",
+      "level": "log",
+      "message": "Querying real-time LP APY for pool 0x2c3c320d... at $2504.61",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.266Z",
+      "level": "log",
+      "message": "Calling MCP tool get_lp_simulate_batch with input {\"reqs\":[{\"chain_id\":\"56\",\"poolOperation\":{\"poolAddress\":\"0x2c3c320d49019d4f9a92352e947c7e5acfe47d68\",\"operation\":\"add\",\"amountUSD\":2504.613675,\"tickLower\":1,\"tickUpper\":2,\"timeHorizon\":30},\"priceImpact\":false,\"includeIL\":true}]}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.266Z",
+      "level": "log",
+      "message": "Tool get_lp_simulate_batch returned keys: 0, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.266Z",
+      "level": "log",
+      "message": "Got real-time APY: 5.98% (vs estimated: 23.58%)",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.266Z",
+      "level": "log",
+      "message": "Querying real-time LP APY for pool 0xfdfc89d9... at $2504.61",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.266Z",
+      "level": "log",
+      "message": "Calling MCP tool get_lp_simulate_batch with input {\"reqs\":[{\"chain_id\":\"56\",\"poolOperation\":{\"poolAddress\":\"0xfdfc89d953e044f84faa2ed4953190a066328ee0\",\"operation\":\"add\",\"amountUSD\":2504.613675,\"tickLower\":-4,\"tickUpper\":-3,\"timeHorizon\":30},\"priceImpact\":false,\"includeIL\":true}]}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.267Z",
+      "level": "log",
+      "message": "Tool get_lp_simulate_batch returned keys: 0, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.267Z",
+      "level": "log",
+      "message": "Got real-time APY: 71.23% (vs estimated: 255.80%)",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.267Z",
+      "level": "log",
+      "message": "Querying real-time LP APY for pool 0xf150d29d... at $2504.61",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.267Z",
+      "level": "log",
+      "message": "Calling MCP tool get_lp_simulate_batch with input {\"reqs\":[{\"chain_id\":\"56\",\"poolOperation\":{\"poolAddress\":\"0xf150d29d92e7460a1531cbc9d1abeab33d6998e4\",\"operation\":\"add\",\"amountUSD\":2504.613675,\"tickLower\":-3,\"tickUpper\":-2,\"timeHorizon\":30},\"priceImpact\":false,\"includeIL\":true}]}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.269Z",
+      "level": "log",
+      "message": "Tool get_lp_simulate_batch returned keys: 0, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.269Z",
+      "level": "log",
+      "message": "Got real-time APY: 65.02% (vs estimated: 252.42%)",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.269Z",
+      "level": "debug",
+      "message": "Allocated $5009.22735 to lp-0xfdfc89d953e044f84faa2ed4953190a066328ee0: used={\"USDC\":1371.0390020347156,\"USD1\":3638.188347965284}, newly swapped=[\"USDC\"], total used={\"USDC\":1371.0390020347156,\"USD1\":3638.188347965284}",
+      "context": "MarginalOptimizerService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.269Z",
+      "level": "log",
+      "message": "Iteration 1: Allocated $5009.23 to lp-0xfdfc89d953e044f84faa2ed4953190a066328ee0, marginal netAPY=49.71% (gross=49.86%), breakeven=0.07h, swapCost=$0.02, total to this opp=$5009.23, remaining=$5009.23",
+      "context": "MarginalOptimizerService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.269Z",
+      "level": "log",
+      "message": "Querying real-time LP APY for pool 0xfdfc89d9... at $7513.84",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.269Z",
+      "level": "log",
+      "message": "Calling MCP tool get_lp_simulate_batch with input {\"reqs\":[{\"chain_id\":\"56\",\"poolOperation\":{\"poolAddress\":\"0xfdfc89d953e044f84faa2ed4953190a066328ee0\",\"operation\":\"add\",\"amountUSD\":7513.841025,\"tickLower\":-4,\"tickUpper\":-3,\"timeHorizon\":30},\"priceImpact\":false,\"includeIL\":true}]}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.270Z",
+      "level": "log",
+      "message": "Tool get_lp_simulate_batch returned keys: 0, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.270Z",
+      "level": "log",
+      "message": "Got real-time APY: 67.10% (vs estimated: 82.11%)",
+      "context": "APYCalculatorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.270Z",
+      "level": "debug",
+      "message": "Allocated $5009.22735 to lp-0xfdfc89d953e044f84faa2ed4953190a066328ee0: used={\"USDC\":1371.0390020347156,\"USD1\":3638.188347965284}, newly swapped=[], total used={\"USDC\":2742.0780040694312,\"USD1\":7276.376695930568}",
+      "context": "MarginalOptimizerService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.270Z",
+      "level": "log",
+      "message": "Iteration 2: Allocated $5009.23 to lp-0xfdfc89d953e044f84faa2ed4953190a066328ee0, marginal netAPY=46.81% (gross=46.97%), breakeven=0.08h, swapCost=$0.02, total to this opp=$10018.45, remaining=$0.00",
+      "context": "MarginalOptimizerService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.270Z",
+      "level": "log",
+      "message": "Optimization complete: 1 positions, invested=$10018.45/10018.45, weighted APY=65.20%, total swap cost=$0.04",
+      "context": "MarginalOptimizerService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.270Z",
+      "level": "log",
+      "message": "Built 1 strategies for user d8c4f4a6-efe1-4e8f-8d9a-6eca3f62cb7e",
+      "context": "RebalancePrecheckService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.270Z",
+      "level": "log",
+      "message": "Calling MCP tool calculate_rebalance_cost_batch with input {\"safeAddress\":\"0xc5de8e48f7897b926e2c4d129ba68af1df811229\",\"wallet_address\":\"0xc5de8e48f7897b926e2c4d129ba68af1df811229\",\"chain_id\":\"56\",\"target_positions_batch\":[{\"targetLiquidityPositions\":[{\"protocol\":\"uniswapV3\",\"poolAddress\":\"0xfdfc89d953e044f84faa2ed4953190a066328ee0\",\"token0Address\":\"0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d\",\"token1Address\":\"0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d\",\"targetTickLower\":-4,\"targetTickUpper\":-3,\"targetAmount0\":\"2742.0780040694317\",\"targetAmount1\":\"7276.376695930569\"}]}]}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.867Z",
+      "level": "log",
+      "message": "Tool calculate_rebalance_cost_batch returned keys: 0, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.867Z",
+      "level": "log",
+      "message": "Strategy 0 (Strategy Conservative: Marginal Optimized): APY=65.20%, swap_fee=$0.0000, break-even=0.00h, score=7.5299",
+      "context": "RebalancePrecheckService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.867Z",
+      "level": "log",
+      "message": "Precheck APPROVED for user d8c4f4a6-efe1-4e8f-8d9a-6eca3f62cb7e: Portfolio APY=37.77%, Opportunity APY=65.20%, Strategy=Strategy Conservative: Marginal Optimized, 0xfdfc89(lp/uniswapV3): $10018.45 (100.0%)",
+      "context": "RebalancePrecheckService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.867Z",
+      "level": "log",
+      "message": "Precheck completed: shouldTrigger=true",
+      "context": "MonitorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.867Z",
+      "level": "log",
+      "message": "Portfolio APY: 37.77%",
+      "context": "MonitorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.867Z",
+      "level": "log",
+      "message": "Opportunity APY: 65.20%",
+      "context": "MonitorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.867Z",
+      "level": "log",
+      "message": "Difference: 2743.35 bps",
+      "context": "MonitorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.867Z",
+      "level": "log",
+      "message": "Proceeding with rebalance...",
+      "context": "MonitorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.867Z",
+      "level": "log",
+      "message": "Selected strategy: Strategy Conservative: Marginal Optimized",
+      "context": "MonitorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.879Z",
+      "level": "log",
+      "message": "Created rebalance job 9729d588-a163-47e0-98ab-e1da74107cb3 for user d8c4f4a6-efe1-4e8f-8d9a-6eca3f62cb7e",
+      "context": "MonitorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.879Z",
+      "level": "log",
+      "message": "Executing rebalance for job 9729d588-a163-47e0-98ab-e1da74107cb3: Strategy Conservative: Marginal Optimized",
+      "context": "MonitorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.880Z",
+      "level": "log",
+      "message": "Processing LP position on uniswapV3",
+      "context": "MonitorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.880Z",
+      "level": "log",
+      "message": "Extracted LP position, pool: 0xfdfc89d953e044f84faa2ed4953190a066328ee0",
+      "context": "MonitorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.880Z",
+      "level": "log",
+      "message": "Calling rebalance_position with 0 supply + 1 LP positions",
+      "context": "MonitorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:10.880Z",
+      "level": "log",
+      "message": "Calling MCP tool rebalance_position with input {\"safeAddress\":\"0xc5de8e48f7897b926e2c4d129ba68af1df811229\",\"walletAddress\":\"0xc5de8e48f7897b926e2c4d129ba68af1df811229\",\"chainId\":\"56\",\"idempotencyKey\":\"rebalance_9729d588-a163-47e0-98ab-e1da74107cb3_1761816310880\",\"targetLendingSupplyPositions\":[],\"targetLiquidityPositions\":[{\"protocol\":\"uniswapV3\",\"poolAddress\":\"0xfdfc89d953e044f84faa2ed4953190a066328ee0\",\"token0Address\":\"0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d\",\"token1Address\":\"0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d\",\"targetTickLower\":-4,\"targetTickUpper\":-3,\"targetAmount0\":\"2742.0780040694317\",\"targetAmount1\":\"7276.376695930569\"}]}",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:13.093Z",
+      "level": "log",
+      "message": "Tool rebalance_position returned keys: success, txHashes, message, _dataSource",
+      "context": "AgentService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:13.093Z",
+      "level": "log",
+      "message": "Rebalance MCP tool returned successfully",
+      "context": "MonitorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:13.094Z",
+      "level": "log",
+      "message": "Rebalance transaction submitted: 0xc0fd5eca1d5615136cb62ea76482963433b820a260af95b80c45eb5c5ca255fc",
+      "context": "MonitorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:13.094Z",
+      "level": "log",
+      "message": "Verifying transaction 0xc0fd5eca1d5615136cb62ea76482963433b820a260af95b80c45eb5c5ca255fc on chain 56",
+      "context": "MonitorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:14.325Z",
+      "level": "log",
+      "message": "Transaction 0xc0fd5eca1d5615136cb62ea76482963433b820a260af95b80c45eb5c5ca255fc confirmed successfully at block 66420558",
+      "context": "MonitorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:14.331Z",
+      "level": "log",
+      "message": "Job 9729d588-a163-47e0-98ab-e1da74107cb3 completed successfully",
+      "context": "MonitorService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:14.331Z",
+      "level": "log",
+      "message": "Stopped log capture for job check_d8c4f4a6-efe1-4e8f-8d9a-6eca3f62cb7e_1761816309481 with status completed",
+      "context": "RebalanceLoggerService"
+    },
+    {
+      "timestamp": "2025-10-30T09:25:14.332Z",
+      "level": "log",
+      "message": "Saved text log to logs/rebalance/2025-10-30/user-d8c4f4a6-efe1-4e8f-8d9a-6eca3f62cb7e-job-check_d8c4f4a6-efe1-4e8f-8d9a-6eca3f62cb7e_1761816309481-2025-10-30_09-25-14-331.log",
+      "context": "RebalanceLoggerService"
+    }
+  ]
+}

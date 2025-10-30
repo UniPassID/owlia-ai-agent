@@ -10,6 +10,10 @@ import { AgentService } from '../src/agent/agent.service';
 import { ConfigService } from '@nestjs/config';
 import { User } from '../src/entities/user.entity';
 import { UserPolicy } from '../src/entities/user-policy.entity';
+import { MarginalOptimizerService } from '../src/monitor/portfolio-optimizer/marginal-optimizer.service';
+import { OpportunityConverterService } from '../src/monitor/portfolio-optimizer/opportunity-converter.service';
+import { CostCalculatorService } from '../src/monitor/portfolio-optimizer/cost-calculator.service';
+import { APYCalculatorService } from '../src/monitor/portfolio-optimizer/apy-calculator.service';
 
 // Load environment variables
 config();
@@ -73,8 +77,20 @@ async function testPrecheck() {
     await agentService.onModuleInit();
     console.log('AgentService initialized\n');
 
+    // Initialize portfolio optimizer services
+    console.log('Initializing portfolio optimizer services...');
+    const apyCalculator = new APYCalculatorService(agentService);
+    const costCalculator = new CostCalculatorService(agentService);
+    const marginalOptimizer = new MarginalOptimizerService(costCalculator);
+    const opportunityConverter = new OpportunityConverterService(apyCalculator);
+    console.log('Portfolio optimizer services initialized\n');
+
     // Initialize RebalancePrecheckService
-    const precheckService = new RebalancePrecheckService(agentService);
+    const precheckService = new RebalancePrecheckService(
+      agentService,
+      marginalOptimizer,
+      opportunityConverter,
+    );
 
     // Create mock user and policy
     const mockUser = createMockUser(address, chainId);
@@ -115,6 +131,10 @@ async function testPrecheck() {
     }
     if (result.failureReason) {
       console.log(`Failure Reason:         ${result.failureReason}`);
+    }
+
+    if (result.strategyEvaluations!== undefined) {
+      console.log(`Break-even Time:        ${JSON.stringify(result.strategyEvaluations)}`);
     }
 
     console.log('='.repeat(80));

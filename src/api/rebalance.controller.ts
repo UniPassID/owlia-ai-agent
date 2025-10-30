@@ -86,6 +86,7 @@ export class RebalanceController {
         user,
         policy,
         dto.trigger || 'manual_trigger',
+        precheck,
       );
 
       return {

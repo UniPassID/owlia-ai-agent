@@ -9,6 +9,7 @@ import { QueueModule } from '../queue/queue.module';
 import { AgentModule } from '../agent/agent.module';
 import { RebalancePrecheckService } from './rebalance-precheck.service';
 import { UserModule } from '../api/user.module';
+import { PortfolioOptimizerModule } from './portfolio-optimizer/portfolio-optimizer.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { UserModule } from '../api/user.module';
     QueueModule,
     AgentModule,
     UserModule,
+    PortfolioOptimizerModule,
   ],
   controllers: [MonitorController],
   providers: [MonitorService, RebalancePrecheckService],

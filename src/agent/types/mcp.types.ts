@@ -309,6 +309,32 @@ export interface CalculateRebalanceCostBatchRequest {
   }[];
 }
 
+export interface CalculateSwapCostBatchRequest {
+  processed_args_batch: ProcessedRebalanceArgs[];
+}
+
+export interface ProcessedRebalanceArgs {
+  network: string;
+  safeAddress: string;
+  currentBalances: TokenBalance[];
+  currentLendingSupplyPositions: LendingPosition[];
+  currentLiquidityPositions: ProcessedLiquidityPosition[];
+  targetLendingSupplyPositions: LendingPosition[];
+  targetLiquidityPositions: TargetLiquidityPosition[];
+}
+
+export interface TokenBalance {
+  token: string; // Token contract address
+  amount: string; // Token amount (wei unit string)
+}
+
+// Internal processed types (not exported to types files)
+export interface ProcessedLiquidityPosition {
+  protocol: "uniswapV3" | "aerodromeSlipstream";
+  tokenId: string; // Processed as string for API
+  poolAddress: string;
+}
+
 export interface LendingPosition {
   protocol: ProtocolType; // Lending protocol
   token: string; // Token contract address
@@ -340,7 +366,7 @@ export interface CalculateRebalanceCostBatchResponse {
 export interface CalculateRebalanceCostResult {
   // Currently only swap_fee is returned by the MCP server
   // All cost calculation and break-even analysis should be done based on this value
-  swap_fee: string | number;
+  fee: string | number;
 
   // Future fields (not yet implemented by MCP server):
   // gas_estimate?: string | number;

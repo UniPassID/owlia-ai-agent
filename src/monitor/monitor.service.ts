@@ -14,6 +14,7 @@ import {
 import { UserService } from '../api/user.service';
 import { AgentService } from '../agent/agent.service';
 import { lookupTokenAddress } from '../agent/token-utils';
+import { extractTxHashFromOutput, verifyTransactionOnChain } from '../utils/chain-verifier.util';
 import type {
   ProtocolType,
   AccountYieldSummaryResponse,
@@ -279,19 +280,51 @@ export class MonitorService {
     // Extract transaction hash
     const txHash = rebalanceResult?.txHash ||
                    rebalanceResult?.transactionHash ||
-                   this.extractTxHash(JSON.stringify(rebalanceResult));
+                   extractTxHashFromOutput(JSON.stringify(rebalanceResult));
 
-    if (txHash) {
-      this.logger.log(`Rebalance transaction submitted: ${txHash}`);
+    if (!txHash) {
+      throw new Error('No transaction hash returned from rebalance_position');
+    }
+
+    this.logger.log(`Rebalance transaction submitted: ${txHash}`);
+
+    // Verify transaction on chain
+    this.logger.log(`Verifying transaction ${txHash} on chain ${chainId}`);
+    const verification = await verifyTransactionOnChain(txHash, chainId);
+
+    if (verification.success && verification.confirmed) {
+      this.logger.log(`Transaction ${txHash} confirmed successfully at block ${verification.blockNumber}`);
       job.execResult = {
         txHash,
+        transactionHash: txHash,
+        blockNumber: verification.blockNumber,
+        status: 'confirmed',
         result: rebalanceResult,
         timestamp: new Date().toISOString(),
       };
       await this.jobRepo.save(job);
-    } else {
-      throw new Error('No transaction hash returned from rebalance_position');
+      return;
     }
+
+    if (verification.success && !verification.confirmed) {
+      const errorMsg = `Transaction ${txHash} failed on chain: ${verification.error || 'Transaction not confirmed'}`;
+      this.logger.error(errorMsg);
+      job.execResult = {
+        txHash,
+        transactionHash: txHash,
+        status: verification.status || 'failed',
+        reason: verification.error || 'Transaction not confirmed',
+        result: rebalanceResult,
+        timestamp: new Date().toISOString(),
+      };
+      await this.jobRepo.save(job);
+      throw new Error(errorMsg);
+    }
+
+    // Verification call failed
+    const errorMsg = `Failed to verify transaction ${txHash}: ${verification.error}`;
+    this.logger.error(errorMsg);
+    throw new Error(errorMsg);
   }
 
   private extractSupplyTokenAddress(position: StrategyPosition, chainId: string): string {
@@ -510,11 +543,6 @@ export class MonitorService {
     if (normalized.includes('uniswap')) return 'uniswapV3';
     if (normalized.includes('aerodrome')) return 'aerodromeSlipstream';
     throw new Error(`Invalid LP protocol: "${protocol}"`);
-  }
-
-  private extractTxHash(output: string): string | null {
-    const match = output.match(/0x[a-fA-F0-9]{64}/);
-    return match ? match[0] : null;
   }
 
 }

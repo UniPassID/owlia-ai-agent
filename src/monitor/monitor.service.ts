@@ -272,9 +272,11 @@ export class MonitorService {
       await this.executeRebalance(user, precheckResult, job, logSessionId);
 
       job.status = JobStatus.COMPLETED;
+      job.completedAt = new Date();
       this.logger.log(`Job ${job.id} completed successfully`);
     } catch (error) {
       job.status = JobStatus.FAILED;
+      job.completedAt = new Date();
       job.errorMessage = error.message;
       this.logger.error(`Job ${job.id} failed: ${error.message}`);
     } finally {
@@ -288,6 +290,16 @@ export class MonitorService {
           if (logContent) {
             const execResult = await this.rebalanceSummaryService.generateExecResult(logContent);
             if (execResult) {
+              // Add txHash to the last step's metadata
+              if (job.simulateReport?.txHash && execResult.steps && execResult.steps.length > 0) {
+                const lastStep = execResult.steps[execResult.steps.length - 1];
+                if (!lastStep.metadata) {
+                  lastStep.metadata = {};
+                }
+                lastStep.metadata.txHash = job.simulateReport.txHash;
+                this.logger.log(`Added txHash ${job.simulateReport.txHash} to execResult`);
+              }
+
               job.execResult = execResult;
               this.logger.log(`Generated execResult for job ${job.id}`);
             } else {

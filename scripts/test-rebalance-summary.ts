@@ -2,7 +2,7 @@
 
 /**
  * Test script for rebalance summary generation
- * Uses the getRebalanceSummaryPrompt to analyze rebalancing logs and generate user-friendly summaries
+ * Uses RebalanceSummaryService to analyze rebalancing logs and generate user-friendly summaries
  *
  * Usage: npx ts-node scripts/test-rebalance-summary.ts [filename]
  *
@@ -17,7 +17,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { ConfigService } from '@nestjs/config';
 import { AgentService } from '../src/agent/agent.service';
-import { getRebalanceSummaryPrompt } from '../src/agent/agent.prompt';
+import { RebalanceSummaryService } from '../src/monitor/rebalance-summary.service';
 
 // Load environment variables
 dotenv.config();
@@ -104,54 +104,42 @@ async function main() {
   console.log('='.repeat(80));
   console.log(rebalanceLog.substring(0, 500) + '...\n');
 
-  // Generate prompt
-  const prompt = getRebalanceSummaryPrompt(rebalanceLog);
-
-  // Create mock ConfigService and initialize AgentService
-  console.log('🔧 Initializing AgentService...');
+  // Create mock ConfigService and initialize services
+  console.log('🔧 Initializing services...');
   const configService = new MockConfigService();
   const agentService = new AgentService(configService);
+  const rebalanceSummaryService = new RebalanceSummaryService(agentService);
 
   try {
     // Initialize the service (connects to MCP)
     await agentService.onModuleInit();
-    console.log('✓ AgentService initialized\n');
+    console.log('✓ Services initialized\n');
 
     console.log('='.repeat(80));
-    console.log('Processing with AgentService...');
+    console.log('Processing with RebalanceSummaryService...');
     console.log('='.repeat(80));
 
-    // Call AgentService's simple completion method
-    const summary = await agentService.runSimpleCompletion(prompt);
+    // Call RebalanceSummaryService to generate execResult
+    const execResult = await rebalanceSummaryService.generateExecResult(rebalanceLog);
 
-    console.log('\n' + '='.repeat(80));
-    console.log('AI Response Processing');
-    console.log('='.repeat(80));
-
-    // Extract JSON from response (AI might wrap it in markdown code blocks)
-    const jsonMatch = summary.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.error('❌ AI did not return valid JSON');
-      console.error('Raw response:', summary);
-      throw new Error('Invalid JSON response from AI');
+    if (!execResult) {
+      console.error('❌ Failed to generate execResult');
+      throw new Error('RebalanceSummaryService returned null');
     }
-
-    // Parse JSON
-    const parsed = JSON.parse(jsonMatch[0]);
 
     // Validate field lengths
     console.log('\n📏 Field Length Validation:');
-    const titleLen = parsed.title?.length || 0;
-    const summaryLen = parsed.summary?.length || 0;
+    const titleLen = execResult.title?.length || 0;
+    const summaryLen = execResult.summary?.length || 0;
     console.log(`  title: ${titleLen}/30 chars ${titleLen <= 30 ? '✓' : '⚠️  EXCEEDS LIMIT'}`);
     console.log(`  summary: ${summaryLen}/50 chars ${summaryLen <= 50 ? '✓' : '⚠️  EXCEEDS LIMIT'}`);
 
-    if (parsed.steps && Array.isArray(parsed.steps)) {
-      parsed.steps.forEach((step: any, idx: number) => {
+    if (execResult.steps && Array.isArray(execResult.steps)) {
+      execResult.steps.forEach((step, idx) => {
         const contentLen = step.content?.length || 0;
         const reasonLen = step.metadata?.reason?.length || 0;
 
-        // Step 1 has different limits
+        // Step 0 has different limits
         if (idx === 0) {
           console.log(`  step[${idx}].content: ${contentLen}/35 chars ${contentLen <= 35 ? '✓' : '⚠️  EXCEEDS LIMIT'}`);
           console.log(`  step[${idx}].reason: ${reasonLen}/100 chars ${reasonLen <= 100 ? '✓' : '⚠️  EXCEEDS LIMIT'}`);
@@ -164,17 +152,17 @@ async function main() {
 
     // Display parsed result
     console.log('\n' + '='.repeat(80));
-    console.log('✅ Parsed TimelineMessage');
+    console.log('✅ Generated TimelineMessage');
     console.log('='.repeat(80));
-    console.log('\n' + JSON.stringify(parsed, null, 2) + '\n');
+    console.log('\n' + JSON.stringify(execResult, null, 2) + '\n');
 
   } catch (error) {
-    console.error('\n❌ Error calling AgentService:', error);
+    console.error('\n❌ Error:', error);
     throw error;
   } finally {
     // Cleanup
     await agentService.onModuleDestroy();
-    console.log('\n🔌 AgentService disconnected');
+    console.log('\n🔌 Services disconnected');
   }
 }
 

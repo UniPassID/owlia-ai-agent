@@ -160,6 +160,30 @@ export class RebalanceLoggerService {
   }
 
   /**
+   * Get log content as text from session (before it's saved to file)
+   */
+  getLogContent(jobId: string): string | null {
+    const session = this.logSessions.get(jobId);
+    if (!session) {
+      return null;
+    }
+    return formatAsText(session);
+  }
+
+  /**
+   * Read log content from saved file
+   */
+  async readLogFile(filePath: string): Promise<string | null> {
+    try {
+      const content = await fs.promises.readFile(filePath, 'utf-8');
+      return content;
+    } catch (error) {
+      this.logger.error(`Failed to read log file ${filePath}: ${(error as Error).message}`);
+      return null;
+    }
+  }
+
+  /**
    * Update session metadata
    */
   updateMetadata(jobId: string, metadata: any): void {

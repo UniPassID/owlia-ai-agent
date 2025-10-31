@@ -531,6 +531,8 @@ export class RebalancePrecheckService {
         request,
       );
 
+      this.logger.log(`calculate_rebalance_cost_batch response: ${JSON.stringify(costResult)}`)
+
       const resultsArray = this.normalizeDictionaryResponse<any>(costResult);
 
       let bestScore = -Infinity;
@@ -539,7 +541,7 @@ export class RebalancePrecheckService {
       resultsArray.forEach((result, index) => {
         if (index >= allStrategies.length) return;
 
-        const swapFee = this.parseNumber(result.swap_fee) || 0;
+        const swapFee = this.parseNumber(result.fee) || 0;
         const strategyApy = allStrategies[index].apy;
         const apyImprovement = strategyApy - portfolioApy;
 

@@ -10,6 +10,7 @@ import {
   RebalancePrecheckResult,
   StrategyPosition,
 } from './rebalance-precheck.service';
+import { RebalanceSummaryService } from './rebalance-summary.service';
 import { UserService } from '../api/user.service';
 import { AgentService } from '../agent/agent.service';
 import { lookupTokenAddress } from '../agent/token-utils';
@@ -36,6 +37,7 @@ export class MonitorService {
     @InjectRepository(RebalanceJob)
     private jobRepo: Repository<RebalanceJob>,
     private precheckService: RebalancePrecheckService,
+    private rebalanceSummaryService: RebalanceSummaryService,
     private userService: UserService,
     private agentService: AgentService,
     private rebalanceLogger: RebalanceLoggerService,
@@ -277,7 +279,27 @@ export class MonitorService {
       this.logger.error(`Job ${job.id} failed: ${error.message}`);
     } finally {
       // Save logs to file (only if triggered by shouldTrigger=true)
-      await this.rebalanceLogger.saveToFile(logSessionId, job.status);
+      const savedPaths = await this.rebalanceLogger.saveToFile(logSessionId, job.status);
+
+      // Generate execResult from log content
+      if (savedPaths.textPath) {
+        try {
+          const logContent = await this.rebalanceLogger.readLogFile(savedPaths.textPath);
+          if (logContent) {
+            const execResult = await this.rebalanceSummaryService.generateExecResult(logContent);
+            if (execResult) {
+              job.execResult = execResult;
+              this.logger.log(`Generated execResult for job ${job.id}`);
+            } else {
+              this.logger.warn(`Failed to generate execResult for job ${job.id}`);
+            }
+          }
+        } catch (error) {
+          this.logger.error(`Error generating execResult for job ${job.id}: ${error.message}`);
+          // Don't throw - we don't want execResult generation failure to break the flow
+        }
+      }
+
       await this.jobRepo.save(job);
 
       // Stop interception if we started it
@@ -391,7 +413,7 @@ export class MonitorService {
     if (verification.success && verification.confirmed) {
       this.logger.log(`Transaction ${txHash} confirmed successfully at block ${verification.blockNumber}`);
 
-      job.execResult = {
+      job.simulateReport= {
         txHash,
         transactionHash: txHash,
         blockNumber: verification.blockNumber,
@@ -407,7 +429,7 @@ export class MonitorService {
       const errorMsg = `Transaction ${txHash} failed on chain: ${verification.error || 'Transaction not confirmed'}`;
       this.logger.error(errorMsg);
 
-      job.execResult = {
+      job.simulateReport= {
         txHash,
         transactionHash: txHash,
         status: verification.status || 'failed',

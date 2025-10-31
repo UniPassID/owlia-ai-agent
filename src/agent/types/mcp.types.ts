@@ -357,7 +357,7 @@ export type ProtocolType = "aave" | "euler" | "venus";
 
 // Calculate Rebalance Cost Batch Response
 // Note: The actual response is a dictionary with numeric keys ("0", "1", "2"), not an array
-// Example: {"0":{"swap_fee":"0.09947096"},"1":{"swap_fee":"0.1"},"2":{"swap_fee":"0.14973548"},"_dataSource":"api"}
+// Example: {"0":{"fee":"0.09947096"},"1":{"fee":"0.1"},"2":{"fee":"0.14973548"},"_dataSource":"api"}
 export interface CalculateRebalanceCostBatchResponse {
   [index: string]: CalculateRebalanceCostResult | string; // string for "_dataSource"
   _dataSource?: string;

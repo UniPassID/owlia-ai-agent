@@ -358,15 +358,30 @@ export type ProtocolType = "aave" | "euler" | "venus";
 // Calculate Rebalance Cost Batch Response
 // Note: The actual response is a dictionary with numeric keys ("0", "1", "2"), not an array
 // Example: {"0":{"fee":"0.09947096"},"1":{"fee":"0.1"},"2":{"fee":"0.14973548"},"_dataSource":"api"}
-export interface CalculateRebalanceCostBatchResponse {
-  [index: string]: CalculateRebalanceCostResult | string; // string for "_dataSource"
+export type CalculateRebalanceCostBatchResponse = Record<string, CalculateRebalanceCostResult | string | undefined> & {
   _dataSource?: string;
+};
+
+export interface RebalanceRoute {
+  actionType: 'Swap' | 'Supply' | 'Withdraw' | 'Borrow' | 'Repay' | 'Deposit' | 'Redeem' | (string & {});
+  tokenA: string;
+  tokenB?: string;
+  amount: string;
+  estimatedOutput?: string;
+  data?: string;
+  protocol?: string;
+}
+
+export interface RebalanceCostDetails {
+  safe: string;
+  routes: RebalanceRoute[];
 }
 
 export interface CalculateRebalanceCostResult {
   // Currently only swap_fee is returned by the MCP server
   // All cost calculation and break-even analysis should be done based on this value
   fee: string | number;
+  details?: RebalanceCostDetails;
 
   // Future fields (not yet implemented by MCP server):
   // gas_estimate?: string | number;

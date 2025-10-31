@@ -14,9 +14,10 @@ import {
   GetSupplyOpportunitiesResponse,
   LendingPosition,
   ProtocolType,
+  RebalanceRoute,
   TargetLiquidityPosition,
 } from '../agent/types/mcp.types';
-import { lookupTokenAddress } from '../agent/token-utils';
+import { lookupTokenAddress, lookupTokenSymbol, TOKEN_DECIMALS_BY_CHAIN } from '../agent/token-utils';
 import { MarginalOptimizerService } from './portfolio-optimizer/marginal-optimizer.service';
 import { OpportunityConverterService } from './portfolio-optimizer/opportunity-converter.service';
 
@@ -533,13 +534,15 @@ export class RebalancePrecheckService {
 
       this.logger.log(`calculate_rebalance_cost_batch response: ${JSON.stringify(costResult)}`)
 
-      const resultsArray = this.normalizeDictionaryResponse<any>(costResult);
+      const resultsArray = this.normalizeDictionaryResponse<CalculateRebalanceCostResult>(costResult);
 
       let bestScore = -Infinity;
       let bestStrategyIndex = -1;
 
       resultsArray.forEach((result, index) => {
         if (index >= allStrategies.length) return;
+
+        this.logRebalanceSwapPlan(result, chainId, index);
 
         const swapFee = this.parseNumber(result.fee) || 0;
         const strategyApy = allStrategies[index].apy;
@@ -879,6 +882,110 @@ export class RebalancePrecheckService {
       if (!Number.isNaN(parsed)) return parsed;
     }
     return null;
+  }
+
+  private logRebalanceSwapPlan(
+    result: CalculateRebalanceCostResult,
+    chainId: string,
+    index: number,
+  ): void {
+    const swapSummaries = this.describeSwapRoutes(result, chainId);
+    if (swapSummaries.length === 0) {
+      return;
+    }
+
+    const safe = result.details?.safe ?? 'unknown';
+    this.logger.log(
+      `Strategy ${index} swap plan (safe ${safe}): ${swapSummaries.join(' | ')}`,
+    );
+  }
+
+  private describeSwapRoutes(
+    result: CalculateRebalanceCostResult,
+    chainId: string,
+  ): string[] {
+    const details = result.details;
+    if (!details || !Array.isArray(details.routes)) {
+      return [];
+    }
+
+    return details.routes
+      .filter(route => route?.actionType === 'Swap')
+      .map(route => this.formatSwapRoute(route, chainId))
+      .filter((summary): summary is string => Boolean(summary));
+  }
+
+  private formatSwapRoute(route: RebalanceRoute, chainId: string): string | null {
+    if (!route || !route.tokenA) {
+      return null;
+    }
+
+    const fromMeta = this.resolveTokenMeta(route.tokenA, chainId);
+    const toMeta = route.tokenB ? this.resolveTokenMeta(route.tokenB, chainId) : null;
+
+    const amountIn = this.formatTokenAmount(route.amount, fromMeta.decimals);
+    const amountOut = route.estimatedOutput
+      ? this.formatTokenAmount(
+        route.estimatedOutput,
+        toMeta?.decimals ?? fromMeta.decimals,
+      )
+      : null;
+
+    const protocol = route.protocol || 'unknown';
+    const outputPart = amountOut && toMeta
+      ? ` -> ${amountOut} ${toMeta.symbol}`
+      : '';
+
+    return `Swap ${amountIn} ${fromMeta.symbol}${outputPart} via ${protocol}`;
+  }
+
+  private resolveTokenMeta(tokenIdentifier: string, chainId: string): { symbol: string; decimals: number } {
+    const symbol =
+      lookupTokenSymbol(tokenIdentifier, chainId) ??
+      (tokenIdentifier?.startsWith('0x') ? `${tokenIdentifier.slice(0, 6)}...` : tokenIdentifier);
+
+    const decimalsMap = TOKEN_DECIMALS_BY_CHAIN[chainId] || {};
+    const decimals = symbol
+      ? decimalsMap[symbol.replace('...', '').toUpperCase()] ?? 18
+      : 18;
+
+    return { symbol: symbol || 'unknown', decimals };
+  }
+
+  private formatTokenAmount(amount: string | number, decimals: number): string {
+    if (amount === null || amount === undefined) {
+      return '0';
+    }
+
+    if (typeof amount === 'number') {
+      return amount.toFixed(4);
+    }
+
+    try {
+      const raw = BigInt(amount);
+      if (decimals <= 0) {
+        return raw.toString();
+      }
+
+      const divisor = BigInt(10) ** BigInt(decimals);
+      const whole = raw / divisor;
+      const fraction = raw % divisor;
+      if (fraction === BigInt(0)) {
+        return whole.toString();
+      }
+
+      const fractionStr = fraction.toString().padStart(decimals, '0').replace(/0+$/, '');
+      const displayFraction = fractionStr.slice(0, 6);
+      return displayFraction
+        ? `${whole.toString()}.${displayFraction}`
+        : whole.toString();
+    } catch {
+      const numeric = Number(amount);
+      if (!Number.isFinite(numeric)) {
+        return String(amount);
+      }
+      return numeric.toFixed(4);
+    }
   }
 
   private normalizeDictionaryResponse<T>(data: any): T[] {

@@ -3,7 +3,7 @@ export interface Message {
   content: string;
   timestamp: Date;
   type?: 'info' | 'success' | 'warning' | 'action';
-  icon?: React.ReactNode;
+  icon?: any;
   messageType: 'simple';
 }
 
@@ -34,5 +34,5 @@ export interface GuideMessage {
   content: string;
   type?: 'info' | 'success' | 'warning' | 'action';
   delay: number; // ms delay before showing this message
-  icon?: React.ReactNode;
+  icon?: any;
 }

@@ -210,7 +210,8 @@ export class RebalancePrecheckService {
 
       this.logger.log(
         `Portfolio for user ${user.id}: totalAssets=$${totalAssetsUsd}, APY=${portfolioApy}%, ` +
-        `holdings=${JSON.stringify(currentHoldings)}`
+        `holdings=${JSON.stringify(currentHoldings)}, ` +
+        `yieldSummary=${JSON.stringify(yieldSummary)}`
       );
 
       return { yieldSummary, totalAssetsUsd, portfolioApy, currentHoldings };

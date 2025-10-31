@@ -61,13 +61,17 @@ export class MarginalOptimizerService {
     while (remainingCapital >= options.incrementSize && iteration < maxIterations) {
       iteration++;
 
+      // Dynamic increment: if remaining < 2x incrementSize, use all remaining; otherwise use incrementSize
+      const baseIncrementAmount = remainingCapital < options.incrementSize * 2
+        ? remainingCapital
+        : options.incrementSize;
+
       // Calculate marginal scores for all opportunities (serially)
       const marginalScores: MarginalScore[] = [];
       for (const opp of opportunities) {
         const currentAlloc = allocations.get(opp.id)!;
         const incrementAmount = Math.min(
-          options.incrementSize,
-          remainingCapital,
+          baseIncrementAmount,
           opp.maxAmount - currentAlloc,
         );
 

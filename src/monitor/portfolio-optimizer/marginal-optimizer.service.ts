@@ -153,18 +153,24 @@ export class MarginalOptimizerService {
     }
 
     // Build final positions
-    const positions = Array.from(allocations.entries())
-      .filter(([_, amount]) => amount > 0)
-      .map(([oppId, amount]) => {
-        const opp = opportunities.find(o => o.id === oppId)!;
-        return {
-          opportunity: opp,
-          amount,
-          apy: opp.getAPY(amount),
-        };
-      });
+    const positions = await Promise.all(
+      Array.from(allocations.entries())
+        .filter(([_, amount]) => amount > 0)
+        .map(async ([oppId, amount]) => {
+          const opp = opportunities.find(o => o.id === oppId)!;
+          const apy = useRealAPY && opp.getAPYAsync
+            ? await opp.getAPYAsync(amount)
+            : opp.getAPY(amount);
+          return {
+            opportunity: opp,
+            amount,
+            apy,
+          };
+        }),
+    );
 
-    const totalInvested = totalCapital - remainingCapital;
+    // const totalInvested = totalCapital - remainingCapital;
+    const totalInvested = totalCapital;
     const weightedAPY = positions.reduce(
       (sum, p) => sum + (p.apy * p.amount) / totalInvested,
       0,
@@ -233,6 +239,7 @@ export class MarginalOptimizerService {
 
     // 2. Get swap cost (real or estimated)
     let swapCost: number;
+    let amortizeCostAcrossExisting = false;
 
     if (useRealCost) {
       // Get target tokens for this opportunity
@@ -284,6 +291,9 @@ export class MarginalOptimizerService {
 
           if (isFirstTimeSwapForToken) {
             swapCost += gasPerSwap; // Gas cost for first-time swap
+            if (currentAllocation > 0) {
+              amortizeCostAcrossExisting = true;
+            }
           }
 
           // DEX fee + slippage (always applies)
@@ -301,7 +311,13 @@ export class MarginalOptimizerService {
     }
 
     // 3. Calculate annualized cost rate using effective holding period
-    const annualizedCostRate = (swapCost / incrementAmount) * (365 / effectiveHoldingPeriodDays);
+    const costDenominator = amortizeCostAcrossExisting
+      ? incrementAmount + currentAllocation
+      : incrementAmount;
+    const annualizedCostRate =
+      costDenominator > 0
+        ? (swapCost / costDenominator) * (365 / effectiveHoldingPeriodDays)
+        : 0;
 
     // 4. Net APY (in percentage points)
     const netAPY = avgMarginalAPY - annualizedCostRate * 100;

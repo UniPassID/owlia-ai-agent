@@ -8,6 +8,7 @@ import { RebalanceJob } from '../entities/rebalance-job.entity';
 import { AgentModule } from '../agent/agent.module';
 import { RebalancePrecheckService } from './rebalance-precheck.service';
 import { RebalanceSummaryService } from './rebalance-summary.service';
+import { TransactionParserService } from './transaction-parser.service';
 import { UserModule } from '../api/user.module';
 import { PortfolioOptimizerModule } from './portfolio-optimizer/portfolio-optimizer.module';
 import { RebalanceLoggerService } from '../utils/rebalance-logger.service';
@@ -20,7 +21,7 @@ import { RebalanceLoggerService } from '../utils/rebalance-logger.service';
     PortfolioOptimizerModule,
   ],
   controllers: [MonitorController],
-  providers: [MonitorService, RebalancePrecheckService, RebalanceSummaryService, RebalanceLoggerService],
+  providers: [MonitorService, RebalancePrecheckService, RebalanceSummaryService, TransactionParserService, RebalanceLoggerService],
   exports: [MonitorService],
 })
 export class MonitorModule {}

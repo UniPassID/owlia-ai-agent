@@ -54,6 +54,11 @@ interface IngestionResult {
   errors: number;
 }
 
+interface YieldSummaryLookup {
+  summary: JsonRecord;
+  source: string;
+}
+
 const LOG_BASE_DIR = path.resolve(process.cwd(), 'logs/rebalance');
 
 async function main() {
@@ -153,9 +158,18 @@ async function main() {
         const parsedTx = await context.parser.parseTransaction(txHash, chainId);
         const txTime = parsedTx.timestamp ? new Date(parsedTx.timestamp * 1000) : new Date();
 
-        const accountYieldSummary =
-          extractAccountYieldSummaryFromMetadata(logData) ??
-          extractAccountYieldSummaryFromLogFile(file);
+        const metadataSummary = extractAccountYieldSummaryFromMetadata(logData);
+        const logSummary = extractAccountYieldSummaryFromLogFile(file);
+        const finalSummary = metadataSummary ?? logSummary;
+        const accountYieldSummary = finalSummary?.summary ?? null;
+
+        logYieldSummaryStatus(
+          relativePath,
+          metadataSummary,
+          logSummary,
+          finalSummary,
+          context.options,
+        );
 
         const snapshot = context.snapshotRepo.create({
           userId: job.userId,
@@ -396,11 +410,16 @@ async function determineChainId(
   return null;
 }
 
-function extractAccountYieldSummaryFromMetadata(logData: JsonRecord): JsonRecord | null {
+function extractAccountYieldSummaryFromMetadata(logData: JsonRecord): YieldSummaryLookup | null {
   const metadata = logData.metadata ?? {};
-  const summary = metadata.accountYieldSummary ?? metadata.precheckResult?.yieldSummary;
-  if (summary && typeof summary === 'object') {
-    return summary;
+  const direct = metadata.accountYieldSummary;
+  if (direct && typeof direct === 'object') {
+    return { summary: direct, source: 'metadata.accountYieldSummary' };
+  }
+
+  const precheck = metadata.precheckResult?.yieldSummary;
+  if (precheck && typeof precheck === 'object') {
+    return { summary: precheck, source: 'metadata.precheckResult.yieldSummary' };
   }
   return null;
 }
@@ -417,7 +436,7 @@ async function loadUser(userId: string, context: IngestionContext): Promise<User
   return user;
 }
 
-function extractAccountYieldSummaryFromLogFile(jsonPath: string): JsonRecord | null {
+function extractAccountYieldSummaryFromLogFile(jsonPath: string): YieldSummaryLookup | null {
   const textPath = jsonPath.replace(/\.json$/, '.log');
   if (!fs.existsSync(textPath)) {
     return null;
@@ -426,18 +445,25 @@ function extractAccountYieldSummaryFromLogFile(jsonPath: string): JsonRecord | n
   try {
     const content = fs.readFileSync(textPath, 'utf-8');
     const lines = content.split(/\r?\n/);
-    for (const line of lines) {
-      const idx = line.indexOf('yieldSummary=');
-      if (idx === -1) {
+    for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
+      const line = lines[lineIndex];
+      const markerIndex = line.indexOf('yieldSummary=');
+      if (markerIndex === -1) {
         continue;
       }
-      const raw = line.slice(idx + 'yieldSummary='.length).trim();
+      const raw = line.slice(markerIndex + 'yieldSummary='.length).trim();
       if (!raw) {
         continue;
       }
       const cleaned = raw.replace(/;?$/, '');
       try {
-        return JSON.parse(cleaned);
+        const parsed = JSON.parse(cleaned);
+        if (parsed && typeof parsed === 'object') {
+          return {
+            summary: parsed,
+            source: `log:${path.basename(textPath)}#L${lineIndex + 1}`,
+          };
+        }
       } catch {
         continue;
       }
@@ -447,6 +473,32 @@ function extractAccountYieldSummaryFromLogFile(jsonPath: string): JsonRecord | n
   }
 
   return null;
+}
+
+function logYieldSummaryStatus(
+  relativePath: string,
+  metadataSummary: YieldSummaryLookup | null,
+  logSummary: YieldSummaryLookup | null,
+  finalSummary: YieldSummaryLookup | null,
+  options: ScriptOptions,
+) {
+  const metaStatus = metadataSummary ? `found (${metadataSummary.source})` : 'missing';
+  const logStatus = logSummary ? `found (${logSummary.source})` : 'missing';
+
+  if (finalSummary) {
+    const baseMessage = `[yieldSummary] ${relativePath}: found via ${finalSummary.source} (metadata=${metaStatus}, log=${logStatus})`;
+    if (options.verbose) {
+      const keys = Object.keys(finalSummary.summary || {});
+      const preview = keys.slice(0, 5).join(', ') || '(no keys)';
+      console.log(`${baseMessage} | keys: ${preview}`);
+    } else {
+      console.log(baseMessage);
+    }
+  } else {
+    console.warn(
+      `[yieldSummary] ${relativePath}: NOT FOUND (metadata=${metaStatus}, log=${logStatus})`,
+    );
+  }
 }
 
 main().catch(error => {

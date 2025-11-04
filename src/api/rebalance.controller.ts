@@ -118,7 +118,13 @@ export class RebalanceController {
   @ApiResponse({ status: 200, description: 'Transactions retrieved successfully' })
   @ApiResponse({ status: 400, description: 'Missing address parameter' })
   @ApiResponse({ status: 404, description: 'User not found' })
-  async getTransactions(@Query('address') address: string) {
+  @ApiQuery({ name: 'page', required: false, description: 'Page number (1-based)', example: '1' })
+  @ApiQuery({ name: 'pageSize', required: false, description: 'Page size (default 20, max 100)', example: '20' })
+  async getTransactions(
+    @Query('address') address: string,
+    @Query('page') pageParam?: string,
+    @Query('pageSize') pageSizeParam?: string,
+  ) {
     if (!address) {
       throw new HttpException(
         { success: false, error: 'address query parameter is required' },
@@ -136,10 +142,17 @@ export class RebalanceController {
       );
     }
 
+    const page = Math.max(parseInt(pageParam || '1', 10) || 1, 1);
+    const requestedPageSize = parseInt(pageSizeParam || '20', 10);
+    const pageSize = Math.min(Math.max(requestedPageSize || 20, 1), 100);
+    const skip = (page - 1) * pageSize;
+
     const userIds = users.map((user) => user.id);
-    const snapshots = await this.snapshotRepo.find({
+    const [snapshots, total] = await this.snapshotRepo.findAndCount({
       where: { userId: In(userIds) },
       order: { txTime: 'DESC' },
+      skip,
+      take: pageSize,
     });
 
     const data = snapshots.map((snapshot) => ({
@@ -153,6 +166,12 @@ export class RebalanceController {
     return {
       success: true,
       data,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      },
     };
   }
 

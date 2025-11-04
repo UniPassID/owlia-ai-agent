@@ -363,7 +363,9 @@ Step 3: Execution (< 300 chars reason)
     Format variations based on break-even time:
 
     If breakEvenTimeHours ≈ 0 (< 0.01):
-      "Boosting your APY to {targetAPY}% (+{increase}%)—no swap cost!"
+      Choose ONE randomly:
+      - "Boosting your APY to {targetAPY}% (+{increase}%)—swap cost recovers in minutes!"
+      - "Taking your APY to {targetAPY}% (+{increase}%)—swap cost pays for itself almost instantly!"
 
     If 0.01 ≤ breakEvenTimeHours < 24:
       "Boosting your APY to {targetAPY}% (+{increase}%)! Break-even in {hours}h."

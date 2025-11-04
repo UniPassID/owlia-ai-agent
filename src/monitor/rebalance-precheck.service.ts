@@ -167,19 +167,19 @@ export class RebalancePrecheckService {
         portfolioApy,
       );
 
-    // Check if any strategy meets constraints
-    if (breakEvenTimeHours < 0) {
-      return {
-        shouldTrigger: false,
-        portfolioApy,
-        opportunityApy: bestStrategy.apy,
-        differenceBps: (bestStrategy.apy - portfolioApy) * 100,
-        totalPortfolioValueUsd: totalAssetsUsd,
-        yieldSummary,
-        currentHoldings,
-        failureReason: 'No strategy meets breakeven time constraint (all > 4h)',
-      };
-    }
+    // // Check if any strategy meets constraints
+    // if (breakEvenTimeHours < 0) {
+    //   return {
+    //     shouldTrigger: false,
+    //     portfolioApy,
+    //     opportunityApy: bestStrategy.apy,
+    //     differenceBps: (bestStrategy.apy - portfolioApy) * 100,
+    //     totalPortfolioValueUsd: totalAssetsUsd,
+    //     yieldSummary,
+    //     currentHoldings,
+    //     failureReason: 'No strategy meets breakeven time constraint (all > 4h)',
+    //   };
+    // }
 
     // Check remaining constraints
     return this.checkConstraintsAndDecide(

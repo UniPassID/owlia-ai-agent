@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { UserPolicy } from '../entities/user-policy.entity';
 import { User } from '../entities/user.entity';
 import { RebalanceJob, JobStatus } from '../entities/rebalance-job.entity';
+import { RebalanceExecutionSnapshot } from '../entities/rebalance-execution-snapshot.entity';
 import {
   RebalancePrecheckService,
   RebalancePrecheckResult,
@@ -16,6 +17,7 @@ import { AgentService } from '../agent/agent.service';
 import { lookupTokenAddress } from '../agent/token-utils';
 import { extractTxHashFromOutput, verifyTransactionOnChain } from '../utils/chain-verifier.util';
 import { RebalanceLoggerService } from '../utils/rebalance-logger.service';
+import { TransactionParserService } from './transaction-parser.service';
 import type {
   ProtocolType,
   AccountYieldSummaryResponse,
@@ -36,22 +38,25 @@ export class MonitorService {
     private userPolicyRepo: Repository<UserPolicy>,
     @InjectRepository(RebalanceJob)
     private jobRepo: Repository<RebalanceJob>,
+    @InjectRepository(RebalanceExecutionSnapshot)
+    private snapshotRepo: Repository<RebalanceExecutionSnapshot>,
     private precheckService: RebalancePrecheckService,
     private rebalanceSummaryService: RebalanceSummaryService,
     private userService: UserService,
     private agentService: AgentService,
+    private transactionParser: TransactionParserService,
     private rebalanceLogger: RebalanceLoggerService,
   ) {
 
-    setTimeout(() => {
-      this.monitorAllUsers()
-    }, 30 * 1000)
+    // setTimeout(() => {
+    //   this.monitorAllUsers()
+    // }, 30 * 1000)
   }
 
   /**
    * Scheduled task to monitor all users with auto-enabled
    */
-  @Cron(CronExpression.EVERY_5_MINUTES)
+  // @Cron(CronExpression.EVERY_5_MINUTES)
   async monitorAllUsers() {
     if (this.monitoringInProgress) {
       this.logger.warn('Skipping scheduled monitoring - previous run still in progress');
@@ -434,6 +439,7 @@ export class MonitorService {
         timestamp: new Date().toISOString(),
       };
       await this.jobRepo.save(job);
+      await this.saveRebalanceSnapshot(user, job, txHash, chainId, precheckResult);
       return;
     }
 
@@ -457,6 +463,32 @@ export class MonitorService {
     const errorMsg = `Failed to verify transaction ${txHash}: ${verification.error}`;
     this.logger.error(errorMsg);
     throw new Error(errorMsg);
+  }
+
+  private async saveRebalanceSnapshot(
+    user: User,
+    job: RebalanceJob,
+    txHash: string,
+    chainId: string,
+    precheckResult: RebalancePrecheckResult,
+  ): Promise<void> {
+    const parsedTransaction = await this.transactionParser.parseTransaction(txHash, chainId);
+    const txTime =
+      parsedTransaction.timestamp !== undefined
+        ? new Date(parsedTransaction.timestamp * 1000)
+        : new Date();
+
+    const snapshot = this.snapshotRepo.create({
+      userId: user.id,
+      jobId: job.id,
+      txHash,
+      txTime,
+      accountYieldSummary: precheckResult.yieldSummary ?? null,
+      parsedTransaction,
+    });
+
+    await this.snapshotRepo.save(snapshot);
+    this.logger.log(`Saved execution snapshot for job ${job.id} (tx ${txHash})`);
   }
 
   private extractSupplyTokenAddress(position: StrategyPosition, chainId: string): string {

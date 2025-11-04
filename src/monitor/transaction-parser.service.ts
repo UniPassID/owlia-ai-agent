@@ -9,7 +9,15 @@ import {
   TokenAmount,
   ParsedTransaction,
   EventSignature,
+  PositionTrackingSummary,
+  LendingPositionSummary,
 } from './types/transaction-parser.types';
+import {
+  trackPositionFlows,
+  formatPositionTracking,
+  trackLendingPositions,
+  formatLendingPositions,
+} from './position-tracker';
 
 @Injectable()
 export class TransactionParserService {
@@ -335,6 +343,8 @@ export class TransactionParserService {
     }),
   );
 
+  private readonly poolTokenCache = new Map<string, { token0: string; token1: string }>();
+
   /**
    * Parse a rebalance transaction by hash
    * @param txHash Transaction hash
@@ -367,10 +377,11 @@ export class TransactionParserService {
 
       // Parse logs to extract rebalance actions
       const actions: RebalanceAction[] = [];
+      const allLogs = receipt.logs;
 
-      for (let i = 0; i < receipt.logs.length; i++) {
-        const log = receipt.logs[i];
-        const action = await this.parseLog(log, i, provider);
+      for (let i = 0; i < allLogs.length; i++) {
+        const log = allLogs[i];
+        const action = await this.parseLog(log, i, provider, allLogs);
         if (action) {
           actions.push(action);
         }
@@ -409,6 +420,7 @@ export class TransactionParserService {
     log: ethers.Log,
     eventIndex: number,
     provider: ethers.Provider,
+    allLogs: readonly ethers.Log[],
   ): Promise<RebalanceAction | null> {
     const topic0 = log.topics[0];
     const eventSig = this.EVENT_TOPICS.get(topic0);
@@ -421,7 +433,7 @@ export class TransactionParserService {
     this.logger.debug(`Parsing ${eventSig.name} event from ${eventSig.protocol}`);
 
     try {
-      const action = await this.parseEventByType(log, eventSig, eventIndex, provider);
+      const action = await this.parseEventByType(log, eventSig, eventIndex, provider, allLogs);
       return action;
     } catch (error) {
       this.logger.warn(`Failed to parse ${eventSig.name} event: ${error.message}`);
@@ -437,6 +449,7 @@ export class TransactionParserService {
     eventSig: EventSignature,
     eventIndex: number,
     provider: ethers.Provider,
+    allLogs: readonly ethers.Log[],
   ): Promise<RebalanceAction | null> {
     // For events with indexed parameters that don't match the signature,
     // we need to manually decode or use flexible decoding
@@ -456,6 +469,7 @@ export class TransactionParserService {
 
     let tokens: TokenAmount[] = [];
     let metadata: Record<string, any> = {};
+    let tokenId: string | undefined;
 
     // Parse based on action type and protocol
     switch (eventSig.actionType) {
@@ -463,9 +477,12 @@ export class TransactionParserService {
       case RebalanceActionType.REMOVE_LIQUIDITY:
       case RebalanceActionType.POOL_MINT:
       case RebalanceActionType.POOL_BURN:
-      case RebalanceActionType.POOL_COLLECT:
-        tokens = await this.parseLiquidityEvent(log, decoded, eventSig, provider);
+      case RebalanceActionType.POOL_COLLECT: {
+        const result = await this.parseLiquidityEvent(log, decoded, eventSig, provider, allLogs, eventIndex);
+        tokens = result.tokens;
+        tokenId = result.tokenId;
         break;
+      }
 
       case RebalanceActionType.SWAP:
         tokens = await this.parseSwapEvent(log, decoded, eventSig, provider);
@@ -490,6 +507,8 @@ export class TransactionParserService {
       metadata,
       eventIndex,
       logIndex: log.index,
+      tokenId,
+      contractAddress: log.address, // Contract that emitted the event
     };
   }
 
@@ -533,155 +552,223 @@ export class TransactionParserService {
 
   /**
    * Parse liquidity events (Mint/Burn for Uniswap V2/Aerodrome)
+   * Returns both tokens array and optional tokenId
    */
   private async parseLiquidityEvent(
     log: ethers.Log,
     decoded: ethers.LogDescription,
     eventSig: EventSignature,
     provider: ethers.Provider,
-  ): Promise<TokenAmount[]> {
+    allLogs: readonly ethers.Log[],
+    eventIndex: number,
+  ): Promise<{ tokens: TokenAmount[]; tokenId?: string }> {
     const tokens: TokenAmount[] = [];
+    let tokenId: string | undefined;
 
     if (eventSig.protocol === Protocol.UNISWAP_V3) {
       // For V3, we need to handle different event types
       if (eventSig.name === 'IncreaseLiquidity' || eventSig.name === 'DecreaseLiquidity') {
         // IncreaseLiquidity(uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)
         // DecreaseLiquidity(uint256 tokenId, uint128 liquidity, uint256 amount0, uint256 amount1)
-        const amount0 = decoded.args[2];
-        const amount1 = decoded.args[3];
+        tokenId = decoded.args[0].toString(); // Extract tokenId
+        const amount0Raw = decoded.args[2];
+        const amount1Raw = decoded.args[3];
+        const amount0 = BigInt(amount0Raw !== undefined ? amount0Raw.toString() : '0');
+        const amount1 = BigInt(amount1Raw !== undefined ? amount1Raw.toString() : '0');
 
-        // We'd need to query the NFT position manager to get token addresses
-        // For now, store amounts without token addresses
-        tokens.push({
-          token: 'UNKNOWN_TOKEN0',
-          amount: amount0.toString(),
-        });
+        const resolvedTokens = await this.resolveTokensFromNearbyPoolEvents(
+          amount0,
+          amount1,
+          eventIndex,
+          allLogs,
+          provider,
+          eventSig.name === 'IncreaseLiquidity' ? 'Mint' : 'Burn',
+        );
 
-        tokens.push({
-          token: 'UNKNOWN_TOKEN1',
-          amount: amount1.toString(),
-        });
+        this.appendTokensWithFallback(tokens, resolvedTokens, amount0, amount1);
       } else if (eventSig.name === 'Mint') {
         // Mint(address sender, address indexed owner, int24 indexed tickLower, int24 indexed tickUpper, uint128 liquidity, uint256 amount0, uint256 amount1)
         // indexed params are in topics, non-indexed in data
         // args array includes all params in order
-        const amount0 = decoded.args.amount0 || decoded.args[5];
-        const amount1 = decoded.args.amount1 || decoded.args[6];
+        const amount0Raw = (decoded.args as any)?.amount0 ?? decoded.args?.[5];
+        const amount1Raw = (decoded.args as any)?.amount1 ?? decoded.args?.[6];
+        const amount0 = BigInt(amount0Raw !== undefined ? amount0Raw.toString() : '0');
+        const amount1 = BigInt(amount1Raw !== undefined ? amount1Raw.toString() : '0');
 
-        // Get token addresses from pool contract
-        const poolAddress = log.address;
-        const poolContract = new ethers.Contract(
-          poolAddress,
-          ['function token0() view returns (address)', 'function token1() view returns (address)'],
-          provider,
-        );
-
-        try {
-          const [token0, token1] = await Promise.all([poolContract.token0(), poolContract.token1()]);
-
-          tokens.push({
-            token: token0,
-            amount: amount0.toString(),
-          });
-
-          tokens.push({
-            token: token1,
-            amount: amount1.toString(),
-          });
-        } catch (error) {
-          // Fallback if contract call fails
-          tokens.push({
-            token: 'UNKNOWN_TOKEN0',
-            amount: amount0.toString(),
-          });
-
-          tokens.push({
-            token: 'UNKNOWN_TOKEN1',
-            amount: amount1.toString(),
-          });
-        }
+        const resolvedTokens = await this.buildPoolTokenAmounts(log.address, amount0, amount1, provider);
+        this.appendTokensWithFallback(tokens, resolvedTokens, amount0, amount1);
       } else if (eventSig.name === 'Burn') {
         // Burn(address indexed owner, int24 indexed tickLower, int24 indexed tickUpper, uint128 liquidity, uint256 amount0, uint256 amount1)
         // indexed params are in topics, non-indexed in data
         // args array includes all params in order
-        const amount0 = decoded.args.amount0 || decoded.args[4];
-        const amount1 = decoded.args.amount1 || decoded.args[5];
+        const amount0Raw = (decoded.args as any)?.amount0 ?? decoded.args?.[4];
+        const amount1Raw = (decoded.args as any)?.amount1 ?? decoded.args?.[5];
+        const amount0 = BigInt(amount0Raw !== undefined ? amount0Raw.toString() : '0');
+        const amount1 = BigInt(amount1Raw !== undefined ? amount1Raw.toString() : '0');
 
-        // Get token addresses from pool contract
-        const poolAddress = log.address;
-        const poolContract = new ethers.Contract(
-          poolAddress,
-          ['function token0() view returns (address)', 'function token1() view returns (address)'],
-          provider,
-        );
-
-        try {
-          const [token0, token1] = await Promise.all([poolContract.token0(), poolContract.token1()]);
-
-          tokens.push({
-            token: token0,
-            amount: amount0.toString(),
-          });
-
-          tokens.push({
-            token: token1,
-            amount: amount1.toString(),
-          });
-        } catch (error) {
-          // Fallback if contract call fails
-          tokens.push({
-            token: 'UNKNOWN_TOKEN0',
-            amount: amount0.toString(),
-          });
-
-          tokens.push({
-            token: 'UNKNOWN_TOKEN1',
-            amount: amount1.toString(),
-          });
-        }
+        const resolvedTokens = await this.buildPoolTokenAmounts(log.address, amount0, amount1, provider);
+        this.appendTokensWithFallback(tokens, resolvedTokens, amount0, amount1);
       } else if (eventSig.name === 'Collect') {
         // Collect(address indexed owner, address indexed recipient, int24 indexed tickLower, int24 indexed tickUpper, uint128 amount0, uint128 amount1)
         // indexed params are in topics, non-indexed in data
         // args array includes all params in order
-        const amount0 = decoded.args.amount0 || decoded.args[4];
-        const amount1 = decoded.args.amount1 || decoded.args[5];
+        const amount0Raw = (decoded.args as any)?.amount0 ?? decoded.args?.[4];
+        const amount1Raw = (decoded.args as any)?.amount1 ?? decoded.args?.[5];
+        const amount0 = BigInt(amount0Raw !== undefined ? amount0Raw.toString() : '0');
+        const amount1 = BigInt(amount1Raw !== undefined ? amount1Raw.toString() : '0');
 
-        // Get token addresses from pool contract
-        const poolAddress = log.address;
-        const poolContract = new ethers.Contract(
-          poolAddress,
-          ['function token0() view returns (address)', 'function token1() view returns (address)'],
-          provider,
-        );
-
-        try {
-          const [token0, token1] = await Promise.all([poolContract.token0(), poolContract.token1()]);
-
-          tokens.push({
-            token: token0,
-            amount: amount0.toString(),
-          });
-
-          tokens.push({
-            token: token1,
-            amount: amount1.toString(),
-          });
-        } catch (error) {
-          // Fallback if contract call fails
-          tokens.push({
-            token: 'UNKNOWN_TOKEN0',
-            amount: amount0.toString(),
-          });
-
-          tokens.push({
-            token: 'UNKNOWN_TOKEN1',
-            amount: amount1.toString(),
-          });
-        }
+        const resolvedTokens = await this.buildPoolTokenAmounts(log.address, amount0, amount1, provider);
+        this.appendTokensWithFallback(tokens, resolvedTokens, amount0, amount1);
       }
     }
 
-    return tokens;
+    return { tokens, tokenId };
+  }
+
+  private appendTokensWithFallback(
+    target: TokenAmount[],
+    resolvedTokens: TokenAmount[] | null,
+    amount0: bigint,
+    amount1: bigint,
+  ): void {
+    if (resolvedTokens && resolvedTokens.length === 2) {
+      target.push(...resolvedTokens);
+      return;
+    }
+
+    target.push(
+      {
+        token: 'UNKNOWN_TOKEN0',
+        amount: amount0.toString(),
+      },
+      {
+        token: 'UNKNOWN_TOKEN1',
+        amount: amount1.toString(),
+      },
+    );
+  }
+
+  private async getPoolTokenAddresses(
+    poolAddress: string,
+    provider: ethers.Provider,
+  ): Promise<{ token0: string; token1: string } | null> {
+    const cacheKey = poolAddress.toLowerCase();
+    const cached = this.poolTokenCache.get(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const poolContract = new ethers.Contract(
+      poolAddress,
+      ['function token0() view returns (address)', 'function token1() view returns (address)'],
+      provider,
+    );
+
+    try {
+      const [token0, token1] = await Promise.all([poolContract.token0(), poolContract.token1()]);
+      const tokens = { token0, token1 };
+      this.poolTokenCache.set(cacheKey, tokens);
+      return tokens;
+    } catch {
+      return null;
+    }
+  }
+
+  private async buildPoolTokenAmounts(
+    poolAddress: string,
+    amount0: bigint,
+    amount1: bigint,
+    provider: ethers.Provider,
+  ): Promise<TokenAmount[] | null> {
+    const tokenAddresses = await this.getPoolTokenAddresses(poolAddress, provider);
+    if (!tokenAddresses) {
+      return null;
+    }
+
+    return [
+      {
+        token: tokenAddresses.token0,
+        amount: amount0.toString(),
+      },
+      {
+        token: tokenAddresses.token1,
+        amount: amount1.toString(),
+      },
+    ];
+  }
+
+  private async resolveTokensFromNearbyPoolEvents(
+    targetAmount0: bigint,
+    targetAmount1: bigint,
+    eventIndex: number,
+    allLogs: readonly ethers.Log[],
+    provider: ethers.Provider,
+    poolEventName: 'Mint' | 'Burn',
+  ): Promise<TokenAmount[] | null> {
+    const poolEventSig = this.EVENT_SIGNATURES.find(
+      (sig) => sig.protocol === Protocol.UNISWAP_V3 && sig.name === poolEventName,
+    );
+    if (!poolEventSig?.abi) {
+      return null;
+    }
+
+    const iface = new ethers.Interface([poolEventSig.abi]);
+    const fragment = iface.getEvent(poolEventName);
+    if (!fragment) {
+      return null;
+    }
+
+    const topic0 = fragment.topicHash;
+    const indices = Array.from({ length: allLogs.length }, (_, idx) => idx).sort((a, b) => {
+      const diff = Math.abs(a - eventIndex) - Math.abs(b - eventIndex);
+      return diff !== 0 ? diff : a - b;
+    });
+
+    for (const idx of indices) {
+      if (idx === eventIndex) {
+        continue;
+      }
+
+      const candidate = allLogs[idx];
+      if (!candidate.topics.length || candidate.topics[0] !== topic0) {
+        continue;
+      }
+
+      let decodedCandidate: ethers.LogDescription;
+      try {
+        decodedCandidate = iface.parseLog({
+          topics: candidate.topics as string[],
+          data: candidate.data,
+        });
+      } catch {
+        continue;
+      }
+
+      const amount0Raw =
+        (decodedCandidate.args as any)?.amount0 ??
+        decodedCandidate.args?.[poolEventName === 'Mint' ? 5 : 4];
+      const amount1Raw =
+        (decodedCandidate.args as any)?.amount1 ??
+        decodedCandidate.args?.[poolEventName === 'Mint' ? 6 : 5];
+
+      if (amount0Raw === undefined || amount1Raw === undefined) {
+        continue;
+      }
+
+      const amount0 = BigInt(amount0Raw.toString());
+      const amount1 = BigInt(amount1Raw.toString());
+
+      if (amount0 !== targetAmount0 || amount1 !== targetAmount1) {
+        continue;
+      }
+
+      const resolved = await this.buildPoolTokenAmounts(candidate.address, amount0, amount1, provider);
+      if (resolved) {
+        return resolved;
+      }
+    }
+
+    return null;
   }
 
   /**
@@ -905,6 +992,44 @@ export class TransactionParserService {
   }
 
   /**
+   * Track position flows by tokenId across multiple transactions
+   * Analyzes all actions across all transactions to calculate inflows, outflows, and fees for each position
+   * @param parsedTransactions Array of parsed transactions with their metadata
+   * @param chainId Chain ID for token info lookup
+   */
+  trackPositionFlows(
+    parsedTransactions: Array<{ txHash: string; parsed: ParsedTransaction }>,
+    chainId: string = '8453',
+  ): PositionTrackingSummary {
+    return trackPositionFlows(parsedTransactions, chainId);
+  }
+
+  /**
+   * Format position tracking summary as human-readable text
+   */
+  formatPositionTracking(summary: PositionTrackingSummary, chainId: string = '8453'): string {
+    return formatPositionTracking(summary, chainId);
+  }
+
+  /**
+   * Track lending positions (AAVE/Euler) across multiple transactions
+   * Analyzes supply/withdraw actions to calculate deposits, withdrawals, and interest earned
+   */
+  trackLendingPositions(
+    parsedTransactions: Array<{ txHash: string; parsed: ParsedTransaction }>,
+    chainId: string = '8453',
+  ): LendingPositionSummary {
+    return trackLendingPositions(parsedTransactions, chainId);
+  }
+
+  /**
+   * Format lending position summary as human-readable text
+   */
+  formatLendingPositions(summary: LendingPositionSummary, chainId: string = '8453'): string {
+    return formatLendingPositions(summary, chainId);
+  }
+
+  /**
    * Format parsed transaction actions as human-readable text
    */
   formatParsedTransaction(parsed: ParsedTransaction): string {
@@ -920,6 +1045,10 @@ export class TransactionParserService {
 
     parsed.actions.forEach((action, idx) => {
       lines.push(`\n[${idx + 1}] ${action.type} via ${action.protocol}`);
+
+      if (action.tokenId) {
+        lines.push(`  TokenId: ${action.tokenId}`);
+      }
 
       action.tokens.forEach((token, tokenIdx) => {
         // Use formatted amount if available, otherwise raw amount

@@ -7,10 +7,11 @@ import { User } from '../entities/user.entity';
 import { MonitorModule } from '../monitor/monitor.module';
 import { AgentModule } from '../agent/agent.module';
 import { UserModule } from './user.module';
+import { RebalanceExecutionSnapshot } from '../entities/rebalance-execution-snapshot.entity';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([UserPolicy, RebalanceJob, User]),
+    TypeOrmModule.forFeature([UserPolicy, RebalanceJob, User, RebalanceExecutionSnapshot]),
     MonitorModule,
     AgentModule,
     UserModule,

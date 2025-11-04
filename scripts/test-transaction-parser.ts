@@ -26,8 +26,9 @@ dotenv.config();
 // Default test transaction (BSC)
 const DEFAULT_TX_HASH = '0x9448d40a76b5170877ea49f3c2d400baf4a71d7b3f05c415a01e392b82fbdb2b';
 const DEFAULT_CHAIN_ID = '56'; // BSC
-const REBALANCE_JOBS_URL =
-  'https://beta-api.owlia.ai/api/v1/rebalance/jobs/address/0xC5dE8e48F7897b926e2c4D129Ba68af1df811229?network=bsc&page=1&pageSize=20';
+const REBALANCE_JOBS_BASE_URL =
+  'https://beta-api.owlia.ai/api/v1/rebalance/jobs/address/0xC5dE8e48F7897b926e2c4D129Ba68af1df811229?network=bsc';
+const REBALANCE_JOBS_PAGE_SIZE = 20;
 
 async function main() {
   console.log('🚀 Starting Transaction Parser Test\n');
@@ -149,6 +150,16 @@ async function main() {
       console.log(formatted);
       console.log('');
 
+      // Display position tracking
+      console.log('='.repeat(80));
+      console.log('Position Tracking');
+      console.log('='.repeat(80));
+      console.log('');
+      const positionSummary = parserService.trackPositionFlows([{ txHash, parsed }], chainId);
+      const positionFormatted = parserService.formatPositionTracking(positionSummary, chainId);
+      console.log(positionFormatted);
+      console.log('');
+
       // Display raw logs for debugging
       if (parsed.rawLogs && parsed.rawLogs.length > 0) {
         console.log('='.repeat(80));
@@ -238,6 +249,7 @@ interface TargetEventSummary {
   tokens: TokenAmount[];
   logAddress?: string;
   decodedArgs?: Record<string, any> | null;
+  tokenId?: string; // For Uniswap V3 LP positions
 }
 
 async function runRebalanceJobsTest(parserService: TransactionParserService) {
@@ -255,11 +267,83 @@ async function runRebalanceJobsTest(parserService: TransactionParserService) {
 
   const events: TargetEventSummary[] = [];
   const exportEvents: TargetEventSummary[] = [];
+  const allParsedTransactions: Array<{ txHash: string; parsed: any }> = [];
+
   for (const txHash of txHashes) {
     console.log(`🔎 Parsing rebalance transaction: ${txHash}`);
     try {
       const parsed = await parserService.parseTransaction(txHash, DEFAULT_CHAIN_ID);
-      parsed.actions.forEach(action => {
+      allParsedTransactions.push({ txHash, parsed });
+
+      // First pass: collect actions and infer tokenIds for POOL events
+      const actionsWithInferredTokenId = parsed.actions.map((action, i) => {
+        let inferredTokenId: string | undefined;
+
+        // Infer tokenId for POOL_BURN from next REMOVE_LIQUIDITY
+        if (action.protocol === Protocol.UNISWAP_V3 && action.type === RebalanceActionType.POOL_BURN) {
+          for (let j = i + 1; j < parsed.actions.length; j++) {
+            const nextAction = parsed.actions[j];
+            if (
+              nextAction.protocol === Protocol.UNISWAP_V3 &&
+              nextAction.type === RebalanceActionType.REMOVE_LIQUIDITY &&
+              nextAction.tokenId
+            ) {
+              inferredTokenId = nextAction.tokenId;
+              break;
+            }
+          }
+        }
+
+        // Infer tokenId for POOL_COLLECT from nearby REMOVE_LIQUIDITY
+        if (action.protocol === Protocol.UNISWAP_V3 && action.type === RebalanceActionType.POOL_COLLECT) {
+          // Try backward first
+          for (let j = i - 1; j >= 0; j--) {
+            const prevAction = parsed.actions[j];
+            if (
+              prevAction.protocol === Protocol.UNISWAP_V3 &&
+              prevAction.type === RebalanceActionType.REMOVE_LIQUIDITY &&
+              prevAction.tokenId
+            ) {
+              inferredTokenId = prevAction.tokenId;
+              break;
+            }
+          }
+          // If not found, try forward
+          if (!inferredTokenId) {
+            for (let j = i + 1; j < parsed.actions.length; j++) {
+              const nextAction = parsed.actions[j];
+              if (
+                nextAction.protocol === Protocol.UNISWAP_V3 &&
+                nextAction.type === RebalanceActionType.REMOVE_LIQUIDITY &&
+                nextAction.tokenId
+              ) {
+                inferredTokenId = nextAction.tokenId;
+                break;
+              }
+            }
+          }
+        }
+
+        // Infer tokenId for POOL_MINT from next ADD_LIQUIDITY
+        if (action.protocol === Protocol.UNISWAP_V3 && action.type === RebalanceActionType.POOL_MINT) {
+          for (let j = i + 1; j < parsed.actions.length; j++) {
+            const nextAction = parsed.actions[j];
+            if (
+              nextAction.protocol === Protocol.UNISWAP_V3 &&
+              nextAction.type === RebalanceActionType.ADD_LIQUIDITY &&
+              nextAction.tokenId
+            ) {
+              inferredTokenId = nextAction.tokenId;
+              break;
+            }
+          }
+        }
+
+        return { action, inferredTokenId };
+      });
+
+      // Second pass: create summaries with inferred tokenIds
+      actionsWithInferredTokenId.forEach(({ action, inferredTokenId }) => {
         const rawLog = parsed.rawLogs?.find(log => log.index === action.logIndex);
         const summary: TargetEventSummary = {
           txHash: parsed.transactionHash,
@@ -272,6 +356,7 @@ async function runRebalanceJobsTest(parserService: TransactionParserService) {
           tokens: action.tokens,
           logAddress: rawLog?.address,
           decodedArgs: decodeEventArgs(action.protocol, action.type, rawLog),
+          tokenId: action.tokenId || inferredTokenId, // Use explicit tokenId or inferred tokenId
         };
 
         if (isExportAction(action.protocol, action.type)) {
@@ -342,33 +427,87 @@ async function runRebalanceJobsTest(parserService: TransactionParserService) {
 
   console.log('✅ Rebalance jobs timeline generated.\n');
 
+  // Display position tracking for all transactions
+  console.log('='.repeat(80));
+  console.log('LP Position Tracking Summary (All Transactions)');
+  console.log('='.repeat(80));
+  console.log('');
+
+  // Track LP positions across all transactions
+  const positionSummary = parserService.trackPositionFlows(allParsedTransactions, DEFAULT_CHAIN_ID);
+  const positionFormatted = parserService.formatPositionTracking(positionSummary, DEFAULT_CHAIN_ID);
+  console.log(positionFormatted);
+
+  if (positionSummary.positions.size === 0) {
+    console.log('ℹ️  No LP positions with tokenId found in the analyzed transactions.');
+  } else {
+    console.log(
+      `\n✅ Tracked ${positionSummary.positions.size} unique LP position(s) across ${allParsedTransactions.length} transaction(s).\n`,
+    );
+  }
+
+  // Display lending position tracking
+  console.log('='.repeat(80));
+  console.log('Lending Position Tracking Summary (All Transactions)');
+  console.log('='.repeat(80));
+  console.log('');
+
+  // Track lending positions across all transactions
+  const lendingSummary = parserService.trackLendingPositions(allParsedTransactions, DEFAULT_CHAIN_ID);
+  const lendingFormatted = parserService.formatLendingPositions(lendingSummary, DEFAULT_CHAIN_ID);
+  console.log(lendingFormatted);
+
+  if (lendingSummary.positions.size === 0) {
+    console.log('ℹ️  No lending positions found in the analyzed transactions.');
+  } else {
+    console.log(
+      `\n✅ Tracked ${lendingSummary.positions.size} lending position(s) across ${allParsedTransactions.length} transaction(s).\n`,
+    );
+  }
+
   const exportPayload = buildExportPayload(exportEvents);
   writeJsonExport(exportPayload);
 }
 
 async function fetchTxHashesFromApi(): Promise<string[]> {
-  console.log(`🌐 Fetching rebalance jobs from ${REBALANCE_JOBS_URL}`);
-  try {
-    const response = await axios.get(REBALANCE_JOBS_URL, { timeout: 15000 });
-    const items = extractItems(response.data);
-    const seen = new Set<string>();
-    const hashes: string[] = [];
+  const seen = new Set<string>();
+  const hashes: string[] = [];
+  const pagesToFetch = 2; // Fetch first 2 pages
 
-    items.forEach(item => {
-      const hash = extractTxHash(item);
-      if (hash && !seen.has(hash)) {
-        seen.add(hash);
-        hashes.push(hash);
+  for (let page = 1; page <= pagesToFetch; page++) {
+    const url = `${REBALANCE_JOBS_BASE_URL}&page=${page}&pageSize=${REBALANCE_JOBS_PAGE_SIZE}`;
+    console.log(`🌐 Fetching rebalance jobs from page ${page}...`);
+
+    try {
+      const response = await axios.get(url, { timeout: 15000 });
+      const items = extractItems(response.data);
+
+      let pageHashes = 0;
+      items.forEach(item => {
+        const hash = extractTxHash(item);
+        if (hash && !seen.has(hash)) {
+          seen.add(hash);
+          hashes.push(hash);
+          pageHashes++;
+        }
+      });
+
+      console.log(`✓ Page ${page}: Retrieved ${pageHashes} unique transaction hash(es)`);
+
+      // If we got fewer items than page size, no more pages to fetch
+      if (items.length < REBALANCE_JOBS_PAGE_SIZE) {
+        console.log(`ℹ️  No more pages available after page ${page}`);
+        break;
       }
-    });
-
-    console.log(`✓ Retrieved ${hashes.length} unique transaction hash(es)\n`);
-    return hashes;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error(`❌ Failed to fetch rebalance jobs: ${message}`);
-    return [];
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error(`❌ Failed to fetch page ${page}: ${message}`);
+      // Continue to next page even if one fails
+    }
   }
+
+  console.log(`✓ Total: Retrieved ${hashes.length} unique transaction hash(es) from ${pagesToFetch} page(s)\n`);
+  return hashes;
 }
 
 function extractItems(data: any): any[] {
@@ -474,7 +613,9 @@ function isExportAction(protocol: Protocol, actionType: RebalanceActionType): bo
     return (
       actionType === RebalanceActionType.POOL_MINT ||
       actionType === RebalanceActionType.POOL_COLLECT ||
-      actionType === RebalanceActionType.POOL_BURN
+      actionType === RebalanceActionType.POOL_BURN ||
+      actionType === RebalanceActionType.ADD_LIQUIDITY ||
+      actionType === RebalanceActionType.REMOVE_LIQUIDITY
     );
   }
 
@@ -716,7 +857,7 @@ function decodeEventArgs(
 }
 
 function buildExportPayload(events: TargetEventSummary[]) {
-  const account = extractAccountFromUrl(REBALANCE_JOBS_URL) ?? 'unknown';
+  const account = extractAccountFromUrl(REBALANCE_JOBS_BASE_URL) ?? 'unknown';
   if (events.length === 0) {
     return { account, results: [] };
   }
@@ -817,7 +958,7 @@ function mapEventToExport(event: TargetEventSummary): Record<string, any> | null
     case Protocol.UNISWAP_V3: {
       const base = {
         poolAddress: event.logAddress,
-        tokenId: event.decodedArgs?.tokenId ?? null,
+        tokenId: event.tokenId ?? event.decodedArgs?.tokenId ?? null, // Use tokenId from action first
         token0: tokenA?.token,
         token0Symbol: tokenA?.symbol,
         amount0: tokenA ? formatAmountDisplay(tokenA, 2) : null,
@@ -834,6 +975,12 @@ function mapEventToExport(event: TargetEventSummary): Record<string, any> | null
       }
       if (event.type === RebalanceActionType.POOL_BURN) {
         return { type: 'burn', ...base };
+      }
+      if (event.type === RebalanceActionType.ADD_LIQUIDITY) {
+        return { type: 'add_liquidity', ...base };
+      }
+      if (event.type === RebalanceActionType.REMOVE_LIQUIDITY) {
+        return { type: 'remove_liquidity', ...base };
       }
       return null;
     }

@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiQuery, ApiBody } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { UserPolicy } from '../entities/user-policy.entity';
 import { RebalanceJob, JobStatus } from '../entities/rebalance-job.entity';
 import { User } from '../entities/user.entity';
@@ -21,6 +21,7 @@ import { TriggerRebalanceDto, ExecuteJobDto } from './dto/rebalance.dto';
 import { AgentService } from '../agent/agent.service';
 import { convertPlanToSteps } from '../utils/plan-to-steps.util';
 import { UserService } from './user.service';
+import { RebalanceExecutionSnapshot } from '../entities/rebalance-execution-snapshot.entity';
 
 @ApiTags('rebalance')
 @Controller('rebalance')
@@ -34,6 +35,8 @@ export class RebalanceController {
     private userPolicyRepo: Repository<UserPolicy>,
     @InjectRepository(RebalanceJob)
     private jobRepo: Repository<RebalanceJob>,
+    @InjectRepository(RebalanceExecutionSnapshot)
+    private snapshotRepo: Repository<RebalanceExecutionSnapshot>,
     private monitorService: MonitorService,
     private agentService: AgentService,
     private userService: UserService,
@@ -101,6 +104,56 @@ export class RebalanceController {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  /**
+   * Get parsed rebalance transactions for a user
+   */
+  @Get('txs')
+  @ApiOperation({
+    summary: 'Get parsed rebalance transactions',
+    description: 'Return parsed rebalance transaction records for the given user address in reverse chronological order',
+  })
+  @ApiQuery({ name: 'address', required: true, description: 'User wallet address', example: '0x1234...' })
+  @ApiResponse({ status: 200, description: 'Transactions retrieved successfully' })
+  @ApiResponse({ status: 400, description: 'Missing address parameter' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async getTransactions(@Query('address') address: string) {
+    if (!address) {
+      throw new HttpException(
+        { success: false, error: 'address query parameter is required' },
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const normalizedAddress = address.toLowerCase();
+    const users = await this.userRepo.find({ where: { address: normalizedAddress } });
+
+    if (users.length === 0) {
+      throw new HttpException(
+        { success: false, error: 'User not found' },
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const userIds = users.map((user) => user.id);
+    const snapshots = await this.snapshotRepo.find({
+      where: { userId: In(userIds) },
+      order: { txTime: 'DESC' },
+    });
+
+    const data = snapshots.map((snapshot) => ({
+      jobId: snapshot.jobId,
+      txHash: snapshot.txHash,
+      txTime: snapshot.txTime,
+      accountYieldSummary: snapshot.accountYieldSummary,
+      parsedTransaction: snapshot.parsedTransaction,
+    }));
+
+    return {
+      success: true,
+      data,
+    };
   }
 
   /**

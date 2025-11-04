@@ -5,6 +5,7 @@ import { MonitorController } from './monitor.controller';
 import { User } from '../entities/user.entity';
 import { UserPolicy } from '../entities/user-policy.entity';
 import { RebalanceJob } from '../entities/rebalance-job.entity';
+import { RebalanceExecutionSnapshot } from '../entities/rebalance-execution-snapshot.entity';
 import { AgentModule } from '../agent/agent.module';
 import { RebalancePrecheckService } from './rebalance-precheck.service';
 import { RebalanceSummaryService } from './rebalance-summary.service';
@@ -15,7 +16,7 @@ import { RebalanceLoggerService } from '../utils/rebalance-logger.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, UserPolicy, RebalanceJob]),
+    TypeOrmModule.forFeature([User, UserPolicy, RebalanceJob, RebalanceExecutionSnapshot]),
     AgentModule,
     UserModule,
     PortfolioOptimizerModule,

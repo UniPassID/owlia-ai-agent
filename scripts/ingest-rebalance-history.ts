@@ -421,6 +421,13 @@ function extractAccountYieldSummaryFromMetadata(logData: JsonRecord): YieldSumma
   if (precheck && typeof precheck === 'object') {
     return { summary: precheck, source: 'metadata.precheckResult.yieldSummary' };
   }
+
+  const logsArray = Array.isArray(logData.logs) ? logData.logs : [];
+  const fromLogs = extractYieldSummaryFromLogEntries(logsArray);
+  if (fromLogs) {
+    return fromLogs;
+  }
+
   return null;
 }
 
@@ -451,25 +458,125 @@ function extractAccountYieldSummaryFromLogFile(jsonPath: string): YieldSummaryLo
       if (markerIndex === -1) {
         continue;
       }
-      const raw = line.slice(markerIndex + 'yieldSummary='.length).trim();
-      if (!raw) {
+      let buffer = line.slice(markerIndex + 'yieldSummary='.length).trim();
+      if (!buffer) {
         continue;
       }
-      const cleaned = raw.replace(/;?$/, '');
+
+      let offset = lineIndex + 1;
+      let jsonString = extractJsonObjectFromString(buffer);
+
+      while (!jsonString && offset < lines.length) {
+        buffer += '\n' + lines[offset];
+        jsonString = extractJsonObjectFromString(buffer);
+        offset += 1;
+      }
+
+      if (!jsonString) {
+        continue;
+      }
+
       try {
-        const parsed = JSON.parse(cleaned);
+        const parsed = JSON.parse(jsonString);
         if (parsed && typeof parsed === 'object') {
           return {
             summary: parsed,
             source: `log:${path.basename(textPath)}#L${lineIndex + 1}`,
           };
         }
-      } catch {
-        continue;
+      } catch (error) {
+        console.warn(
+          `⚠️  Failed to parse yieldSummary JSON from ${textPath} (line ${lineIndex + 1}): ${
+            (error as Error).message
+          }`,
+        );
       }
     }
   } catch (error) {
     console.warn(`⚠️  Failed to read text log ${textPath}: ${(error as Error).message}`);
+  }
+
+  return null;
+}
+
+function extractYieldSummaryFromLogEntries(logs: any[]): YieldSummaryLookup | null {
+  for (let index = 0; index < logs.length; index += 1) {
+    const entry = logs[index];
+    const message = entry?.message;
+    if (typeof message !== 'string') {
+      continue;
+    }
+
+    const markerIndex = message.indexOf('yieldSummary=');
+    if (markerIndex === -1) {
+      continue;
+    }
+
+    const raw = message.slice(markerIndex + 'yieldSummary='.length).trim();
+    const jsonString = extractJsonObjectFromString(raw);
+    if (!jsonString) {
+      continue;
+    }
+
+    try {
+      const parsed = JSON.parse(jsonString);
+      if (parsed && typeof parsed === 'object') {
+        const ts = entry?.timestamp ? `@${entry.timestamp}` : '';
+        return {
+          summary: parsed,
+          source: `logs[${index}].message${ts}`,
+        };
+      }
+    } catch (error) {
+      console.warn(
+        `⚠️  Failed to parse yieldSummary JSON from logs[${index}].message: ${
+          (error as Error).message
+        }`,
+      );
+    }
+  }
+
+  return null;
+}
+
+function extractJsonObjectFromString(raw: string): string | null {
+  const start = raw.indexOf('{');
+  if (start === -1) {
+    return null;
+  }
+
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+
+  for (let i = start; i < raw.length; i += 1) {
+    const char = raw[i];
+
+    if (escape) {
+      escape = false;
+      continue;
+    }
+
+    if (char === '\\') {
+      escape = true;
+      continue;
+    }
+
+    if (char === '"') {
+      inString = !inString;
+      continue;
+    }
+
+    if (!inString) {
+      if (char === '{') {
+        depth += 1;
+      } else if (char === '}') {
+        depth -= 1;
+        if (depth === 0) {
+          return raw.slice(start, i + 1);
+        }
+      }
+    }
   }
 
   return null;

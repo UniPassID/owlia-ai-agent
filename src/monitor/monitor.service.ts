@@ -473,6 +473,7 @@ export class MonitorService {
     precheckResult: RebalancePrecheckResult,
   ): Promise<void> {
     const parsedTransaction = await this.transactionParser.parseTransaction(txHash, chainId);
+    const { rawLogs: _rawLogsIgnored, ...parsedTransactionWithoutRawLogs } = parsedTransaction;
     const txTime =
       parsedTransaction.timestamp !== undefined
         ? new Date(parsedTransaction.timestamp * 1000)
@@ -484,7 +485,7 @@ export class MonitorService {
       txHash,
       txTime,
       accountYieldSummary: precheckResult.yieldSummary ?? null,
-      parsedTransaction,
+      parsedTransaction: parsedTransactionWithoutRawLogs,
     });
 
     await this.snapshotRepo.save(snapshot);

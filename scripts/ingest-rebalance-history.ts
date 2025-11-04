@@ -156,6 +156,7 @@ async function main() {
         }
 
         const parsedTx = await context.parser.parseTransaction(txHash, chainId);
+        const { rawLogs: _rawLogsIgnored, ...parsedTxWithoutRawLogs } = parsedTx;
         const txTime = parsedTx.timestamp ? new Date(parsedTx.timestamp * 1000) : new Date();
 
         const metadataSummary = extractAccountYieldSummaryFromMetadata(logData);
@@ -177,7 +178,7 @@ async function main() {
           txHash,
           txTime,
           accountYieldSummary: accountYieldSummary ?? null,
-          parsedTransaction: parsedTx,
+          parsedTransaction: parsedTxWithoutRawLogs,
         });
 
         if (options.dryRun) {

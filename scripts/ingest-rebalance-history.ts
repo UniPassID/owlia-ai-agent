@@ -137,6 +137,12 @@ async function main() {
           continue;
         }
 
+        if (job.status !== 'completed') {
+          results.skipped += 1;
+          console.warn(`⚠️  ${relativePath}: Job ${jobIdentifier} status is ${job.status}, not completed, skipping.`);
+          continue;
+        }
+
         const existing = await context.snapshotRepo.findOne({
           where: [{ jobId: jobIdentifier }, { txHash }],
         });

@@ -48,15 +48,15 @@ export class MonitorService {
     private rebalanceLogger: RebalanceLoggerService,
   ) {
 
-    // setTimeout(() => {
-    //   this.monitorAllUsers()
-    // }, 30 * 1000)
+    setTimeout(() => {
+      this.monitorAllUsers()
+    }, 30 * 1000)
   }
 
   /**
    * Scheduled task to monitor all users with auto-enabled
    */
-  // @Cron(CronExpression.EVERY_5_MINUTES)
+  @Cron(CronExpression.EVERY_5_MINUTES)
   async monitorAllUsers() {
     if (this.monitoringInProgress) {
       this.logger.warn('Skipping scheduled monitoring - previous run still in progress');

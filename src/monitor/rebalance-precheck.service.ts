@@ -20,6 +20,7 @@ import {
 import { lookupTokenAddress, lookupTokenSymbol, TOKEN_DECIMALS_BY_CHAIN } from '../agent/token-utils';
 import { MarginalOptimizerService } from './portfolio-optimizer/marginal-optimizer.service';
 import { OpportunityConverterService } from './portfolio-optimizer/opportunity-converter.service';
+import { LENDING_PROTOCOLS } from '../config/protocol.config';
 
 export interface StrategyPosition {
   type: 'supply' | 'lp';
@@ -358,7 +359,7 @@ export class RebalancePrecheckService {
     try {
       const supplyOpps = await this.agentService.callMcpTool<GetSupplyOpportunitiesResponse>(
         'get_supply_opportunities',
-        { chain_id: chainId, amount: totalAssetsUsd },
+        { chain_id: chainId, amount: totalAssetsUsd, protocols: [...LENDING_PROTOCOLS] },
       );
       this.logger.log(`get_supply_opportunities response: ${JSON.stringify(supplyOpps)}`);
       supplyOpportunities.push(supplyOpps);

@@ -55,6 +55,8 @@ export interface RebalanceAction {
   logIndex: number; // Log index in transaction receipt
   tokenId?: string; // NFT tokenId for Uniswap V3 positions (for POOL_MINT/POOL_BURN and ADD_LIQUIDITY/REMOVE_LIQUIDITY)
   contractAddress?: string; // Contract address that emitted the event (e.g., Euler vault address)
+  tickLower?: number; // Lower tick for LP positions (e.g., Uniswap V3)
+  tickUpper?: number; // Upper tick for LP positions (e.g., Uniswap V3)
 }
 
 export interface ParsedTransaction {

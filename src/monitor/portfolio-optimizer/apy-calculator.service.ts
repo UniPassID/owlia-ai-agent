@@ -7,6 +7,7 @@ import {
   GetSupplyOpportunitiesResponse,
 } from '../../agent/types/mcp.types';
 import { APYFunctions } from './types';
+import { LENDING_PROTOCOLS } from '../../config/protocol.config';
 
 @Injectable()
 export class APYCalculatorService {
@@ -126,7 +127,7 @@ export class APYCalculatorService {
     try {
       const result = await this.agentService.callMcpTool<GetSupplyOpportunitiesResponse>(
         'get_supply_opportunities',
-        { chain_id: chainId as ChainId, amount },
+        { chain_id: chainId as ChainId, amount, protocols: [...LENDING_PROTOCOLS] },
       );
 
       if (result.opportunities && Array.isArray(result.opportunities)) {

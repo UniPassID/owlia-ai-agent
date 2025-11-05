@@ -470,6 +470,8 @@ export class TransactionParserService {
     let tokens: TokenAmount[] = [];
     let metadata: Record<string, any> = {};
     let tokenId: string | undefined;
+    let tickLower: number | undefined;
+    let tickUpper: number | undefined;
 
     // Parse based on action type and protocol
     switch (eventSig.actionType) {
@@ -481,6 +483,8 @@ export class TransactionParserService {
         const result = await this.parseLiquidityEvent(log, decoded, eventSig, provider, allLogs, eventIndex);
         tokens = result.tokens;
         tokenId = result.tokenId;
+        tickLower = result.tickLower;
+        tickUpper = result.tickUpper;
         break;
       }
 
@@ -509,6 +513,8 @@ export class TransactionParserService {
       logIndex: log.index,
       tokenId,
       contractAddress: log.address, // Contract that emitted the event
+      tickLower,
+      tickUpper,
     };
   }
 
@@ -552,7 +558,7 @@ export class TransactionParserService {
 
   /**
    * Parse liquidity events (Mint/Burn for Uniswap V2/Aerodrome)
-   * Returns both tokens array and optional tokenId
+   * Returns tokens array, optional tokenId, and tick range
    */
   private async parseLiquidityEvent(
     log: ethers.Log,
@@ -561,9 +567,11 @@ export class TransactionParserService {
     provider: ethers.Provider,
     allLogs: readonly ethers.Log[],
     eventIndex: number,
-  ): Promise<{ tokens: TokenAmount[]; tokenId?: string }> {
+  ): Promise<{ tokens: TokenAmount[]; tokenId?: string; tickLower?: number; tickUpper?: number }> {
     const tokens: TokenAmount[] = [];
     let tokenId: string | undefined;
+    let tickLower: number | undefined;
+    let tickUpper: number | undefined;
 
     if (eventSig.protocol === Protocol.UNISWAP_V3) {
       // For V3, we need to handle different event types
@@ -590,8 +598,14 @@ export class TransactionParserService {
         // Mint(address sender, address indexed owner, int24 indexed tickLower, int24 indexed tickUpper, uint128 liquidity, uint256 amount0, uint256 amount1)
         // indexed params are in topics, non-indexed in data
         // args array includes all params in order
+        const tickLowerRaw = (decoded.args as any)?.tickLower ?? decoded.args?.[2];
+        const tickUpperRaw = (decoded.args as any)?.tickUpper ?? decoded.args?.[3];
         const amount0Raw = (decoded.args as any)?.amount0 ?? decoded.args?.[5];
         const amount1Raw = (decoded.args as any)?.amount1 ?? decoded.args?.[6];
+
+        tickLower = tickLowerRaw !== undefined ? Number(tickLowerRaw) : undefined;
+        tickUpper = tickUpperRaw !== undefined ? Number(tickUpperRaw) : undefined;
+
         const amount0 = BigInt(amount0Raw !== undefined ? amount0Raw.toString() : '0');
         const amount1 = BigInt(amount1Raw !== undefined ? amount1Raw.toString() : '0');
 
@@ -601,8 +615,14 @@ export class TransactionParserService {
         // Burn(address indexed owner, int24 indexed tickLower, int24 indexed tickUpper, uint128 liquidity, uint256 amount0, uint256 amount1)
         // indexed params are in topics, non-indexed in data
         // args array includes all params in order
+        const tickLowerRaw = (decoded.args as any)?.tickLower ?? decoded.args?.[1];
+        const tickUpperRaw = (decoded.args as any)?.tickUpper ?? decoded.args?.[2];
         const amount0Raw = (decoded.args as any)?.amount0 ?? decoded.args?.[4];
         const amount1Raw = (decoded.args as any)?.amount1 ?? decoded.args?.[5];
+
+        tickLower = tickLowerRaw !== undefined ? Number(tickLowerRaw) : undefined;
+        tickUpper = tickUpperRaw !== undefined ? Number(tickUpperRaw) : undefined;
+
         const amount0 = BigInt(amount0Raw !== undefined ? amount0Raw.toString() : '0');
         const amount1 = BigInt(amount1Raw !== undefined ? amount1Raw.toString() : '0');
 
@@ -612,8 +632,14 @@ export class TransactionParserService {
         // Collect(address indexed owner, address indexed recipient, int24 indexed tickLower, int24 indexed tickUpper, uint128 amount0, uint128 amount1)
         // indexed params are in topics, non-indexed in data
         // args array includes all params in order
+        const tickLowerRaw = (decoded.args as any)?.tickLower ?? decoded.args?.[2];
+        const tickUpperRaw = (decoded.args as any)?.tickUpper ?? decoded.args?.[3];
         const amount0Raw = (decoded.args as any)?.amount0 ?? decoded.args?.[4];
         const amount1Raw = (decoded.args as any)?.amount1 ?? decoded.args?.[5];
+
+        tickLower = tickLowerRaw !== undefined ? Number(tickLowerRaw) : undefined;
+        tickUpper = tickUpperRaw !== undefined ? Number(tickUpperRaw) : undefined;
+
         const amount0 = BigInt(amount0Raw !== undefined ? amount0Raw.toString() : '0');
         const amount1 = BigInt(amount1Raw !== undefined ? amount1Raw.toString() : '0');
 
@@ -622,7 +648,7 @@ export class TransactionParserService {
       }
     }
 
-    return { tokens, tokenId };
+    return { tokens, tokenId, tickLower, tickUpper };
   }
 
   private appendTokensWithFallback(

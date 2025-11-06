@@ -1,20 +1,20 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { ScheduleModule } from '@nestjs/schedule';
-import { getDatabaseConfig } from './config/database.config';
-import { AgentModule } from './agent/agent.module';
-import { GuardModule } from './guard/guard.module';
-import { MonitorModule } from './monitor/monitor.module';
-import { ApiModule } from './api/api.module';
-import { UserModule } from './api/user.module';
+import { Module } from "@nestjs/common";
+import { ConfigModule, ConfigService } from "@nestjs/config";
+import { TypeOrmModule } from "@nestjs/typeorm";
+import { ScheduleModule } from "@nestjs/schedule";
+import { getDatabaseConfig } from "./config/database.config";
+import { AgentModule } from "./agent/agent.module";
+import { GuardModule } from "./guard/guard.module";
+import { MonitorModule } from "./monitor/monitor.module";
+import { ApiModule } from "./api/api.module";
+import { UserModule } from "./user/user.module";
 
 @Module({
   imports: [
     // Configuration
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: ".env",
     }),
 
     // Database

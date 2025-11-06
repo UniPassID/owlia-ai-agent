@@ -90,7 +90,7 @@ export class UserResponseDto {
   @ApiProperty()
   wallet: string;
   @ApiProperty()
-  address: string;
+  owliaAddress: string;
   @ApiProperty()
   operator: string;
   @ApiProperty()
@@ -122,7 +122,7 @@ export function getUserResponseDto(user: UserV2): UserResponseDto {
     operator: ethers.hexlify(user.operator),
     guard: ethers.hexlify(user.guard),
     status: getUserV2StatusDto(user.status),
-    address: ethers.hexlify(user.address),
+    owliaAddress: ethers.hexlify(user.address),
     poolConfigs: getPoolConfigDtos(user.chainId),
   };
 }

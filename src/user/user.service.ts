@@ -165,7 +165,7 @@ export class UserService {
         id: null,
         network: network,
         wallet,
-        address,
+        owliaAddress: address,
         operator: deploymentConfig.operator,
         guard: deploymentConfig.guard,
         status: UserV2StatusDto.notCreated,

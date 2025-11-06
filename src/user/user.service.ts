@@ -6,44 +6,51 @@ import {
   Logger,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
-import { Repository } from "typeorm";
+import { DataSource, QueryRunner, Repository } from "typeorm";
 import { ethers } from "ethers";
 import {
   getChainId,
+  getNetworkDto,
   getPoolConfigDtos,
   getUserResponseDto,
   NetworkDto,
   UserResponseDto,
-  UserV2StatusDto,
+  UserV2DeploymentStatusDto,
 } from "./dtos/user.dto";
-import Safe, { PredictedSafeProps } from "@safe-global/protocol-kit";
+import Safe, {
+  EthSafeTransaction,
+  PredictedSafeProps,
+} from "@safe-global/protocol-kit";
 import { UserV2, UserV2Status } from "../entities/user-v2.entity";
 import { ConfigService } from "@nestjs/config";
 import { v7 as uuidV7 } from "uuid";
 import { encodeFunctionData } from "viem";
 import { SAFE_ABI } from "./safe";
 import { GUARD_ABI } from "./guard";
+import {
+  UserV2Deployment,
+  UserV2DeploymentStatus,
+} from "../entities/user-v2-deployment.entity";
 
 const SALT_NONCE =
   "0x47d3c7c3f44f7e04d88199ea908538d4c5c19fcc1826b351111da656bc5f2ead";
 
-export const DEPLOYMENT_CONFIGS: Record<
-  string,
-  {
-    operator: `0x${string}`;
-    guard: `0x${string}`;
-    pools: {
-      type: "uniswapV3" | "aerodromeSlipstream";
-      address: `0x${string}`;
-      token0: `0x${string}`;
-      token1: `0x${string}`;
-      fee?: number;
-      tickSpacing?: number;
-      tickLower: number;
-      tickUpper: number;
-    }[];
-  }
-> = {
+export type DeploymentConfig = {
+  operator: `0x${string}`;
+  guard: `0x${string}`;
+  pools: {
+    type: "uniswapV3" | "aerodromeSlipstream";
+    address: `0x${string}`;
+    token0: `0x${string}`;
+    token1: `0x${string}`;
+    fee?: number;
+    tickSpacing?: number;
+    tickLower: number;
+    tickUpper: number;
+  }[];
+};
+
+export const DEPLOYMENT_CONFIGS: Record<string, DeploymentConfig> = {
   56: {
     operator: "0x0fff18b2e7f2f0c45f4aed3872f6bab3d495c705",
     guard: "0xb19d7f88cc299e8f52e9ff4a497bb4305c2f154e",
@@ -121,8 +128,11 @@ export class UserService {
   constructor(
     @InjectRepository(UserV2)
     private userRepository: Repository<UserV2>,
+    @InjectRepository(UserV2Deployment)
+    private userV2DeploymentRepository: Repository<UserV2Deployment>,
     @Inject(ConfigService)
-    configService: ConfigService
+    configService: ConfigService,
+    private readonly dataSource: DataSource
   ) {
     const bsc_rpc_url = configService.getOrThrow("BSC_RPC_URL");
     const base_rpc_url = configService.getOrThrow("BASE_RPC_URL");
@@ -132,44 +142,50 @@ export class UserService {
     };
   }
 
-  async getUserInfo(
-    network: NetworkDto,
-    wallet: string
-  ): Promise<UserResponseDto> {
-    const chainId = getChainId(network);
+  async getUserInfo(wallet: string): Promise<UserResponseDto> {
     const walletBuffer = Buffer.from(ethers.getBytes(wallet));
     const user = await this.userRepository.findOne({
       where: {
-        chainId: Number(chainId),
         wallet: walletBuffer,
       },
     });
 
     if (user) {
-      return getUserResponseDto(user);
+      const deployments = await this.userV2DeploymentRepository.find({
+        where: {
+          userId: user.id,
+        },
+      });
+      return getUserResponseDto(user, deployments);
     } else {
-      const deploymentConfig = DEPLOYMENT_CONFIGS[chainId];
-      if (!deploymentConfig) {
-        throw new HttpException(
-          `Unsupported chain: ${chainId}`,
-          HttpStatus.BAD_REQUEST
-        );
-      }
-      const safe = await this.getSafe(
-        deploymentConfig.operator,
-        wallet,
-        chainId
+      const deployments = await Promise.all(
+        Object.entries(DEPLOYMENT_CONFIGS).map(
+          async ([chainId, deploymentConfig]) => {
+            const chainIdNumber = Number(chainId);
+            const safe = await this.getSafe(
+              deploymentConfig.operator,
+              wallet,
+              chainIdNumber
+            );
+            const address = await safe.getAddress();
+            return {
+              id: null,
+              userId: null,
+              network: getNetworkDto(chainIdNumber),
+              owliaAddress: address,
+              operator: deploymentConfig.operator,
+              guard: deploymentConfig.guard,
+              status: UserV2DeploymentStatusDto.uninitialized,
+              poolConfigs: getPoolConfigDtos(chainIdNumber),
+            };
+          }
+        )
       );
-      const address = await safe.getAddress();
+
       return {
         id: null,
-        network: network,
         wallet,
-        owliaAddress: address,
-        operator: deploymentConfig.operator,
-        guard: deploymentConfig.guard,
-        status: UserV2StatusDto.notCreated,
-        poolConfigs: getPoolConfigDtos(chainId),
+        deployments,
       };
     }
   }
@@ -207,30 +223,160 @@ export class UserService {
   ): Promise<UserResponseDto> {
     const chainId = getChainId(network);
     const walletBuffer = Buffer.from(ethers.getBytes(wallet));
-    let user = await this.userRepository.findOne({
+    const user = await this.userRepository.findOne({
       where: {
-        chainId,
         wallet: walletBuffer,
       },
     });
     if (user) {
-      throw new HttpException(
-        "User already registered",
-        HttpStatus.BAD_REQUEST
+      let deployments = await this.userV2DeploymentRepository.find({
+        where: {
+          userId: user.id,
+        },
+      });
+      let chainDeploymentIndex = deployments.findIndex(
+        (deployment) => deployment.chainId === chainId
       );
+      if (chainDeploymentIndex !== -1) {
+        switch (deployments[chainDeploymentIndex].status) {
+          case UserV2DeploymentStatus.uninitialized: {
+            const deploymentConfig = DEPLOYMENT_CONFIGS[chainId];
+            if (!deploymentConfig) {
+              throw new HttpException(
+                `Unsupported chain: ${chainId}`,
+                HttpStatus.BAD_REQUEST
+              );
+            }
+
+            const safe = await this.getSafe(
+              deploymentConfig.operator,
+              wallet,
+              chainId
+            );
+            const transaction = await this.getSetGuardTransaction(
+              deploymentConfig,
+              safe
+            );
+            const txHash = await safe.getTransactionHash(transaction);
+            const isValid = await safe.isValidSignature(txHash, sig);
+            if (!isValid) {
+              throw new HttpException(
+                "Invalid signature",
+                HttpStatus.BAD_REQUEST
+              );
+            }
+            deployments[chainDeploymentIndex].status =
+              UserV2DeploymentStatus.init;
+            deployments[chainDeploymentIndex].setGuardSignature = Buffer.from(
+              ethers.getBytes(sig)
+            );
+            deployments[chainDeploymentIndex].updatedAt = new Date();
+            await this.userV2DeploymentRepository.save(
+              deployments[chainDeploymentIndex]
+            );
+            return getUserResponseDto(user, deployments);
+          }
+          case UserV2DeploymentStatus.init:
+          case UserV2DeploymentStatus.setGuardSuccess:
+            throw new HttpException(
+              "User already registered",
+              HttpStatus.BAD_REQUEST
+            );
+        }
+      } else {
+        throw new HttpException(
+          "Chain deployment not found",
+          HttpStatus.BAD_REQUEST
+        );
+      }
     }
 
-    const deploymentConfig = DEPLOYMENT_CONFIGS[chainId];
-    if (!deploymentConfig) {
-      throw new HttpException(
-        `Unsupported chain: ${chainId}`,
-        HttpStatus.BAD_REQUEST
-      );
+    const now = new Date();
+    const newUser = new UserV2();
+    newUser.id = uuidV7();
+    newUser.wallet = walletBuffer;
+    newUser.createdAt = now;
+    newUser.updatedAt = now;
+
+    const deployments = await Promise.all(
+      Object.entries(DEPLOYMENT_CONFIGS).map(
+        async ([chainIdKey, deploymentConfig]) => {
+          const chainIdNumber = Number(chainIdKey);
+          if (chainIdNumber === chainId) {
+            const safe = await this.getSafe(
+              deploymentConfig.operator,
+              wallet,
+              chainId
+            );
+            const address = await safe.getAddress();
+            const transaction = await this.getSetGuardTransaction(
+              deploymentConfig,
+              safe
+            );
+            const txHash = await safe.getTransactionHash(transaction);
+            const isValid = await safe.isValidSignature(txHash, sig);
+            if (!isValid) {
+              throw new HttpException(
+                "Invalid signature",
+                HttpStatus.BAD_REQUEST
+              );
+            }
+
+            const deployment = new UserV2Deployment();
+            deployment.id = uuidV7();
+            deployment.userId = newUser.id;
+            deployment.chainId = chainIdNumber;
+            deployment.address = Buffer.from(ethers.getBytes(address));
+            deployment.operator = Buffer.from(
+              ethers.getBytes(deploymentConfig.operator)
+            );
+            deployment.guard = Buffer.from(
+              ethers.getBytes(deploymentConfig.guard)
+            );
+            deployment.setGuardSignature = Buffer.from(ethers.getBytes(sig));
+            deployment.status = UserV2DeploymentStatus.init;
+            deployment.createdAt = now;
+            deployment.updatedAt = now;
+            return deployment;
+          }
+        }
+      )
+    );
+
+    if (
+      deployments.findIndex(
+        (deployment) =>
+          deployment.chainId === chainId &&
+          deployment.status === UserV2DeploymentStatus.init
+      ) === -1
+    ) {
+      throw new HttpException("not support chain", HttpStatus.BAD_REQUEST);
     }
 
-    const safe = await this.getSafe(deploymentConfig.operator, wallet, chainId);
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      await queryRunner.manager.save(UserV2, newUser);
+      for (const deployment of deployments) {
+        await queryRunner.manager.save(UserV2Deployment, deployment);
+      }
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+    return getUserResponseDto(newUser, deployments);
+  }
+
+  async getSetGuardTransaction(
+    deploymentConfig: DeploymentConfig,
+    safe: Safe
+  ): Promise<EthSafeTransaction> {
     const address = await safe.getAddress();
-
     const setGuardTx = {
       to: address,
       data: encodeFunctionData({
@@ -281,25 +427,6 @@ export class UserService {
     const transaction = await safe.createTransaction({
       transactions: [setGuardTx, ...configurePoolTxs],
     });
-
-    const txHash = await safe.getTransactionHash(transaction);
-    const isValid = await safe.isValidSignature(txHash, sig);
-    if (!isValid) {
-      throw new HttpException("Invalid signature", HttpStatus.BAD_REQUEST);
-    }
-
-    const now = new Date();
-    let newUser = new UserV2();
-    newUser.id = uuidV7();
-    newUser.wallet = walletBuffer;
-    newUser.address = Buffer.from(ethers.getBytes(address));
-    newUser.operator = Buffer.from(ethers.getBytes(deploymentConfig.operator));
-    newUser.guard = Buffer.from(ethers.getBytes(deploymentConfig.guard));
-    newUser.setGuardSignature = Buffer.from(ethers.getBytes(sig));
-    newUser.status = UserV2Status.init;
-    newUser.createdAt = now;
-    newUser.updatedAt = now;
-    await this.userRepository.save(newUser);
-    return getUserResponseDto(newUser);
+    return transaction;
   }
 }

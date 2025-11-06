@@ -3,11 +3,15 @@ import { UserV2, UserV2Status } from "../../entities/user-v2.entity";
 import { DEPLOYMENT_CONFIGS } from "../user.service";
 import { HttpException, HttpStatus } from "@nestjs/common";
 import { ApiProperty } from "@nestjs/swagger";
+import {
+  UserV2Deployment,
+  UserV2DeploymentStatus,
+} from "../../entities/user-v2-deployment.entity";
 
-export enum UserV2StatusDto {
-  notCreated = "not_created",
-  init = "init",
-  setGuardSuccess = "set_guard_success",
+export enum UserV2DeploymentStatusDto {
+  uninitialized = "uninitialized",
+  pendingDeployment = "pending_deployment",
+  deployed = "deployed",
 }
 
 export enum NetworkDto {
@@ -82,13 +86,13 @@ export function getPoolConfigDtos(chainId: number): PoolConfigDto[] {
   }));
 }
 
-export class UserResponseDto {
+export class UserV2DeploymentResponseDto {
   @ApiProperty()
-  id: string | null;
+  id: string;
   @ApiProperty()
   network: NetworkDto;
   @ApiProperty()
-  wallet: string;
+  userId: string | null;
   @ApiProperty()
   owliaAddress: string;
   @ApiProperty()
@@ -96,34 +100,66 @@ export class UserResponseDto {
   @ApiProperty()
   guard: string;
   @ApiProperty({
-    enum: UserV2StatusDto,
+    enum: UserV2DeploymentStatusDto,
   })
-  status: UserV2StatusDto;
+  status: UserV2DeploymentStatusDto;
   @ApiProperty()
   poolConfigs: PoolConfigDto[];
 }
 
-export function getUserV2StatusDto(status: number): UserV2StatusDto {
+export function getUserV2DeploymentResponseDto(
+  deployment: UserV2Deployment
+): UserV2DeploymentResponseDto {
+  return {
+    id: deployment.id,
+    userId: deployment.userId,
+    network: getNetworkDto(deployment.chainId),
+    owliaAddress: ethers.hexlify(deployment.address),
+    operator: ethers.hexlify(deployment.operator),
+    guard: ethers.hexlify(deployment.guard),
+    status: getUserV2DeploymentStatusDto(deployment.status),
+    poolConfigs: getPoolConfigDtos(deployment.chainId),
+  };
+}
+
+export class UserResponseDto {
+  @ApiProperty()
+  id: string | null;
+  @ApiProperty()
+  wallet: string;
+  @ApiProperty({
+    type: [UserV2DeploymentResponseDto],
+    isArray: true,
+  })
+  deployments: UserV2DeploymentResponseDto[];
+}
+
+export function getUserV2DeploymentStatusDto(
+  status: UserV2DeploymentStatus
+): UserV2DeploymentStatusDto {
   switch (status) {
-    case UserV2Status.init: {
-      return UserV2StatusDto.init;
+    case UserV2DeploymentStatus.uninitialized: {
+      return UserV2DeploymentStatusDto.uninitialized;
     }
-    case UserV2Status.setGuardSuccess: {
-      return UserV2StatusDto.setGuardSuccess;
+    case UserV2DeploymentStatus.init: {
+      return UserV2DeploymentStatusDto.pendingDeployment;
+    }
+    case UserV2DeploymentStatus.setGuardSuccess: {
+      return UserV2DeploymentStatusDto.deployed;
     }
   }
 }
 
-export function getUserResponseDto(user: UserV2): UserResponseDto {
+export function getUserResponseDto(
+  user: UserV2,
+  deployments: UserV2Deployment[]
+): UserResponseDto {
   return {
     id: user.id,
-    network: getNetworkDto(user.chainId),
     wallet: ethers.hexlify(user.wallet),
-    operator: ethers.hexlify(user.operator),
-    guard: ethers.hexlify(user.guard),
-    status: getUserV2StatusDto(user.status),
-    owliaAddress: ethers.hexlify(user.address),
-    poolConfigs: getPoolConfigDtos(user.chainId),
+    deployments: deployments.map((deployment) =>
+      getUserV2DeploymentResponseDto(deployment)
+    ),
   };
 }
 

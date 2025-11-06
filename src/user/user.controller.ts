@@ -14,11 +14,8 @@ export class UserController {
 
   @Get("info")
   @ApiResponse({ type: UserResponseDto })
-  async getUserInfo(
-    @Query("network") network: NetworkDto,
-    @Query("wallet") wallet: string
-  ) {
-    return this.userService.getUserInfo(network, wallet);
+  async getUserInfo(@Query("wallet") wallet: string) {
+    return this.userService.getUserInfo(wallet);
   }
 
   @Post("register")

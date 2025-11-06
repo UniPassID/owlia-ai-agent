@@ -5,9 +5,10 @@ import {
   RegisterUserRequestDto,
   UserResponseDto,
 } from "./dtos/user.dto";
-import { ApiBody, ApiResponse } from "@nestjs/swagger";
+import { ApiResponse, ApiTags } from "@nestjs/swagger";
 
 @Controller("account")
+@ApiTags("account")
 export class UserController {
   constructor(private readonly userService: UserService) {}
 

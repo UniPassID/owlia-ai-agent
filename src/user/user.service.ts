@@ -9,9 +9,11 @@ import { InjectRepository } from "@nestjs/typeorm";
 import { Repository } from "typeorm";
 import { ethers } from "ethers";
 import {
+  getChainId,
   getPoolConfigDtos,
-  getUserDto,
-  UserDto,
+  getUserResponseDto,
+  NetworkDto,
+  UserResponseDto,
   UserV2StatusDto,
 } from "./dtos/user.dto";
 import Safe, { PredictedSafeProps } from "@safe-global/protocol-kit";
@@ -130,7 +132,11 @@ export class UserService {
     };
   }
 
-  async getUserInfo(chainId: string, wallet: string): Promise<UserDto> {
+  async getUserInfo(
+    network: NetworkDto,
+    wallet: string
+  ): Promise<UserResponseDto> {
+    const chainId = getChainId(network);
     const walletBuffer = Buffer.from(ethers.getBytes(wallet));
     const user = await this.userRepository.findOne({
       where: {
@@ -140,7 +146,7 @@ export class UserService {
     });
 
     if (user) {
-      return getUserDto(user);
+      return getUserResponseDto(user);
     } else {
       const deploymentConfig = DEPLOYMENT_CONFIGS[chainId];
       if (!deploymentConfig) {
@@ -157,7 +163,7 @@ export class UserService {
       const address = await safe.getAddress();
       return {
         id: null,
-        chainId: chainId,
+        network: network,
         wallet,
         address,
         operator: deploymentConfig.operator,
@@ -171,7 +177,7 @@ export class UserService {
   async getSafe(
     operator: string,
     wallet: string,
-    chainId: string
+    chainId: number
   ): Promise<Safe> {
     const predictedSafe: PredictedSafeProps = {
       safeAccountConfig: {
@@ -195,14 +201,15 @@ export class UserService {
   }
 
   async registerUser(
-    chainId: string,
+    network: NetworkDto,
     wallet: string,
     sig: string
-  ): Promise<UserDto> {
+  ): Promise<UserResponseDto> {
+    const chainId = getChainId(network);
     const walletBuffer = Buffer.from(ethers.getBytes(wallet));
     let user = await this.userRepository.findOne({
       where: {
-        chainId: Number(chainId),
+        chainId,
         wallet: walletBuffer,
       },
     });
@@ -293,6 +300,6 @@ export class UserService {
     newUser.createdAt = now;
     newUser.updatedAt = now;
     await this.userRepository.save(newUser);
-    return getUserDto(newUser);
+    return getUserResponseDto(newUser);
   }
 }

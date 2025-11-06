@@ -1,21 +1,28 @@
 import { Body, Controller, Get, Post, Query } from "@nestjs/common";
 import { UserService } from "./user.service";
-import { RegisterUserDto } from "./dtos/user.dto";
+import {
+  NetworkDto,
+  RegisterUserRequestDto,
+  UserResponseDto,
+} from "./dtos/user.dto";
+import { ApiBody, ApiResponse } from "@nestjs/swagger";
 
 @Controller("account")
 export class UserController {
   constructor(private readonly userService: UserService) {}
 
   @Get("info")
+  @ApiResponse({ type: UserResponseDto })
   async getUserInfo(
-    @Query("chainId") chainId: string,
+    @Query("network") network: NetworkDto,
     @Query("wallet") wallet: string
   ) {
-    return this.userService.getUserInfo(chainId, wallet);
+    return this.userService.getUserInfo(network, wallet);
   }
 
   @Post("register")
-  async registerUser(@Body() dto: RegisterUserDto) {
-    return this.userService.registerUser(dto.chainId, dto.wallet, dto.sig);
+  @ApiResponse({ type: UserResponseDto })
+  async registerUser(@Body() dto: RegisterUserRequestDto) {
+    return this.userService.registerUser(dto.network, dto.wallet, dto.sig);
   }
 }

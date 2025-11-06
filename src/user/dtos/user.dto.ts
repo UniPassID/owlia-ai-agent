@@ -2,6 +2,7 @@ import { ethers } from "ethers";
 import { UserV2, UserV2Status } from "../../entities/user-v2.entity";
 import { DEPLOYMENT_CONFIGS } from "../user.service";
 import { HttpException, HttpStatus } from "@nestjs/common";
+import { ApiProperty } from "@nestjs/swagger";
 
 export enum UserV2StatusDto {
   notCreated = "not_created",
@@ -9,18 +10,59 @@ export enum UserV2StatusDto {
   setGuardSuccess = "set_guard_success",
 }
 
+export enum NetworkDto {
+  bsc = "bsc",
+  base = "base",
+}
+
+export function getChainId(network: NetworkDto): number {
+  switch (network) {
+    case NetworkDto.bsc:
+      return 56;
+    case NetworkDto.base:
+      return 8453;
+    default:
+      throw new HttpException(
+        `Unsupported network: ${network}`,
+        HttpStatus.BAD_REQUEST
+      );
+  }
+}
+
+export function getNetworkDto(chainId: number): NetworkDto {
+  switch (chainId) {
+    case 56:
+      return NetworkDto.bsc;
+    case 8453:
+      return NetworkDto.base;
+    default:
+      throw new HttpException(
+        `Unsupported chain: ${chainId}`,
+        HttpStatus.BAD_REQUEST
+      );
+  }
+}
+
 export class PoolConfigDto {
+  @ApiProperty()
   type: "uniswapV3" | "aerodromeSlipstream";
+  @ApiProperty()
   address: string;
+  @ApiProperty()
   token0: string;
+  @ApiProperty()
   token1: string;
+  @ApiProperty()
   fee?: number;
+  @ApiProperty()
   tickSpacing?: number;
+  @ApiProperty()
   tickLower: number;
+  @ApiProperty()
   tickUpper: number;
 }
 
-export function getPoolConfigDtos(chainId: string): PoolConfigDto[] {
+export function getPoolConfigDtos(chainId: number): PoolConfigDto[] {
   const deploymentConfig = DEPLOYMENT_CONFIGS[chainId];
   if (!deploymentConfig) {
     throw new HttpException(
@@ -40,14 +82,24 @@ export function getPoolConfigDtos(chainId: string): PoolConfigDto[] {
   }));
 }
 
-export class UserDto {
+export class UserResponseDto {
+  @ApiProperty()
   id: string | null;
-  chainId: string;
+  @ApiProperty()
+  network: NetworkDto;
+  @ApiProperty()
   wallet: string;
+  @ApiProperty()
   address: string;
+  @ApiProperty()
   operator: string;
+  @ApiProperty()
   guard: string;
+  @ApiProperty({
+    enum: UserV2StatusDto,
+  })
   status: UserV2StatusDto;
+  @ApiProperty()
   poolConfigs: PoolConfigDto[];
 }
 
@@ -62,21 +114,24 @@ export function getUserV2StatusDto(status: number): UserV2StatusDto {
   }
 }
 
-export function getUserDto(user: UserV2): UserDto {
+export function getUserResponseDto(user: UserV2): UserResponseDto {
   return {
     id: user.id,
-    chainId: user.chainId.toString(),
+    network: getNetworkDto(user.chainId),
     wallet: ethers.hexlify(user.wallet),
     operator: ethers.hexlify(user.operator),
     guard: ethers.hexlify(user.guard),
     status: getUserV2StatusDto(user.status),
     address: ethers.hexlify(user.address),
-    poolConfigs: getPoolConfigDtos(user.chainId.toString()),
+    poolConfigs: getPoolConfigDtos(user.chainId),
   };
 }
 
-export class RegisterUserDto {
-  chainId: string;
+export class RegisterUserRequestDto {
+  @ApiProperty()
+  network: NetworkDto;
+  @ApiProperty()
   wallet: string;
+  @ApiProperty()
   sig: string;
 }

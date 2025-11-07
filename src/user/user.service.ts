@@ -335,10 +335,10 @@ export class UserService {
 
               verifiedAddress = await recoverMessageAddress({
                 message: txHash as `0x${string}`,
-                signature: fromBytes(staticPart, "hex"),
+                signature: staticPart,
               });
             } catch (error) {
-              this.logger.error("Invalid signature", error);
+              this.logger.error("Invalid signature", error, txHash);
               throw new HttpException(
                 "Invalid signature",
                 HttpStatus.BAD_REQUEST

@@ -396,6 +396,7 @@ export class UserService {
         message: txHash as `0x${string}`,
         signature: staticPart,
       });
+      this.logger.log("Verified signature", verifiedAddress, wallet, txHash);
       return verifiedAddress.toLowerCase() === wallet.toLowerCase();
     } catch (error) {
       this.logger.error("Invalid signature", error, txHash);

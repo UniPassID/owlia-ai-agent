@@ -351,6 +351,29 @@ export class UserService {
             deployment.createdAt = now;
             deployment.updatedAt = now;
             return deployment;
+          } else {
+            const safe = await this.getSafe(
+              deploymentConfig.operator,
+              wallet,
+              chainId
+            );
+            const address = await safe.getAddress();
+            const deployment = new UserV2Deployment();
+            deployment.id = uuidV7();
+            deployment.userId = newUser.id;
+            deployment.chainId = chainIdNumber;
+            deployment.address = Buffer.from(ethers.getBytes(address));
+            deployment.operator = Buffer.from(
+              ethers.getBytes(deploymentConfig.operator)
+            );
+            deployment.guard = Buffer.from(
+              ethers.getBytes(deploymentConfig.guard)
+            );
+            deployment.setGuardSignature = null;
+            deployment.status = UserV2DeploymentStatus.uninitialized;
+            deployment.createdAt = now;
+            deployment.updatedAt = now;
+            return deployment;
           }
         }
       )

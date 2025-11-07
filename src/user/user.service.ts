@@ -331,7 +331,6 @@ export class UserService {
             try {
               const newSig = new EthSafeSignature(wallet, sig);
               const staticPart = toBytes(newSig.staticPart());
-              staticPart[65] = staticPart[65] - 4;
 
               verifiedAddress = await recoverMessageAddress({
                 message: txHash as `0x${string}`,

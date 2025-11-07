@@ -26,8 +26,10 @@ import { UserV2, UserV2Status } from "../entities/user-v2.entity";
 import { ConfigService } from "@nestjs/config";
 import { v7 as uuidV7 } from "uuid";
 import {
+  concat,
   encodeFunctionData,
   fromBytes,
+  keccak256,
   recoverAddress,
   recoverMessageAddress,
   toBytes,
@@ -393,9 +395,15 @@ export class UserService {
     staticPart[64] = staticPart[64] - 4;
     try {
       const verifiedAddress = await recoverAddress({
-        hash: txHash as `0x${string}`,
+        hash: keccak256(
+          concat([
+            toBytes("\x19Ethereum Signed Message:\n32"),
+            toBytes(txHash as `0x${string}`),
+          ])
+        ),
         signature: staticPart,
       });
+
       this.logger.log("Verified signature", verifiedAddress, wallet, txHash);
       return verifiedAddress.toLowerCase() === wallet.toLowerCase();
     } catch (error) {

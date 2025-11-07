@@ -392,10 +392,8 @@ export class UserService {
     const staticPart = toBytes(newSig.staticPart());
     staticPart[64] = staticPart[64] - 4;
     try {
-      const verifiedAddress = await recoverMessageAddress({
-        message: {
-          raw: txHash as `0x${string}`,
-        },
+      const verifiedAddress = await recoverAddress({
+        hash: txHash as `0x${string}`,
         signature: staticPart,
       });
       this.logger.log("Verified signature", verifiedAddress, wallet, txHash);

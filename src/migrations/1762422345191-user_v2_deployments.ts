@@ -10,7 +10,7 @@ export class UserV2Deployments1762422345191 implements MigrationInterface {
             \`address\` varbinary(32) NOT NULL,
             \`operator\` varbinary(32) NOT NULL,
             \`guard\` varbinary(32) NOT NULL,
-            \`setGuardSignature\` varbinary(128) NOT NULL,
+            \`setGuardSignature\` varbinary(128) NULL,
             \`status\` tinyint NOT NULL,
             \`createdAt\` datetime NOT NULL,
             \`updatedAt\` datetime NOT NULL,

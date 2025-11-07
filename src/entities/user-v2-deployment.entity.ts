@@ -21,8 +21,12 @@ export class UserV2Deployment {
   @Column("varbinary", { name: "guard", length: 32 })
   guard: Buffer;
 
-  @Column("varbinary", { name: "setGuardSignature", length: 128 })
-  setGuardSignature: Buffer;
+  @Column("varbinary", {
+    name: "setGuardSignature",
+    length: 128,
+    nullable: true,
+  })
+  setGuardSignature: Buffer | null;
 
   @Column("tinyint", { name: "status" })
   status: UserV2DeploymentStatus;

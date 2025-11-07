@@ -268,6 +268,7 @@ export class UserService {
             const txHash = await safe.getTransactionHash(transaction);
             const isValid = await this.verifySignature(txHash, sig, wallet);
             if (!isValid) {
+              this.logger.error("Invalid signature", txHash, sig, wallet);
               throw new HttpException(
                 "Invalid signature",
                 HttpStatus.BAD_REQUEST
@@ -325,6 +326,7 @@ export class UserService {
             const txHash = await safe.getTransactionHash(transaction);
             const isValid = await this.verifySignature(txHash, sig, wallet);
             if (!isValid) {
+              this.logger.error("Invalid signature", txHash, sig, wallet);
               throw new HttpException(
                 "Invalid signature",
                 HttpStatus.BAD_REQUEST

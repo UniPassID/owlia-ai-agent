@@ -25,7 +25,13 @@ import Safe, {
 import { UserV2, UserV2Status } from "../entities/user-v2.entity";
 import { ConfigService } from "@nestjs/config";
 import { v7 as uuidV7 } from "uuid";
-import { encodeFunctionData, recoverAddress } from "viem";
+import {
+  encodeFunctionData,
+  fromBytes,
+  recoverAddress,
+  recoverMessageAddress,
+  toBytes,
+} from "viem";
 import { SAFE_ABI } from "./safe";
 import { GUARD_ABI } from "./guard";
 import {
@@ -321,11 +327,22 @@ export class UserService {
               safe
             );
             const txHash = await safe.getTransactionHash(transaction);
-            const newSig = new EthSafeSignature(wallet, sig);
-            const verifiedAddress = await recoverAddress({
-              hash: txHash as `0x${string}`,
-              signature: newSig.staticPart() as `0x${string}`,
-            });
+            let verifiedAddress: string;
+            try {
+              const newSig = new EthSafeSignature(wallet, sig);
+              const staticPart = toBytes(newSig.staticPart());
+              staticPart[65] = staticPart[65] - 4;
+
+              verifiedAddress = await recoverMessageAddress({
+                message: txHash as `0x${string}`,
+                signature: fromBytes(staticPart, "hex"),
+              });
+            } catch (error) {
+              throw new HttpException(
+                "Invalid signature",
+                HttpStatus.BAD_REQUEST
+              );
+            }
             if (verifiedAddress !== wallet) {
               throw new HttpException(
                 "Invalid signature",

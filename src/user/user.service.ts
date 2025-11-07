@@ -203,6 +203,7 @@ export class UserService {
       safeDeploymentConfig: {
         deploymentType: "canonical",
         saltNonce: SALT_NONCE,
+        safeVersion: "1.4.1",
       },
     };
     const rpcUrl = this.rpcUrls[chainId];

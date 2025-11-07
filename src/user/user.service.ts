@@ -321,8 +321,12 @@ export class UserService {
               safe
             );
             const txHash = await safe.getTransactionHash(transaction);
-            const newSig = await safe.signHash(txHash);
-            if (newSig.data.toLowerCase() !== sig.toLowerCase()) {
+            const newSig = new EthSafeSignature(wallet, sig);
+            const verifiedAddress = await recoverAddress({
+              hash: txHash as `0x${string}`,
+              signature: newSig.staticPart() as `0x${string}`,
+            });
+            if (verifiedAddress !== wallet) {
               throw new HttpException(
                 "Invalid signature",
                 HttpStatus.BAD_REQUEST

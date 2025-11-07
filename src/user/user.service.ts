@@ -338,6 +338,7 @@ export class UserService {
                 signature: fromBytes(staticPart, "hex"),
               });
             } catch (error) {
+              this.logger.error("Invalid signature", error);
               throw new HttpException(
                 "Invalid signature",
                 HttpStatus.BAD_REQUEST

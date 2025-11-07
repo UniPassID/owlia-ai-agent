@@ -193,7 +193,8 @@ export class UserService {
   async getSafe(
     operator: string,
     wallet: string,
-    chainId: number
+    chainId: number,
+    signer?: string
   ): Promise<Safe> {
     const predictedSafe: PredictedSafeProps = {
       safeAccountConfig: {
@@ -213,6 +214,7 @@ export class UserService {
     const protocolKit = await Safe.init({
       predictedSafe,
       provider: rpcUrl,
+      signer: signer ? signer : wallet,
     });
     return protocolKit;
   }
@@ -315,8 +317,8 @@ export class UserService {
               safe
             );
             const txHash = await safe.getTransactionHash(transaction);
-            const isValid = await safe.isValidSignature(txHash, sig);
-            if (!isValid) {
+            const newSig = await safe.signHash(txHash);
+            if (newSig.data.toLowerCase() !== sig.toLowerCase()) {
               throw new HttpException(
                 "Invalid signature",
                 HttpStatus.BAD_REQUEST

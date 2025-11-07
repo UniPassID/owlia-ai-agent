@@ -18,13 +18,14 @@ import {
   UserV2DeploymentStatusDto,
 } from "./dtos/user.dto";
 import Safe, {
+  EthSafeSignature,
   EthSafeTransaction,
   PredictedSafeProps,
 } from "@safe-global/protocol-kit";
 import { UserV2, UserV2Status } from "../entities/user-v2.entity";
 import { ConfigService } from "@nestjs/config";
 import { v7 as uuidV7 } from "uuid";
-import { encodeFunctionData } from "viem";
+import { encodeFunctionData, recoverAddress } from "viem";
 import { SAFE_ABI } from "./safe";
 import { GUARD_ABI } from "./guard";
 import {
@@ -193,8 +194,7 @@ export class UserService {
   async getSafe(
     operator: string,
     wallet: string,
-    chainId: number,
-    signer?: string
+    chainId: number
   ): Promise<Safe> {
     const predictedSafe: PredictedSafeProps = {
       safeAccountConfig: {
@@ -214,7 +214,6 @@ export class UserService {
     const protocolKit = await Safe.init({
       predictedSafe,
       provider: rpcUrl,
-      signer: signer ? signer : wallet,
     });
     return protocolKit;
   }
@@ -261,13 +260,18 @@ export class UserService {
               safe
             );
             const txHash = await safe.getTransactionHash(transaction);
-            const isValid = await safe.isValidSignature(txHash, sig);
-            if (!isValid) {
+            const newSig = new EthSafeSignature(wallet, sig);
+            const verifiedAddress = await recoverAddress({
+              hash: txHash as `0x${string}`,
+              signature: newSig.staticPart() as `0x${string}`,
+            });
+            if (verifiedAddress !== wallet) {
               throw new HttpException(
                 "Invalid signature",
                 HttpStatus.BAD_REQUEST
               );
             }
+
             deployments[chainDeploymentIndex].status =
               UserV2DeploymentStatus.init;
             deployments[chainDeploymentIndex].setGuardSignature = Buffer.from(

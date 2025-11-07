@@ -266,12 +266,8 @@ export class UserService {
               safe
             );
             const txHash = await safe.getTransactionHash(transaction);
-            const newSig = new EthSafeSignature(wallet, sig);
-            const verifiedAddress = await recoverAddress({
-              hash: txHash as `0x${string}`,
-              signature: newSig.staticPart() as `0x${string}`,
-            });
-            if (verifiedAddress !== wallet) {
+            const isValid = await this.verifySignature(txHash, sig, wallet);
+            if (!isValid) {
               throw new HttpException(
                 "Invalid signature",
                 HttpStatus.BAD_REQUEST
@@ -327,24 +323,8 @@ export class UserService {
               safe
             );
             const txHash = await safe.getTransactionHash(transaction);
-            let verifiedAddress: string;
-            try {
-              const newSig = new EthSafeSignature(wallet, sig);
-              const staticPart = toBytes(newSig.staticPart());
-              staticPart[64] = staticPart[64] - 4;
-
-              verifiedAddress = await recoverMessageAddress({
-                message: txHash as `0x${string}`,
-                signature: staticPart,
-              });
-            } catch (error) {
-              this.logger.error("Invalid signature", error, txHash);
-              throw new HttpException(
-                "Invalid signature",
-                HttpStatus.BAD_REQUEST
-              );
-            }
-            if (verifiedAddress !== wallet) {
+            const isValid = await this.verifySignature(txHash, sig, wallet);
+            if (!isValid) {
               throw new HttpException(
                 "Invalid signature",
                 HttpStatus.BAD_REQUEST
@@ -399,6 +379,26 @@ export class UserService {
       await queryRunner.release();
     }
     return getUserResponseDto(newUser, deployments);
+  }
+
+  async verifySignature(
+    txHash: string,
+    sig: string,
+    wallet: string
+  ): Promise<boolean> {
+    const newSig = new EthSafeSignature(wallet, sig);
+    const staticPart = toBytes(newSig.staticPart());
+    staticPart[64] = staticPart[64] - 4;
+    try {
+      const verifiedAddress = await recoverMessageAddress({
+        message: txHash as `0x${string}`,
+        signature: staticPart,
+      });
+      return verifiedAddress.toLowerCase() === wallet.toLowerCase();
+    } catch (error) {
+      this.logger.error("Invalid signature", error, txHash);
+      return false;
+    }
   }
 
   async getSetGuardTransaction(

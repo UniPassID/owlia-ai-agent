@@ -7,6 +7,7 @@ import {
   UserV2Deployment,
   UserV2DeploymentStatus,
 } from "../../entities/user-v2-deployment.entity";
+import { IsString } from "class-validator";
 
 export enum UserV2DeploymentStatusDto {
   uninitialized = "uninitialized",
@@ -165,9 +166,12 @@ export function getUserResponseDto(
 
 export class RegisterUserRequestDto {
   @ApiProperty()
+  @IsString()
   network: NetworkDto;
   @ApiProperty()
+  @IsString()
   wallet: string;
   @ApiProperty()
+  @IsString()
   sig: string;
 }

@@ -115,6 +115,7 @@ export class RebalanceController {
     description: 'Return parsed rebalance transaction records for the given user address in reverse chronological order',
   })
   @ApiQuery({ name: 'address', required: true, description: 'User wallet address', example: '0x1234...' })
+  @ApiQuery({ name: 'network', required: false, description: 'Blockchain network (name or chain ID)', example: 'base' })
   @ApiResponse({ status: 200, description: 'Transactions retrieved successfully' })
   @ApiResponse({ status: 400, description: 'Missing address parameter' })
   @ApiResponse({ status: 404, description: 'User not found' })
@@ -122,6 +123,7 @@ export class RebalanceController {
   @ApiQuery({ name: 'pageSize', required: false, description: 'Page size (default 20, max 100)', example: '20' })
   async getTransactions(
     @Query('address') address: string,
+    @Query('network') network?: string,
     @Query('page') pageParam?: string,
     @Query('pageSize') pageSizeParam?: string,
   ) {
@@ -132,8 +134,16 @@ export class RebalanceController {
       );
     }
 
-    const normalizedAddress = address.toLowerCase();
-    const users = await this.userRepo.find({ where: { address: normalizedAddress } });
+    // If network is provided, use UserService to get user by address and network
+    let users: User[];
+    if (network) {
+      const user = await this.userService.getUserByAddress(address, network);
+      users = user ? [user] : [];
+    } else {
+      // Fallback to old behavior: find all users with this address
+      const normalizedAddress = address.toLowerCase();
+      users = await this.userRepo.find({ where: { address: normalizedAddress } });
+    }
 
     if (users.length === 0) {
       throw new HttpException(

@@ -1,28 +1,31 @@
-import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { MonitorService } from './monitor.service';
-import { MonitorController } from './monitor.controller';
-import { User } from '../entities/user.entity';
-import { UserPolicy } from '../entities/user-policy.entity';
-import { RebalanceJob } from '../entities/rebalance-job.entity';
-import { RebalanceExecutionSnapshot } from '../entities/rebalance-execution-snapshot.entity';
-import { AgentModule } from '../agent/agent.module';
-import { RebalancePrecheckService } from './rebalance-precheck.service';
-import { RebalanceSummaryService } from './rebalance-summary.service';
-import { TransactionParserService } from './transaction-parser.service';
-import { UserModule } from '../api/user.module';
-import { PortfolioOptimizerModule } from './portfolio-optimizer/portfolio-optimizer.module';
-import { RebalanceLoggerService } from '../utils/rebalance-logger.service';
+import { Module } from "@nestjs/common";
+import { TypeOrmModule } from "@nestjs/typeorm";
+import { MonitorService } from "./monitor.service";
+import { MonitorController } from "./monitor.controller";
+import { User } from "../entities/user.entity";
+import { RebalanceJob } from "../entities/rebalance-job.entity";
+import { RebalanceExecutionSnapshot } from "../entities/rebalance-execution-snapshot.entity";
+import { AgentModule } from "../agent/agent.module";
+import { RebalancePrecheckService } from "./rebalance-precheck.service";
+import { RebalanceSummaryService } from "./rebalance-summary.service";
+import { TransactionParserService } from "./transaction-parser.service";
+import { PortfolioOptimizerModule } from "./portfolio-optimizer/portfolio-optimizer.module";
+import { RebalanceLoggerService } from "../utils/rebalance-logger.service";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, UserPolicy, RebalanceJob, RebalanceExecutionSnapshot]),
+    TypeOrmModule.forFeature([RebalanceJob, RebalanceExecutionSnapshot]),
     AgentModule,
-    UserModule,
     PortfolioOptimizerModule,
   ],
   controllers: [MonitorController],
-  providers: [MonitorService, RebalancePrecheckService, RebalanceSummaryService, TransactionParserService, RebalanceLoggerService],
+  providers: [
+    MonitorService,
+    RebalancePrecheckService,
+    RebalanceSummaryService,
+    TransactionParserService,
+    RebalanceLoggerService,
+  ],
   exports: [MonitorService],
 })
 export class MonitorModule {}

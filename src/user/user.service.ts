@@ -62,7 +62,7 @@ export type DeploymentConfig = {
 export const DEPLOYMENT_CONFIGS: Record<string, DeploymentConfig> = {
   56: {
     operator: "0x0fff18b2e7f2f0c45f4aed3872f6bab3d495c705",
-    guard: "0xb19d7f88cc299e8f52e9ff4a497bb4305c2f154e",
+    guard: "0x8c4f026da33bb8036a326afa3177073a96144da8",
     pools: [
       {
         type: "uniswapV3",
@@ -95,7 +95,7 @@ export const DEPLOYMENT_CONFIGS: Record<string, DeploymentConfig> = {
   },
   8453: {
     operator: "0x0fff18b2e7f2f0c45f4aed3872f6bab3d495c705",
-    guard: "0xf759577e7b5e51d8ab8f8da9a104d4d0c0f7f420",
+    guard: "0x016639d99a2b0b33b07d80cf16cfa6f00bacb906",
     pools: [
       {
         type: "aerodromeSlipstream",

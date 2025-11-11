@@ -30,7 +30,8 @@ import {
   UserV2Deployment,
   UserV2DeploymentStatus,
 } from "../entities/user-v2-deployment.entity";
-import { hexlify } from "ethers";
+import { getBytes, hexlify } from "ethers";
+import { getChainId, NetworkDto } from "../user/dtos/user.dto";
 
 @Injectable()
 export class MonitorService {
@@ -181,6 +182,19 @@ export class MonitorService {
       // Always stop interception
       this.rebalanceLogger.stopInterception();
     }
+  }
+
+  async evaluateUserPrecheckByAddress(address: string, network: NetworkDto) {
+    const deployment = await this.userDeploymentRepo.findOne({
+      where: {
+        address: Buffer.from(getBytes(address)),
+        chainId: getChainId(network),
+      },
+    });
+    if (!deployment) {
+      throw new NotFoundException("Deployment not found");
+    }
+    return this.evaluateUserPrecheckByDeployment(deployment);
   }
 
   async evaluateUserPrecheckByDeployment(deployment: UserV2Deployment) {

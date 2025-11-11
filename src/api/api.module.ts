@@ -7,6 +7,7 @@ import { AgentModule } from "../agent/agent.module";
 import { RebalanceExecutionSnapshot } from "../entities/rebalance-execution-snapshot.entity";
 import { UserV2 } from "../entities/user-v2.entity";
 import { UserV2Deployment } from "../entities/user-v2-deployment.entity";
+import { UserModule } from "../user/user.module";
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { UserV2Deployment } from "../entities/user-v2-deployment.entity";
       RebalanceExecutionSnapshot,
     ]),
     MonitorModule,
+    UserModule,
     AgentModule,
   ],
   controllers: [RebalanceController],

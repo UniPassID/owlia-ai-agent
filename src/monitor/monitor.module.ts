@@ -11,12 +11,19 @@ import { RebalanceSummaryService } from "./rebalance-summary.service";
 import { TransactionParserService } from "./transaction-parser.service";
 import { PortfolioOptimizerModule } from "./portfolio-optimizer/portfolio-optimizer.module";
 import { RebalanceLoggerService } from "../utils/rebalance-logger.service";
+import { UserV2Deployment } from "../entities/user-v2-deployment.entity";
+import { UserModule } from "../user/user.module";
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([RebalanceJob, RebalanceExecutionSnapshot]),
+    TypeOrmModule.forFeature([
+      RebalanceJob,
+      UserV2Deployment,
+      RebalanceExecutionSnapshot,
+    ]),
     AgentModule,
     PortfolioOptimizerModule,
+    UserModule,
   ],
   controllers: [MonitorController],
   providers: [

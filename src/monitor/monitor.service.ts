@@ -32,6 +32,7 @@ import {
 } from "../entities/user-v2-deployment.entity";
 import { getBytes, hexlify } from "ethers";
 import { getChainId, NetworkDto } from "../user/dtos/user.dto";
+import { UserService } from "../user/user.service";
 
 @Injectable()
 export class MonitorService {
@@ -49,6 +50,7 @@ export class MonitorService {
     private rebalanceSummaryService: RebalanceSummaryService,
     private agentService: AgentService,
     private transactionParser: TransactionParserService,
+    private userService: UserService,
     private rebalanceLogger: RebalanceLoggerService
   ) {
     setTimeout(() => {
@@ -185,16 +187,16 @@ export class MonitorService {
   }
 
   async evaluateUserPrecheckByAddress(address: string, network: NetworkDto) {
-    const deployment = await this.userDeploymentRepo.findOne({
-      where: {
-        address: Buffer.from(getBytes(address)),
-        chainId: getChainId(network),
-      },
-    });
+    const deployment = await this.userService.getDeploymentByAddress(
+      address,
+      network
+    );
     if (!deployment) {
       throw new NotFoundException("Deployment not found");
     }
-    return this.evaluateUserPrecheckByDeployment(deployment);
+    return this.evaluateUserPrecheckByDeployment(
+      deployment as UserV2Deployment
+    );
   }
 
   async evaluateUserPrecheckByDeployment(deployment: UserV2Deployment) {

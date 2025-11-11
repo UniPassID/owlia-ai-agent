@@ -13,11 +13,13 @@ import { PortfolioOptimizerModule } from "./portfolio-optimizer/portfolio-optimi
 import { RebalanceLoggerService } from "../utils/rebalance-logger.service";
 import { UserV2Deployment } from "../entities/user-v2-deployment.entity";
 import { UserModule } from "../user/user.module";
+import { UserV2 } from "../entities/user-v2.entity";
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([
       RebalanceJob,
+      UserV2,
       UserV2Deployment,
       RebalanceExecutionSnapshot,
     ]),

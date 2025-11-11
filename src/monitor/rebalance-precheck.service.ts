@@ -1,7 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { AgentService } from '../agent/agent.service';
-import { User } from '../entities/user.entity';
-import { UserPolicy } from '../entities/user-policy.entity';
+import { Injectable, Logger } from "@nestjs/common";
+import { AgentService } from "../agent/agent.service";
 import {
   AccountYieldSummaryResponse,
   CalculateRebalanceCostBatchRequest,
@@ -16,14 +14,21 @@ import {
   ProtocolType,
   RebalanceRoute,
   TargetLiquidityPosition,
-} from '../agent/types/mcp.types';
-import { lookupTokenAddress, lookupTokenSymbol, TOKEN_DECIMALS_BY_CHAIN } from '../agent/token-utils';
-import { MarginalOptimizerService } from './portfolio-optimizer/marginal-optimizer.service';
-import { OpportunityConverterService } from './portfolio-optimizer/opportunity-converter.service';
-import { LENDING_PROTOCOLS } from '../config/protocol.config';
+} from "../agent/types/mcp.types";
+import {
+  lookupTokenAddress,
+  lookupTokenSymbol,
+  TOKEN_DECIMALS_BY_CHAIN,
+} from "../agent/token-utils";
+import { MarginalOptimizerService } from "./portfolio-optimizer/marginal-optimizer.service";
+import { OpportunityConverterService } from "./portfolio-optimizer/opportunity-converter.service";
+import { LENDING_PROTOCOLS } from "../config/protocol.config";
+import { UserV2 } from "../entities/user-v2.entity";
+import { UserV2Deployment } from "../entities/user-v2-deployment.entity";
+import { hexlify } from "ethers";
 
 export interface StrategyPosition {
-  type: 'supply' | 'lp';
+  type: "supply" | "lp";
   protocol: string;
   amount: number;
   allocation: number;
@@ -119,24 +124,24 @@ export class RebalancePrecheckService {
   constructor(
     private readonly agentService: AgentService,
     private readonly marginalOptimizer: MarginalOptimizerService,
-    private readonly opportunityConverter: OpportunityConverterService,
+    private readonly opportunityConverter: OpportunityConverterService
   ) {}
 
-  async evaluate(user: User, policy: UserPolicy | null): Promise<RebalancePrecheckResult> {
-    const chainId = user.chainId.toString() as ChainId;
+  async evaluate(
+    deployment: UserV2Deployment
+  ): Promise<RebalancePrecheckResult> {
+    const chainId = deployment.chainId.toString() as ChainId;
 
     // Fetch data
-    const { yieldSummary, totalAssetsUsd, portfolioApy, currentHoldings } = await this.fetchUserData(user, chainId);
+    const { yieldSummary, totalAssetsUsd, portfolioApy, currentHoldings } =
+      await this.fetchUserData(deployment, chainId);
 
     if (!yieldSummary || totalAssetsUsd < 50) {
       return this.rejectResult(portfolioApy, totalAssetsUsd, yieldSummary);
     }
 
-    const { lpSimulations, supplyOpportunities, dexPools } = await this.fetchOpportunities(
-      user,
-      chainId,
-      totalAssetsUsd,
-    );
+    const { lpSimulations, supplyOpportunities, dexPools } =
+      await this.fetchOpportunities(deployment, chainId, totalAssetsUsd);
 
     // Build optimized strategies
     const allStrategies = await this.buildOptimizedStrategies(
@@ -145,28 +150,40 @@ export class RebalancePrecheckService {
       totalAssetsUsd,
       chainId,
       dexPools,
-      user.address,
-      currentHoldings,
+      hexlify(deployment.address),
+      currentHoldings
     );
 
     if (allStrategies.length === 0) {
-      return this.rejectResult(portfolioApy, totalAssetsUsd, yieldSummary, 'No valid strategies');
+      return this.rejectResult(
+        portfolioApy,
+        totalAssetsUsd,
+        yieldSummary,
+        "No valid strategies"
+      );
     }
 
-    this.logger.log(`Built ${allStrategies.length} strategies for user ${user.id}`);
+    this.logger.log(
+      `Built ${allStrategies.length} strategies for user ${deployment.userId}`
+    );
 
     // Evaluate strategies with cost analysis
-    const { bestStrategy, gasEstimate, breakEvenTimeHours, netGainUsd, evaluationRecords } =
-      await this.evaluateStrategies(
-        allStrategies,
-        user.address,
-        chainId,
-        lpSimulations,
-        supplyOpportunities,
-        dexPools,
-        totalAssetsUsd,
-        portfolioApy,
-      );
+    const {
+      bestStrategy,
+      gasEstimate,
+      breakEvenTimeHours,
+      netGainUsd,
+      evaluationRecords,
+    } = await this.evaluateStrategies(
+      allStrategies,
+      hexlify(deployment.address),
+      chainId,
+      lpSimulations,
+      supplyOpportunities,
+      dexPools,
+      totalAssetsUsd,
+      portfolioApy
+    );
 
     // // Check if any strategy meets constraints
     // if (breakEvenTimeHours < 0) {
@@ -192,17 +209,18 @@ export class RebalancePrecheckService {
       gasEstimate,
       breakEvenTimeHours,
       netGainUsd,
-      user.id,
-      evaluationRecords,
+      deployment.userId,
+      evaluationRecords
     );
   }
 
-  private async fetchUserData(user: User, chainId: ChainId) {
+  private async fetchUserData(deployment: UserV2Deployment, chainId: ChainId) {
     try {
-      const yieldSummary = await this.agentService.callMcpTool<AccountYieldSummaryResponse>(
-        'get_account_yield_summary',
-        { wallet_address: user.address, chain_id: chainId },
-      );
+      const yieldSummary =
+        await this.agentService.callMcpTool<AccountYieldSummaryResponse>(
+          "get_account_yield_summary",
+          { wallet_address: hexlify(deployment.address), chain_id: chainId }
+        );
 
       const totalAssetsUsd = this.parseNumber(yieldSummary.totalAssetsUsd) || 0;
       const portfolioApy = this.parseNumber(yieldSummary.portfolioApy) || 0;
@@ -211,15 +229,20 @@ export class RebalancePrecheckService {
       const currentHoldings = this.extractCurrentHoldings(yieldSummary);
 
       this.logger.log(
-        `Portfolio for user ${user.id}: totalAssets=$${totalAssetsUsd}, APY=${portfolioApy}%, ` +
-        `holdings=${JSON.stringify(currentHoldings)}, ` +
-        `yieldSummary=${JSON.stringify(yieldSummary)}`
+        `Portfolio for user ${deployment.userId}: totalAssets=$${totalAssetsUsd}, APY=${portfolioApy}%, ` +
+          `holdings=${JSON.stringify(currentHoldings)}, ` +
+          `yieldSummary=${JSON.stringify(yieldSummary)}`
       );
 
       return { yieldSummary, totalAssetsUsd, portfolioApy, currentHoldings };
     } catch (error) {
       this.logger.warn(`get_account_yield_summary failed: ${error.message}`);
-      return { yieldSummary: null, totalAssetsUsd: 0, portfolioApy: 0, currentHoldings: {} };
+      return {
+        yieldSummary: null,
+        totalAssetsUsd: 0,
+        portfolioApy: 0,
+        currentHoldings: {},
+      };
     }
   }
 
@@ -227,7 +250,9 @@ export class RebalancePrecheckService {
    * Extract current token holdings from yield summary
    * Returns a map of token symbol to amount
    */
-  private extractCurrentHoldings(yieldSummary: AccountYieldSummaryResponse): Record<string, number> {
+  private extractCurrentHoldings(
+    yieldSummary: AccountYieldSummaryResponse
+  ): Record<string, number> {
     const holdings: Record<string, number> = {};
 
     // 1. Extract from idle assets
@@ -243,7 +268,8 @@ export class RebalancePrecheckService {
 
     // 2. Extract from lending positions (supply only)
     if (yieldSummary.activeInvestments?.lendingInvestments?.positions) {
-      for (const lendingPosition of yieldSummary.activeInvestments.lendingInvestments.positions) {
+      for (const lendingPosition of yieldSummary.activeInvestments
+        .lendingInvestments.positions) {
         // Each position has protocolPositions with supplies array
         const supplies = lendingPosition.protocolPositions?.supplies || [];
 
@@ -258,10 +284,14 @@ export class RebalancePrecheckService {
     }
 
     // 3. Extract from Uniswap V3 LP positions
-    if (yieldSummary.activeInvestments?.uniswapV3LiquidityInvestments?.positions) {
-      for (const liquidityPosition of yieldSummary.activeInvestments.uniswapV3LiquidityInvestments.positions) {
+    if (
+      yieldSummary.activeInvestments?.uniswapV3LiquidityInvestments?.positions
+    ) {
+      for (const liquidityPosition of yieldSummary.activeInvestments
+        .uniswapV3LiquidityInvestments.positions) {
         // Each position has protocolPositions array
-        for (const protocolPosition of liquidityPosition.protocolPositions || []) {
+        for (const protocolPosition of liquidityPosition.protocolPositions ||
+          []) {
           // Get token symbols from poolInfo as fallback
           const poolTokens = protocolPosition.poolInfo?.tokens || [];
           const token0SymbolFallback = poolTokens[0]?.symbol;
@@ -272,20 +302,24 @@ export class RebalancePrecheckService {
             const extraData = deposit.extraData;
             if (extraData) {
               // Extract token0
-              const token0Amount = this.parseNumber(extraData.token0Amount) || 0;
+              const token0Amount =
+                this.parseNumber(extraData.token0Amount) || 0;
               if (token0Amount > 0) {
                 const token0Symbol = extraData.token0 || token0SymbolFallback;
                 if (token0Symbol) {
-                  holdings[token0Symbol] = (holdings[token0Symbol] || 0) + token0Amount;
+                  holdings[token0Symbol] =
+                    (holdings[token0Symbol] || 0) + token0Amount;
                 }
               }
 
               // Extract token1
-              const token1Amount = this.parseNumber(extraData.token1Amount) || 0;
+              const token1Amount =
+                this.parseNumber(extraData.token1Amount) || 0;
               if (token1Amount > 0) {
                 const token1Symbol = extraData.token1 || token1SymbolFallback;
                 if (token1Symbol) {
-                  holdings[token1Symbol] = (holdings[token1Symbol] || 0) + token1Amount;
+                  holdings[token1Symbol] =
+                    (holdings[token1Symbol] || 0) + token1Amount;
                 }
               }
             }
@@ -295,9 +329,14 @@ export class RebalancePrecheckService {
     }
 
     // 4. Extract from Aerodrome Slipstream LP positions
-    if (yieldSummary.activeInvestments?.aerodromeSlipstreamLiquidityInvestments?.positions) {
-      for (const liquidityPosition of yieldSummary.activeInvestments.aerodromeSlipstreamLiquidityInvestments.positions) {
-        for (const protocolPosition of liquidityPosition.protocolPositions || []) {
+    if (
+      yieldSummary.activeInvestments?.aerodromeSlipstreamLiquidityInvestments
+        ?.positions
+    ) {
+      for (const liquidityPosition of yieldSummary.activeInvestments
+        .aerodromeSlipstreamLiquidityInvestments.positions) {
+        for (const protocolPosition of liquidityPosition.protocolPositions ||
+          []) {
           // Get token symbols from poolInfo as fallback
           const poolTokens = protocolPosition.poolInfo?.tokens || [];
           const token0SymbolFallback = poolTokens[0]?.symbol;
@@ -307,20 +346,24 @@ export class RebalancePrecheckService {
             const extraData = deposit.extraData;
             if (extraData) {
               // Extract token0
-              const token0Amount = this.parseNumber(extraData.token0Amount) || 0;
+              const token0Amount =
+                this.parseNumber(extraData.token0Amount) || 0;
               if (token0Amount > 0) {
                 const token0Symbol = extraData.token0 || token0SymbolFallback;
                 if (token0Symbol) {
-                  holdings[token0Symbol] = (holdings[token0Symbol] || 0) + token0Amount;
+                  holdings[token0Symbol] =
+                    (holdings[token0Symbol] || 0) + token0Amount;
                 }
               }
 
               // Extract token1
-              const token1Amount = this.parseNumber(extraData.token1Amount) || 0;
+              const token1Amount =
+                this.parseNumber(extraData.token1Amount) || 0;
               if (token1Amount > 0) {
                 const token1Symbol = extraData.token1 || token1SymbolFallback;
                 if (token1Symbol) {
-                  holdings[token1Symbol] = (holdings[token1Symbol] || 0) + token1Amount;
+                  holdings[token1Symbol] =
+                    (holdings[token1Symbol] || 0) + token1Amount;
                 }
               }
             }
@@ -332,24 +375,43 @@ export class RebalancePrecheckService {
     return holdings;
   }
 
-  private async fetchOpportunities(user: User, chainId: ChainId, totalAssetsUsd: number) {
+  private async fetchOpportunities(
+    deployment: UserV2Deployment,
+    chainId: ChainId,
+    totalAssetsUsd: number
+  ) {
     const lpSimulations: GetLpSimulateResponse[] = [];
     const supplyOpportunities: GetSupplyOpportunitiesResponse[] = [];
     let dexPools: GetDexPoolsResponse = {};
 
     try {
-      dexPools = await this.agentService.callMcpTool<GetDexPoolsResponse>('get_dex_pools', {
-        chain_id: chainId,
-      });
+      dexPools = await this.agentService.callMcpTool<GetDexPoolsResponse>(
+        "get_dex_pools",
+        {
+          chain_id: chainId,
+        }
+      );
       this.logger.log(`get_dex_pools response: ${JSON.stringify(dexPools)}`);
 
-      const lpRequests = this.buildLpSimulateRequests(chainId, dexPools, totalAssetsUsd);
+      const lpRequests = this.buildLpSimulateRequests(
+        chainId,
+        dexPools,
+        totalAssetsUsd
+      );
       if (lpRequests.length > 0) {
-        const simulationsRaw = await this.agentService.callMcpTool<any>('get_lp_simulate_batch', {
-          reqs: lpRequests,
-        });
-        this.logger.log(`get_lp_simulate_batch response: ${JSON.stringify(simulationsRaw)}`);
-        const simulations = this.normalizeDictionaryResponse<GetLpSimulateResponse>(simulationsRaw);
+        const simulationsRaw = await this.agentService.callMcpTool<any>(
+          "get_lp_simulate_batch",
+          {
+            reqs: lpRequests,
+          }
+        );
+        this.logger.log(
+          `get_lp_simulate_batch response: ${JSON.stringify(simulationsRaw)}`
+        );
+        const simulations =
+          this.normalizeDictionaryResponse<GetLpSimulateResponse>(
+            simulationsRaw
+          );
         lpSimulations.push(...simulations);
       }
     } catch (error) {
@@ -357,11 +419,18 @@ export class RebalancePrecheckService {
     }
 
     try {
-      const supplyOpps = await this.agentService.callMcpTool<GetSupplyOpportunitiesResponse>(
-        'get_supply_opportunities',
-        { chain_id: chainId, amount: totalAssetsUsd, protocols: [...LENDING_PROTOCOLS] },
+      const supplyOpps =
+        await this.agentService.callMcpTool<GetSupplyOpportunitiesResponse>(
+          "get_supply_opportunities",
+          {
+            chain_id: chainId,
+            amount: totalAssetsUsd,
+            protocols: [...LENDING_PROTOCOLS],
+          }
+        );
+      this.logger.log(
+        `get_supply_opportunities response: ${JSON.stringify(supplyOpps)}`
       );
-      this.logger.log(`get_supply_opportunities response: ${JSON.stringify(supplyOpps)}`);
       supplyOpportunities.push(supplyOpps);
     } catch (error) {
       this.logger.warn(`get_supply_opportunities failed: ${error.message}`);
@@ -377,7 +446,7 @@ export class RebalancePrecheckService {
     chainId: string,
     dexPools: Record<string, any>,
     walletAddress: string,
-    currentHoldings: Record<string, number>,
+    currentHoldings: Record<string, number>
   ): Promise<StrategyCandidate[]> {
     // Store these for later use in strategy position enrichment
     this._cachedLpSimulations = lpSimulations;
@@ -387,12 +456,14 @@ export class RebalancePrecheckService {
       supplyData,
       totalCapital,
       chainId,
-      dexPools,
+      dexPools
     );
 
     if (opportunities.length === 0) return [];
 
-    this.logger.log(`Found ${opportunities.length} opportunities for optimization`);
+    this.logger.log(
+      `Found ${opportunities.length} opportunities for optimization`
+    );
 
     const optimizationConfigs = [
       // {
@@ -410,8 +481,8 @@ export class RebalancePrecheckService {
       //   holdingPeriodDays: 1,
       // },
       {
-        name: 'Conservative',
-        incrementSize: Math.max(totalCapital * 0.50, 100),
+        name: "Conservative",
+        incrementSize: Math.max(totalCapital * 0.5, 100),
         minMarginalAPY: 3,
         maxBreakevenHours: 8,
         holdingPeriodDays: 1,
@@ -433,12 +504,12 @@ export class RebalancePrecheckService {
           supplyData,
           dexPools,
           true,
-          true,
+          true
         );
 
         if (result.positions.length === 0) continue;
 
-        const strategyPositions = result.positions.map(pos => {
+        const strategyPositions = result.positions.map((pos) => {
           const basePosition = {
             type: pos.opportunity.type,
             protocol: pos.opportunity.protocol,
@@ -446,18 +517,18 @@ export class RebalancePrecheckService {
             allocation: (pos.amount / result.totalInvested) * 100,
           };
 
-          if (pos.opportunity.type === 'supply') {
+          if (pos.opportunity.type === "supply") {
             return {
               ...basePosition,
               asset: pos.opportunity.asset,
               vaultAddress: pos.opportunity.vaultAddress,
             };
-          } else if (pos.opportunity.type === 'lp') {
+          } else if (pos.opportunity.type === "lp") {
             // Enrich LP position with token addresses, amounts, and ticks
             const lpInfo = this.findLpPositionInfo(
               pos.opportunity.poolAddress,
               this._cachedLpSimulations,
-              this._cachedDexPools,
+              this._cachedDexPools
             );
 
             return {
@@ -489,7 +560,9 @@ export class RebalancePrecheckService {
           },
         });
       } catch (error) {
-        this.logger.warn(`Failed to run ${config.name} optimization: ${error.message}`);
+        this.logger.warn(
+          `Failed to run ${config.name} optimization: ${error.message}`
+        );
       }
     }
 
@@ -504,7 +577,7 @@ export class RebalancePrecheckService {
     supplyData: GetSupplyOpportunitiesResponse[],
     dexPools: Record<string, any>,
     totalAssetsUsd: number,
-    portfolioApy: number,
+    portfolioApy: number
   ) {
     const maxBreakEvenHours = 4;
     const minRelativeApyIncrease = 1.1;
@@ -517,8 +590,14 @@ export class RebalancePrecheckService {
     const evaluationRecords: StrategyEvaluationRecord[] = [];
 
     try {
-      const targetPositionsBatch = allStrategies.map(s =>
-        this.convertStrategyToTargetPositions(s.strategy, lpSimulations, supplyData, dexPools, chainId)
+      const targetPositionsBatch = allStrategies.map((s) =>
+        this.convertStrategyToTargetPositions(
+          s.strategy,
+          lpSimulations,
+          supplyData,
+          dexPools,
+          chainId
+        )
       );
 
       const request: CalculateRebalanceCostBatchRequest = {
@@ -528,14 +607,20 @@ export class RebalancePrecheckService {
         target_positions_batch: targetPositionsBatch,
       };
 
-      const costResult = await this.agentService.callMcpTool<CalculateRebalanceCostBatchResponse>(
-        'calculate_rebalance_cost_batch',
-        request,
+      const costResult =
+        await this.agentService.callMcpTool<CalculateRebalanceCostBatchResponse>(
+          "calculate_rebalance_cost_batch",
+          request
+        );
+
+      this.logger.log(
+        `calculate_rebalance_cost_batch response: ${JSON.stringify(costResult)}`
       );
 
-      this.logger.log(`calculate_rebalance_cost_batch response: ${JSON.stringify(costResult)}`)
-
-      const resultsArray = this.normalizeDictionaryResponse<CalculateRebalanceCostResult>(costResult);
+      const resultsArray =
+        this.normalizeDictionaryResponse<CalculateRebalanceCostResult>(
+          costResult
+        );
 
       let bestScore = -Infinity;
       let bestStrategyIndex = -1;
@@ -558,22 +643,25 @@ export class RebalancePrecheckService {
           }
         }
 
-        const dailyGainRate = (apyImprovement / 100) / 365;
+        const dailyGainRate = apyImprovement / 100 / 365;
         const dailyGain = totalAssetsUsd * dailyGainRate;
         const dailyCost = swapFee / 30;
         const netGain = dailyGain - dailyCost;
 
         const score = netGain / (breakEven + 1);
 
-        const relativeIncrease = portfolioApy > 0 ? strategyApy / portfolioApy : Infinity;
+        const relativeIncrease =
+          portfolioApy > 0 ? strategyApy / portfolioApy : Infinity;
         const meetsBreakEvenConstraint = breakEven <= maxBreakEvenHours;
-        const meetsRelativeApyConstraint = relativeIncrease >= minRelativeApyIncrease;
-        const meetsAbsoluteApyConstraint = apyImprovement >= minAbsoluteApyIncrease;
+        const meetsRelativeApyConstraint =
+          relativeIncrease >= minRelativeApyIncrease;
+        const meetsAbsoluteApyConstraint =
+          apyImprovement >= minAbsoluteApyIncrease;
 
         this.logger.log(
           `Strategy ${index} (${allStrategies[index].name}): ` +
-          `APY=${strategyApy.toFixed(2)}%, swap_fee=$${swapFee.toFixed(4)}, ` +
-          `break-even=${breakEven.toFixed(2)}h, score=${score.toFixed(4)}`
+            `APY=${strategyApy.toFixed(2)}%, swap_fee=$${swapFee.toFixed(4)}, ` +
+            `break-even=${breakEven.toFixed(2)}h, score=${score.toFixed(4)}`
         );
 
         // Record evaluation data
@@ -617,7 +705,9 @@ export class RebalancePrecheckService {
 
       // If no strategy meets the constraint, return with negative marker
       if (bestStrategyIndex === -1) {
-        this.logger.log(`No strategy meets breakeven time constraint (all > ${maxBreakEvenHours}h)`);
+        this.logger.log(
+          `No strategy meets breakeven time constraint (all > ${maxBreakEvenHours}h)`
+        );
         return {
           bestStrategy: allStrategies[0],
           gasEstimate: 0,
@@ -630,7 +720,13 @@ export class RebalancePrecheckService {
       this.logger.warn(`Cost calculation failed: ${error.message}`);
     }
 
-    return { bestStrategy, gasEstimate, breakEvenTimeHours, netGainUsd, evaluationRecords };
+    return {
+      bestStrategy,
+      gasEstimate,
+      breakEvenTimeHours,
+      netGainUsd,
+      evaluationRecords,
+    };
   }
 
   private checkConstraintsAndDecide(
@@ -643,10 +739,11 @@ export class RebalancePrecheckService {
     breakEvenTimeHours: number,
     netGainUsd: number,
     userId: string,
-    evaluationRecords?: StrategyEvaluationRecord[],
+    evaluationRecords?: StrategyEvaluationRecord[]
   ): RebalancePrecheckResult {
     const opportunityApy = bestStrategy.apy;
-    const relativeIncrease = portfolioApy > 0 ? opportunityApy / portfolioApy : Infinity;
+    const relativeIncrease =
+      portfolioApy > 0 ? opportunityApy / portfolioApy : Infinity;
     const absoluteIncrease = opportunityApy - portfolioApy;
 
     // Note: breakEvenTimeHours constraint is already checked in evaluateStrategies()
@@ -654,7 +751,7 @@ export class RebalancePrecheckService {
     if (relativeIncrease < 1.1 || absoluteIncrease < 2) {
       this.logger.log(
         `Precheck REJECTED: APY conditions not met. ` +
-        `Relative=${relativeIncrease.toFixed(2)}x, Absolute=${absoluteIncrease.toFixed(2)}pp`
+          `Relative=${relativeIncrease.toFixed(2)}x, Absolute=${absoluteIncrease.toFixed(2)}pp`
       );
       return {
         shouldTrigger: false,
@@ -667,7 +764,7 @@ export class RebalancePrecheckService {
         gasEstimate,
         breakEvenTimeHours,
         netGainUsd,
-        failureReason: 'APY improvement insufficient',
+        failureReason: "APY improvement insufficient",
         strategyEvaluations: evaluationRecords,
       };
     }
@@ -675,8 +772,8 @@ export class RebalancePrecheckService {
     const strategyDetails = this.formatStrategyDetails(bestStrategy.strategy);
     this.logger.log(
       `Precheck APPROVED for user ${userId}: ` +
-      `Portfolio APY=${portfolioApy.toFixed(2)}%, Opportunity APY=${opportunityApy.toFixed(2)}%, ` +
-      `Strategy=${bestStrategy.name}, ${strategyDetails}`
+        `Portfolio APY=${portfolioApy.toFixed(2)}%, Opportunity APY=${opportunityApy.toFixed(2)}%, ` +
+        `Strategy=${bestStrategy.name}, ${strategyDetails}`
     );
 
     return {
@@ -700,7 +797,7 @@ export class RebalancePrecheckService {
     totalAssetsUsd: number,
     yieldSummary?: AccountYieldSummaryResponse,
     reason?: string,
-    currentHoldings?: Record<string, number>,
+    currentHoldings?: Record<string, number>
   ): RebalancePrecheckResult {
     return {
       shouldTrigger: false,
@@ -719,9 +816,9 @@ export class RebalancePrecheckService {
   private buildLpSimulateRequests(
     chainId: ChainId,
     dexPools: Record<string, any> | null | undefined,
-    amount: number,
+    amount: number
   ): GetLpSimulateRequest[] {
-    if (!dexPools || typeof dexPools !== 'object') return [];
+    if (!dexPools || typeof dexPools !== "object") return [];
 
     const requests: GetLpSimulateRequest[] = [];
 
@@ -731,7 +828,8 @@ export class RebalancePrecheckService {
         this.parseNumber(poolData?.pricePosition?.currentTick) ??
         this.parseNumber((poolData as any)?.currentTick);
 
-      if (currentTickValue === null || !Number.isFinite(currentTickValue)) continue;
+      if (currentTickValue === null || !Number.isFinite(currentTickValue))
+        continue;
 
       const tickLower = Math.trunc(currentTickValue);
       const tickUpper = tickLower + 1;
@@ -740,7 +838,7 @@ export class RebalancePrecheckService {
         chain_id: chainId,
         poolOperation: {
           poolAddress,
-          operation: 'add',
+          operation: "add",
           amountUSD: amount,
           tickLower,
           tickUpper,
@@ -759,7 +857,7 @@ export class RebalancePrecheckService {
     lpSimulations: GetLpSimulateResponse[],
     supplyData: GetSupplyOpportunitiesResponse[],
     dexPools: Record<string, any>,
-    chainId: string,
+    chainId: string
   ): {
     targetLendingSupplyPositions?: LendingPosition[];
     targetLiquidityPositions?: TargetLiquidityPosition[];
@@ -767,23 +865,33 @@ export class RebalancePrecheckService {
     const targetLendingSupplyPositions: LendingPosition[] = [];
     const targetLiquidityPositions: TargetLiquidityPosition[] = [];
 
-    if (!strategy || !strategy.positions || !Array.isArray(strategy.positions)) {
+    if (
+      !strategy ||
+      !strategy.positions ||
+      !Array.isArray(strategy.positions)
+    ) {
       return {};
     }
 
     for (const position of strategy.positions) {
-      if (position.type === 'supply') {
+      if (position.type === "supply") {
         const supplyTokenAddress = lookupTokenAddress(position.asset, chainId);
-          targetLendingSupplyPositions.push({
-            protocol: this.normalizeProtocolType(position.protocol),
-            token: supplyTokenAddress,
-            vToken: position.vaultAddress,
-            amount: position.amount.toString(),
-          });
-      } else if (position.type === 'lp') {
-        const lpInfo = this.findLpPositionInfo(position.poolAddress, lpSimulations, dexPools);
+        targetLendingSupplyPositions.push({
+          protocol: this.normalizeProtocolType(position.protocol),
+          token: supplyTokenAddress,
+          vToken: position.vaultAddress,
+          amount: position.amount.toString(),
+        });
+      } else if (position.type === "lp") {
+        const lpInfo = this.findLpPositionInfo(
+          position.poolAddress,
+          lpSimulations,
+          dexPools
+        );
         if (lpInfo) {
-          const allocationRatio = position.allocation ? position.allocation / 100 : 1;
+          const allocationRatio = position.allocation
+            ? position.allocation / 100
+            : 1;
           targetLiquidityPositions.push({
             protocol: this.normalizeLpProtocol(position.protocol),
             poolAddress: position.poolAddress,
@@ -799,86 +907,109 @@ export class RebalancePrecheckService {
     }
 
     const result: any = {};
-    if (targetLendingSupplyPositions.length > 0) result.targetLendingSupplyPositions = targetLendingSupplyPositions;
-    if (targetLiquidityPositions.length > 0) result.targetLiquidityPositions = targetLiquidityPositions;
+    if (targetLendingSupplyPositions.length > 0)
+      result.targetLendingSupplyPositions = targetLendingSupplyPositions;
+    if (targetLiquidityPositions.length > 0)
+      result.targetLiquidityPositions = targetLiquidityPositions;
     return result;
   }
-
 
   private findLpPositionInfo(
     poolAddress: string,
     lpSimulations: GetLpSimulateResponse[],
-    dexPools: Record<string, any>,
+    dexPools: Record<string, any>
   ) {
     const normalizedPoolAddress = poolAddress.toLowerCase();
 
-    let token0Amount = 0, token1Amount = 0, tickLower = 0, tickUpper = 0;
+    let token0Amount = 0,
+      token1Amount = 0,
+      tickLower = 0,
+      tickUpper = 0;
     for (const sim of lpSimulations) {
       if (sim.pool?.poolAddress?.toLowerCase() === normalizedPoolAddress) {
-        token0Amount = this.parseNumber(sim.summary?.requiredTokens?.token0?.amount) || 0;
-        token1Amount = this.parseNumber(sim.summary?.requiredTokens?.token1?.amount) || 0;
+        token0Amount =
+          this.parseNumber(sim.summary?.requiredTokens?.token0?.amount) || 0;
+        token1Amount =
+          this.parseNumber(sim.summary?.requiredTokens?.token1?.amount) || 0;
         tickLower = sim.pool?.position?.tickLower ?? 0;
         tickUpper = sim.pool?.position?.tickUpper ?? 0;
         break;
       }
     }
 
-    let token0Address = '', token1Address = '';
+    let token0Address = "",
+      token1Address = "";
     for (const [poolAddr, poolData] of Object.entries(dexPools)) {
       if (poolAddr.toLowerCase() === normalizedPoolAddress) {
         const snap = poolData?.currentSnapshot || {};
-        token0Address = snap.token0Address || snap.token0 || '';
-        token1Address = snap.token1Address || snap.token1 || '';
+        token0Address = snap.token0Address || snap.token0 || "";
+        token1Address = snap.token1Address || snap.token1 || "";
         break;
       }
     }
 
-    if (!token0Address || !token1Address || (token0Amount === 0 && token1Amount === 0)) return null;
-    return { token0Address, token1Address, token0Amount, token1Amount, tickLower, tickUpper };
+    if (
+      !token0Address ||
+      !token1Address ||
+      (token0Amount === 0 && token1Amount === 0)
+    )
+      return null;
+    return {
+      token0Address,
+      token1Address,
+      token0Amount,
+      token1Amount,
+      tickLower,
+      tickUpper,
+    };
   }
 
   private normalizeProtocolType(protocol: string): ProtocolType {
     const normalized = protocol.toLowerCase();
-    if (normalized === 'aave' || normalized === 'aavev3') return 'aave';
-    if (normalized === 'euler' || normalized === 'eulerv2') return 'euler';
-    if (normalized === 'venus' || normalized === 'venusv4') return 'venus';
-    return 'aave';
+    if (normalized === "aave" || normalized === "aavev3") return "aave";
+    if (normalized === "euler" || normalized === "eulerv2") return "euler";
+    if (normalized === "venus" || normalized === "venusv4") return "venus";
+    return "aave";
   }
 
-  private normalizeLpProtocol(protocol: string | undefined): 'uniswapV3' | 'aerodromeSlipstream' {
-    if (!protocol) throw new Error('LP protocol required');
+  private normalizeLpProtocol(
+    protocol: string | undefined
+  ): "uniswapV3" | "aerodromeSlipstream" {
+    if (!protocol) throw new Error("LP protocol required");
     const normalized = protocol.toLowerCase();
-    if (normalized.includes('uniswap')) return 'uniswapV3';
-    if (normalized.includes('aerodrome')) return 'aerodromeSlipstream';
+    if (normalized.includes("uniswap")) return "uniswapV3";
+    if (normalized.includes("aerodrome")) return "aerodromeSlipstream";
     throw new Error(`Invalid LP protocol: "${protocol}"`);
   }
 
   private formatStrategyDetails(strategy: Strategy): string {
     if (!strategy.positions || strategy.positions.length === 0) {
-      return 'No positions';
+      return "No positions";
     }
 
     const details = strategy.positions
-      .map(pos => {
+      .map((pos) => {
         const amountStr = `$${pos.amount.toFixed(2)}`;
         const allocStr = `${pos.allocation.toFixed(1)}%`;
-        if (pos.type === 'supply') {
+        if (pos.type === "supply") {
           return `${pos.asset}(supply/${pos.protocol}): ${amountStr} (${allocStr})`;
         } else {
-          const poolShort = pos.poolAddress ? pos.poolAddress.slice(0, 8) : 'unknown';
+          const poolShort = pos.poolAddress
+            ? pos.poolAddress.slice(0, 8)
+            : "unknown";
           return `${poolShort}(lp/${pos.protocol}): ${amountStr} (${allocStr})`;
         }
       })
-      .join(', ');
+      .join(", ");
 
     return details;
   }
 
   private parseNumber(value: any): number | null {
     if (value === null || value === undefined) return null;
-    if (typeof value === 'number' && Number.isFinite(value)) return value;
-    if (typeof value === 'string') {
-      const sanitized = value.replace(/[%,$]/g, '').trim();
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string") {
+      const sanitized = value.replace(/[%,$]/g, "").trim();
       const parsed = Number(sanitized);
       if (!Number.isNaN(parsed)) return parsed;
     }
@@ -888,22 +1019,22 @@ export class RebalancePrecheckService {
   private logRebalanceSwapPlan(
     result: CalculateRebalanceCostResult,
     chainId: string,
-    index: number,
+    index: number
   ): void {
     const swapSummaries = this.describeSwapRoutes(result, chainId);
     if (swapSummaries.length === 0) {
       return;
     }
 
-    const safe = result.details?.safe ?? 'unknown';
+    const safe = result.details?.safe ?? "unknown";
     this.logger.log(
-      `Strategy ${index} swap plan (safe ${safe}): ${swapSummaries.join(' | ')}`,
+      `Strategy ${index} swap plan (safe ${safe}): ${swapSummaries.join(" | ")}`
     );
   }
 
   private describeSwapRoutes(
     result: CalculateRebalanceCostResult,
-    chainId: string,
+    chainId: string
   ): string[] {
     const details = result.details;
     if (!details || !Array.isArray(details.routes)) {
@@ -911,54 +1042,63 @@ export class RebalancePrecheckService {
     }
 
     return details.routes
-      .filter(route => route?.actionType === 'Swap')
-      .map(route => this.formatSwapRoute(route, chainId))
+      .filter((route) => route?.actionType === "Swap")
+      .map((route) => this.formatSwapRoute(route, chainId))
       .filter((summary): summary is string => Boolean(summary));
   }
 
-  private formatSwapRoute(route: RebalanceRoute, chainId: string): string | null {
+  private formatSwapRoute(
+    route: RebalanceRoute,
+    chainId: string
+  ): string | null {
     if (!route || !route.tokenA) {
       return null;
     }
 
     const fromMeta = this.resolveTokenMeta(route.tokenA, chainId);
-    const toMeta = route.tokenB ? this.resolveTokenMeta(route.tokenB, chainId) : null;
+    const toMeta = route.tokenB
+      ? this.resolveTokenMeta(route.tokenB, chainId)
+      : null;
 
     const amountIn = this.formatTokenAmount(route.amount, fromMeta.decimals);
     const amountOut = route.estimatedOutput
       ? this.formatTokenAmount(
-        route.estimatedOutput,
-        toMeta?.decimals ?? fromMeta.decimals,
-      )
+          route.estimatedOutput,
+          toMeta?.decimals ?? fromMeta.decimals
+        )
       : null;
 
-    const protocol = route.protocol || 'unknown';
-    const outputPart = amountOut && toMeta
-      ? ` -> ${amountOut} ${toMeta.symbol}`
-      : '';
+    const protocol = route.protocol || "unknown";
+    const outputPart =
+      amountOut && toMeta ? ` -> ${amountOut} ${toMeta.symbol}` : "";
 
     return `Swap ${amountIn} ${fromMeta.symbol}${outputPart} via ${protocol}`;
   }
 
-  private resolveTokenMeta(tokenIdentifier: string, chainId: string): { symbol: string; decimals: number } {
+  private resolveTokenMeta(
+    tokenIdentifier: string,
+    chainId: string
+  ): { symbol: string; decimals: number } {
     const symbol =
       lookupTokenSymbol(tokenIdentifier, chainId) ??
-      (tokenIdentifier?.startsWith('0x') ? `${tokenIdentifier.slice(0, 6)}...` : tokenIdentifier);
+      (tokenIdentifier?.startsWith("0x")
+        ? `${tokenIdentifier.slice(0, 6)}...`
+        : tokenIdentifier);
 
     const decimalsMap = TOKEN_DECIMALS_BY_CHAIN[chainId] || {};
     const decimals = symbol
-      ? decimalsMap[symbol.replace('...', '').toUpperCase()] ?? 18
+      ? (decimalsMap[symbol.replace("...", "").toUpperCase()] ?? 18)
       : 18;
 
-    return { symbol: symbol || 'unknown', decimals };
+    return { symbol: symbol || "unknown", decimals };
   }
 
   private formatTokenAmount(amount: string | number, decimals: number): string {
     if (amount === null || amount === undefined) {
-      return '0';
+      return "0";
     }
 
-    if (typeof amount === 'number') {
+    if (typeof amount === "number") {
       return amount.toFixed(4);
     }
 
@@ -975,7 +1115,10 @@ export class RebalancePrecheckService {
         return whole.toString();
       }
 
-      const fractionStr = fraction.toString().padStart(decimals, '0').replace(/0+$/, '');
+      const fractionStr = fraction
+        .toString()
+        .padStart(decimals, "0")
+        .replace(/0+$/, "");
       const displayFraction = fractionStr.slice(0, 6);
       return displayFraction
         ? `${whole.toString()}.${displayFraction}`
@@ -992,12 +1135,16 @@ export class RebalancePrecheckService {
   private normalizeDictionaryResponse<T>(data: any): T[] {
     if (!data) return [];
     if (Array.isArray(data)) return data as T[];
-    if (typeof data === 'object') {
-      const entries = Object.entries(data).filter(([key]) => key !== '_dataSource');
+    if (typeof data === "object") {
+      const entries = Object.entries(data).filter(
+        ([key]) => key !== "_dataSource"
+      );
       if (entries.length === 0) return [];
       entries.sort((a, b) => {
-        const aNum = Number(a[0]), bNum = Number(b[0]);
-        const aIsNum = !Number.isNaN(aNum), bIsNum = !Number.isNaN(bNum);
+        const aNum = Number(a[0]),
+          bNum = Number(b[0]);
+        const aIsNum = !Number.isNaN(aNum),
+          bIsNum = !Number.isNaN(bNum);
         if (aIsNum && bIsNum) return aNum - bNum;
         if (aIsNum) return -1;
         if (bIsNum) return 1;

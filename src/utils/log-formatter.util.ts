@@ -11,7 +11,7 @@ export interface LogEntry {
 
 export interface RebalanceLogSession {
   jobId: string;
-  userId: string;
+  deploymentId: string;
   userAddress?: string;
   chainId?: string;
   trigger: string;
@@ -35,7 +35,7 @@ export function formatAsText(session: RebalanceLogSession): string {
   lines.push('REBALANCE OPERATION LOG');
   lines.push(DIVIDER);
   lines.push(`Job ID:        ${session.jobId}`);
-  lines.push(`User ID:       ${session.userId}`);
+  lines.push(`Deployment ID: ${session.deploymentId}`);
   if (session.userAddress) {
     lines.push(`User Address:  ${session.userAddress}`);
   }
@@ -112,7 +112,7 @@ export function formatAsText(session: RebalanceLogSession): string {
 export function formatAsJson(session: RebalanceLogSession): string {
   const output = {
     jobId: session.jobId,
-    userId: session.userId,
+    deploymentId: session.deploymentId,
     userAddress: session.userAddress,
     chainId: session.chainId,
     trigger: session.trigger,

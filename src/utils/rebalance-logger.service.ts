@@ -29,7 +29,7 @@ export class RebalanceLoggerService {
    * Start capturing logs for a rebalance job
    */
   startCapture(jobId: string, metadata: {
-    userId: string;
+    deploymentId: string;
     userAddress?: string;
     chainId?: string;
     trigger: string;
@@ -37,7 +37,7 @@ export class RebalanceLoggerService {
   }): void {
     const session: RebalanceLogSession = {
       jobId,
-      userId: metadata.userId,
+      deploymentId: metadata.deploymentId,
       userAddress: metadata.userAddress,
       chainId: metadata.chainId,
       trigger: metadata.trigger,
@@ -123,7 +123,7 @@ export class RebalanceLoggerService {
 
       // Save text log
       if (this.config.format === 'text' || this.config.format === 'both') {
-        const textFileName = generateLogFileName(session.userId, jobId, 'log');
+        const textFileName = generateLogFileName(session.deploymentId, jobId, 'log');
         const textPath = path.join(logDir, textFileName);
         const textContent = formatAsText(session);
         await fs.promises.writeFile(textPath, textContent, 'utf-8');
@@ -133,7 +133,7 @@ export class RebalanceLoggerService {
 
       // Save JSON log
       if (this.config.format === 'json' || this.config.format === 'both') {
-        const jsonFileName = generateLogFileName(session.userId, jobId, 'json');
+        const jsonFileName = generateLogFileName(session.deploymentId, jobId, 'json');
         const jsonPath = path.join(logDir, jsonFileName);
         const jsonContent = formatAsJson(session);
         await fs.promises.writeFile(jsonPath, jsonContent, 'utf-8');

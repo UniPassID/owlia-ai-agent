@@ -492,4 +492,19 @@ export class UserService {
     });
     return transaction;
   }
+
+  async getDeploymentByAddress(
+    address: string,
+    network: NetworkDto
+  ): Promise<UserV2Deployment | null> {
+    const chainId = getChainId(network);
+    const addressBuffer = Buffer.from(ethers.getBytes(address));
+    const deployment = await this.userV2DeploymentRepository.findOne({
+      where: {
+        address: addressBuffer,
+        chainId: chainId,
+      },
+    });
+    return deployment;
+  }
 }

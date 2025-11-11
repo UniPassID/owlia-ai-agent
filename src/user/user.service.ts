@@ -435,6 +435,24 @@ export class UserService {
     }
   }
 
+  async getWrappedDeploymentConfig(network: NetworkDto, wallet: string) {
+    const chainId = getChainId(network);
+    const deploymentConfig = DEPLOYMENT_CONFIGS[chainId];
+    if (!deploymentConfig) {
+      throw new Error(`Unsupported chain: ${chainId}`);
+    }
+    const safe = await this.getSafe(deploymentConfig.operator, wallet, chainId);
+    const tx = await this.getSetGuardTransaction(deploymentConfig, safe);
+    return {
+      predictedSafe: safe.getPredictedSafe(),
+      wrappedTx: {
+        to: await safe.getAddress(),
+        data: tx.data,
+        value: "0",
+      },
+    };
+  }
+
   async getSetGuardTransaction(
     deploymentConfig: DeploymentConfig,
     safe: Safe

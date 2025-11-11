@@ -31,8 +31,9 @@ import {
   UserV2DeploymentStatus,
 } from "../entities/user-v2-deployment.entity";
 import { getBytes, hexlify } from "ethers";
-import { getChainId, NetworkDto } from "../user/dtos/user.dto";
+import { getChainId, getNetworkDto, NetworkDto } from "../user/dtos/user.dto";
 import { UserService } from "../user/user.service";
+import { UserV2 } from "../entities/user-v2.entity";
 
 @Injectable()
 export class MonitorService {
@@ -51,6 +52,8 @@ export class MonitorService {
     private agentService: AgentService,
     private transactionParser: TransactionParserService,
     private userService: UserService,
+    @InjectRepository(UserV2)
+    private userRepo: Repository<UserV2>,
     private rebalanceLogger: RebalanceLoggerService
   ) {
     setTimeout(() => {
@@ -82,11 +85,20 @@ export class MonitorService {
           ]),
         },
       });
+      const users = await this.userRepo.find({
+        where: {
+          id: In(deployments.map((deployment) => deployment.userId)),
+        },
+      });
+      const userMap = new Map(users.map((user) => [user.id, user]));
       this.logger.log(`Found ${deployments.length} users to monitor`);
 
       for (const deployment of deployments) {
         try {
-          await this.checkUserPositions(deployment);
+          await this.checkUserPositions(
+            userMap.get(deployment.userId),
+            deployment
+          );
         } catch (error) {
           this.logger.error(
             `Failed to monitor deployment ${deployment.id}: ${error.message}`
@@ -104,7 +116,10 @@ export class MonitorService {
    * Check a specific user's positions and trigger rebalance if needed
    * Agent will analyze positions and determine if rebalancing is beneficial
    */
-  async checkUserPositions(deployment: UserV2Deployment): Promise<void> {
+  async checkUserPositions(
+    user: UserV2,
+    deployment: UserV2Deployment
+  ): Promise<void> {
     this.logger.log(`Checking positions for deployment ${deployment.id}`);
 
     // Generate a temporary session ID for logging
@@ -169,6 +184,7 @@ export class MonitorService {
 
       // Trigger rebalance with precheck result
       await this.triggerRebalance(
+        user,
         deployment,
         "scheduled_monitor",
         precheck,
@@ -207,6 +223,7 @@ export class MonitorService {
    * Trigger a rebalance job for a user - directly execute rebalance
    */
   async triggerRebalance(
+    user: UserV2,
     deployment: UserV2Deployment,
     trigger: string,
     precheckResult: RebalancePrecheckResult,
@@ -307,6 +324,7 @@ export class MonitorService {
     try {
       // Execute rebalance directly (logs will be auto-captured)
       await this.executeRebalance(
+        user,
         deployment,
         precheckResult,
         job,
@@ -386,6 +404,7 @@ export class MonitorService {
   }
 
   private async executeRebalance(
+    user: UserV2,
     deployment: UserV2Deployment,
     precheckResult: RebalancePrecheckResult,
     job: RebalanceJob,
@@ -398,6 +417,15 @@ export class MonitorService {
     const chainId = deployment.chainId.toString();
     const safeAddress = hexlify(deployment.address);
     const strategy = precheckResult.bestStrategy.strategy;
+    const network = getNetworkDto(deployment.chainId);
+    const wallet = hexlify(user.wallet);
+    let deployConfig;
+    if (deployment.status === UserV2DeploymentStatus.init) {
+      deployConfig = await this.userService.getWrappedDeploymentConfig(
+        network,
+        wallet
+      );
+    }
 
     this.logger.log(
       `Executing rebalance for job ${job.id}: ${precheckResult.bestStrategy.name}`
@@ -452,11 +480,13 @@ export class MonitorService {
 
     const payload = {
       safeAddress,
-      walletAddress: safeAddress,
+      walletAddress: wallet,
+      operatorAddress: hexlify(deployment.operator),
       chainId,
       idempotencyKey: `rebalance_${job.id}_${Date.now()}`,
       targetLendingSupplyPositions,
       targetLiquidityPositions,
+      deployConfig,
     };
 
     this.logger.log(

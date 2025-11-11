@@ -78,6 +78,16 @@ export class RebalanceController {
           HttpStatus.NOT_FOUND
         );
       }
+      const user = await this.userRepo.findOne({
+        where: { id: deployment.userId },
+      });
+      if (!user) {
+        this.logger.error(`user not found`);
+        throw new HttpException(
+          { success: false, error: "User not found" },
+          HttpStatus.NOT_FOUND
+        );
+      }
 
       // Then get policy (optional)
       const precheck =
@@ -102,6 +112,7 @@ export class RebalanceController {
       this.logger.log(`  - User address: ${hexlify(deployment.address)}`);
 
       const job = await this.monitorService.triggerRebalance(
+        user,
         deployment,
         dto.trigger || "manual_trigger",
         precheck
@@ -311,7 +322,10 @@ export class RebalanceController {
     @Query("pageSize") pageSize?: string
   ) {
     // Find user by address (using UserService to handle chainId conversion)
-    const deployment = await this.userService.getDeploymentByAddress(address, network);
+    const deployment = await this.userService.getDeploymentByAddress(
+      address,
+      network
+    );
     if (!deployment) {
       throw new HttpException(
         { success: false, error: "User not found" },

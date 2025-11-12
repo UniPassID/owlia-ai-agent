@@ -420,9 +420,9 @@ export class MonitorService {
     const strategy = precheckResult.bestStrategy.strategy;
     const network = getNetworkDto(deployment.chainId);
     const wallet = hexlify(user.wallet);
-    let deployConfig;
+    let deploymentConfig;
     if (deployment.status === UserV2DeploymentStatus.init) {
-      deployConfig = await this.userService.getWrappedDeploymentConfig(
+      deploymentConfig = await this.userService.getWrappedDeploymentConfig(
         network,
         wallet,
         hexlify(deployment.setGuardSignature)
@@ -488,7 +488,7 @@ export class MonitorService {
       idempotencyKey: `rebalance_${job.id}_${Date.now()}`,
       targetLendingSupplyPositions,
       targetLiquidityPositions,
-      deployConfig,
+      deploymentConfig,
     };
 
     this.logger.log(

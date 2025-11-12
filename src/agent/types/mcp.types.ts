@@ -13,7 +13,6 @@ export interface GetIdleAssetsRequest {
   chain_id: ChainId;
 }
 
-
 export interface GetActiveInvestmentsRequest {
   wallet_address: string;
   chain_id: ChainId;
@@ -37,8 +36,6 @@ export interface GetSupplyOpportunitiesRequest {
   min_total_supply?: number; // Optional: minimum total supply filter (USD)
 }
 
-
-
 export interface IdleAssetsResponse {
   account: string;
   idleAssetsUsd: string;
@@ -53,7 +50,6 @@ export interface IdleAsset {
   balanceUsd: string;
   tokenPriceUsd: string;
 }
-
 
 export interface ActiveInvestmentsResponse {
   activeInvestmentsUsd: string;
@@ -95,7 +91,6 @@ export interface RiskMetrics {
   protocolDiversification: "low" | "medium" | "high";
 }
 
-
 export type AccountLendingPosition = {
   protocol: "aaveV3" | "venusV4" | "eulerV2";
   accountId: string | null;
@@ -114,9 +109,6 @@ export type AccountLendingProtocolPosition = {
   healthFactor: string;
 };
 
-
-
-
 export type AccountLendingSupply = {
   tokenSymbol: string;
   tokenAddress: string;
@@ -133,8 +125,6 @@ export type AccountLendingBorrow = {
   borrowAmountUsd: string;
   borrowApy: string;
 };
-
-
 
 export type AccountLiquidityPosition = {
   protocol: "uniswapV3" | "aerodromeSlipstream";
@@ -179,7 +169,6 @@ export type AccountLiquidityUniswapV3ExtraData = {
   unclaimedRewardToken1AmountUsd?: string;
 };
 
-
 // Supply Opportunities Response
 export interface GetSupplyOpportunitiesResponse {
   opportunities: SupplyOpportunity[];
@@ -196,26 +185,25 @@ export interface SupplyOpportunity {
   protocol: "aave" | "euler" | "venus";
   asset: string;
   vault_address?: string;
-  
+
   before: {
     supplyAPY: number;
     totalSupplyUSD: number;
     utilization: number;
   };
-  
+
   after: {
     supplyAPY: number;
     totalSupplyUSD: number;
     utilization: number;
   };
-  
+
   changes: {
     apyDelta: number;
     apyDeltaPercent: number;
     expectedAnnualReturn: number;
   };
 }
-
 
 // LP Simulation Requests
 export interface GetLpSimulateRequest {
@@ -232,64 +220,60 @@ export interface GetLpSimulateRequest {
   includeIL?: boolean; // Include impermanent loss calculation (default: true)
 }
 
-
-
-
 // LP Simulation Response
 export interface GetLpSimulateResponse {
   timestamp: number;
   summary: {
-    totalLiquidityUSD: number;          // Total liquidity added/removed
-    totalExpectedAPY: number;            // Weighted average expected APY
-    totalExpectedDailyReturn: number;   // Total expected daily return in USD
-    requiredTokens?: {                  // Required token amounts for the position
+    totalLiquidityUSD: number; // Total liquidity added/removed
+    totalExpectedAPY: number; // Weighted average expected APY
+    totalExpectedDailyReturn: number; // Total expected daily return in USD
+    requiredTokens?: {
+      // Required token amounts for the position
       token0: {
-        amount: number;                  // Token0 amount needed
-        amountUSD: number;               // Token0 value in USD
-        percentage: number;              // Percentage of total investment
+        amount: number; // Token0 amount needed
+        amountUSD: number; // Token0 value in USD
+        percentage: number; // Percentage of total investment
       };
       token1: {
-        amount: number;                  // Token1 amount needed
-        amountUSD: number;               // Token1 value in USD
-        percentage: number;              // Percentage of total investment
+        amount: number; // Token1 amount needed
+        amountUSD: number; // Token1 value in USD
+        percentage: number; // Percentage of total investment
       };
     };
   };
   pool: {
-    poolAddress: string;                // Pool contract address
-    protocol: string; 
-    inputAmountUSD: number;             // Amount added/removed in USD
+    poolAddress: string; // Pool contract address
+    protocol: string;
+    inputAmountUSD: number; // Amount added/removed in USD
 
     position: {
-      tickLower?: number;                // Lower tick (for concentrated liquidity)
-      tickUpper?: number;                // Upper tick (for concentrated liquidity)
-      currentTick: number;               // Current pool tick
-      inRange: boolean;                  // Whether position is in range
+      tickLower?: number; // Lower tick (for concentrated liquidity)
+      tickUpper?: number; // Upper tick (for concentrated liquidity)
+      currentTick: number; // Current pool tick
+      inRange: boolean; // Whether position is in range
       priceRange?: {
-        lower: number;                   // Lower price bound
-        upper: number;                   // Upper price bound
-        current: number;                 // Current price
+        lower: number; // Lower price bound
+        upper: number; // Upper price bound
+        current: number; // Current price
       };
       token0Amount: number;
       token1Amount: number;
     };
-    
+
     before: {
-      totalLiquidityUSD: number;         // Total pool liquidity before
-      apy: number;                       // Current APY
-      tvl: number;                       // Total value locked
+      totalLiquidityUSD: number; // Total pool liquidity before
+      apy: number; // Current APY
+      tvl: number; // Total value locked
     };
-    
+
     after: {
-      totalLiquidityUSD: number;         // Total pool liquidity after
-      estimatedAPY: number;              // Estimated APY after operation
-      tvl: number;                       // New TVL
-      yourShare: number;                 // Your % share of the pool
+      totalLiquidityUSD: number; // Total pool liquidity after
+      estimatedAPY: number; // Estimated APY after operation
+      tvl: number; // New TVL
+      yourShare: number; // Your % share of the pool
     };
-    
   };
 }
-
 
 export interface AccountYieldSummaryResponse {
   idleAssets: IdleAssetsResponse;
@@ -316,6 +300,8 @@ export interface CalculateSwapCostBatchRequest {
 export interface ProcessedRebalanceArgs {
   network: string;
   safeAddress: string;
+  operator: string;
+  wallet: string;
   currentBalances: TokenBalance[];
   currentLendingSupplyPositions: LendingPosition[];
   currentLiquidityPositions: ProcessedLiquidityPosition[];
@@ -358,12 +344,23 @@ export type ProtocolType = "aave" | "euler" | "venus";
 // Calculate Rebalance Cost Batch Response
 // Note: The actual response is a dictionary with numeric keys ("0", "1", "2"), not an array
 // Example: {"0":{"fee":"0.09947096"},"1":{"fee":"0.1"},"2":{"fee":"0.14973548"},"_dataSource":"api"}
-export type CalculateRebalanceCostBatchResponse = Record<string, CalculateRebalanceCostResult | string | undefined> & {
+export type CalculateRebalanceCostBatchResponse = Record<
+  string,
+  CalculateRebalanceCostResult | string | undefined
+> & {
   _dataSource?: string;
 };
 
 export interface RebalanceRoute {
-  actionType: 'Swap' | 'Supply' | 'Withdraw' | 'Borrow' | 'Repay' | 'Deposit' | 'Redeem' | (string & {});
+  actionType:
+    | "Swap"
+    | "Supply"
+    | "Withdraw"
+    | "Borrow"
+    | "Repay"
+    | "Deposit"
+    | "Redeem"
+    | (string & {});
   tokenA: string;
   tokenB?: string;
   amount: string;

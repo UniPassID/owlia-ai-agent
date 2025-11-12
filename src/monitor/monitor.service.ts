@@ -34,6 +34,7 @@ import { getBytes, hexlify } from "ethers";
 import { getChainId, getNetworkDto, NetworkDto } from "../user/dtos/user.dto";
 import { UserService } from "../user/user.service";
 import { UserV2 } from "../entities/user-v2.entity";
+import { RPC_PROVIDERS } from "../config/rpc.config";
 
 @Injectable()
 export class MonitorService {
@@ -490,7 +491,7 @@ export class MonitorService {
     };
 
     this.logger.log(
-      `Calling rebalance_position with ${targetLendingSupplyPositions.length} supply + ${targetLiquidityPositions.length} LP positions`
+      `Calling rebalance_position with payload: ${JSON.stringify(payload)}`
     );
 
     // Store payload in metadata for log file
@@ -529,7 +530,10 @@ export class MonitorService {
       this.logger.log(
         `Transaction ${txHash} confirmed successfully at block ${verification.blockNumber}`
       );
-      if (deployment.status === UserV2DeploymentStatus.init) {
+      if (
+        deployment.status === UserV2DeploymentStatus.init &&
+        (await RPC_PROVIDERS[chainId].getCode(safeAddress)) !== "0x"
+      ) {
         deployment.status = UserV2DeploymentStatus.setGuardSuccess;
         await this.userDeploymentRepo.save(deployment);
         this.logger.log(

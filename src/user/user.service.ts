@@ -451,11 +451,13 @@ export class UserService {
     const data = await safe.getEncodedTransaction(tx);
     return {
       predictedSafe: safe.getPredictedSafe(),
-      wrappedTx: {
-        to: await safe.getAddress(),
-        data,
-        value: "0",
-      },
+      wrappedTx: [
+        {
+          to: await safe.getAddress(),
+          data,
+          value: "0",
+        },
+      ],
     };
   }
 

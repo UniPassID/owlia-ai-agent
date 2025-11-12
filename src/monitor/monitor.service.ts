@@ -424,7 +424,8 @@ export class MonitorService {
     if (deployment.status === UserV2DeploymentStatus.init) {
       deployConfig = await this.userService.getWrappedDeploymentConfig(
         network,
-        wallet
+        wallet,
+        hexlify(deployment.setGuardSignature)
       );
     }
 

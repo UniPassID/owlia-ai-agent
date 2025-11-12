@@ -435,7 +435,11 @@ export class UserService {
     }
   }
 
-  async getWrappedDeploymentConfig(network: NetworkDto, wallet: string) {
+  async getWrappedDeploymentConfig(
+    network: NetworkDto,
+    wallet: string,
+    sig: string
+  ) {
     const chainId = getChainId(network);
     const deploymentConfig = DEPLOYMENT_CONFIGS[chainId];
     if (!deploymentConfig) {
@@ -443,11 +447,13 @@ export class UserService {
     }
     const safe = await this.getSafe(deploymentConfig.operator, wallet, chainId);
     const tx = await this.getSetGuardTransaction(deploymentConfig, safe);
+    tx.addSignature(new EthSafeSignature(wallet, sig));
+    const data = await safe.getEncodedTransaction(tx);
     return {
       predictedSafe: safe.getPredictedSafe(),
       wrappedTx: {
         to: await safe.getAddress(),
-        data: tx.data,
+        data,
         value: "0",
       },
     };

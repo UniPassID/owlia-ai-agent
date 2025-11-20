@@ -4,11 +4,13 @@ import { ApiOk } from '../common/dto/response.dto';
 import { PositionsResponseDto } from './dto/position.response.dto';
 import { GetDeploymentSnapshotsDto } from './dto/get-snapshot.dto';
 import { DeploymentSnapshotsResponseDto } from './dto/snapshot.response.dto';
+import { ApiTags } from '@nestjs/swagger';
 
 @Controller({
   path: 'account',
   version: '1',
 })
+@ApiTags('Account')
 export class AccountController {
   @Get('')
   @ApiOk(AccountResponseDto)

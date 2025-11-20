@@ -1,10 +1,17 @@
-import { IsString, IsOptional, IsNumber, IsBoolean, IsArray } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsBoolean,
+  IsArray,
+} from "class-validator";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { NetworkDto } from "../../user/dtos/user.dto";
 
 export class UpdatePolicyDto {
   @ApiPropertyOptional({
-    description: 'List of blockchain networks to monitor',
-    example: ['ethereum', 'base'],
+    description: "List of blockchain networks to monitor",
+    example: ["ethereum", "base"],
     type: [String],
   })
   @IsOptional()
@@ -12,8 +19,8 @@ export class UpdatePolicyDto {
   networks?: string[];
 
   @ApiPropertyOptional({
-    description: 'Whitelist of allowed assets',
-    example: ['USDC', 'USDT', 'DAI'],
+    description: "Whitelist of allowed assets",
+    example: ["USDC", "USDT", "DAI"],
     type: [String],
   })
   @IsOptional()
@@ -21,7 +28,7 @@ export class UpdatePolicyDto {
   assetWhitelist?: string[];
 
   @ApiPropertyOptional({
-    description: 'Minimum APR lift in basis points (1 bps = 0.01%)',
+    description: "Minimum APR lift in basis points (1 bps = 0.01%)",
     example: 50,
   })
   @IsOptional()
@@ -29,7 +36,7 @@ export class UpdatePolicyDto {
   minAprLiftBps?: number;
 
   @ApiPropertyOptional({
-    description: 'Minimum net profit in USD for rebalance',
+    description: "Minimum net profit in USD for rebalance",
     example: 10,
   })
   @IsOptional()
@@ -37,7 +44,7 @@ export class UpdatePolicyDto {
   minNetUsd?: number;
 
   @ApiPropertyOptional({
-    description: 'Minimum health factor to maintain',
+    description: "Minimum health factor to maintain",
     example: 1.5,
   })
   @IsOptional()
@@ -45,7 +52,7 @@ export class UpdatePolicyDto {
   minHealthFactor?: number;
 
   @ApiPropertyOptional({
-    description: 'Maximum allowed slippage in basis points',
+    description: "Maximum allowed slippage in basis points",
     example: 100,
   })
   @IsOptional()
@@ -53,7 +60,7 @@ export class UpdatePolicyDto {
   maxSlippageBps?: number;
 
   @ApiPropertyOptional({
-    description: 'Maximum gas cost in USD',
+    description: "Maximum gas cost in USD",
     example: 50,
   })
   @IsOptional()
@@ -61,7 +68,7 @@ export class UpdatePolicyDto {
   maxGasUsd?: number;
 
   @ApiPropertyOptional({
-    description: 'Maximum amount per trade in USD',
+    description: "Maximum amount per trade in USD",
     example: 10000,
   })
   @IsOptional()
@@ -69,7 +76,7 @@ export class UpdatePolicyDto {
   maxPerTradeUsd?: number;
 
   @ApiPropertyOptional({
-    description: 'Enable automatic rebalancing',
+    description: "Enable automatic rebalancing",
     example: false,
   })
   @IsOptional()
@@ -79,22 +86,22 @@ export class UpdatePolicyDto {
 
 export class TriggerRebalanceDto {
   @ApiProperty({
-    description: 'User wallet address',
-    example: '0x1234567890abcdef1234567890abcdef12345678',
+    description: "User wallet address",
+    example: "0x1234567890abcdef1234567890abcdef12345678",
   })
   @IsString()
   address: string;
 
   @ApiProperty({
-    description: 'Blockchain network (name or chain ID)',
-    example: 'base',
+    description: "Blockchain network (name or chain ID)",
+    example: "base",
   })
   @IsString()
-  network: string;
+  network: NetworkDto;
 
   @ApiPropertyOptional({
-    description: 'Trigger reason',
-    example: 'manual_trigger',
+    description: "Trigger reason",
+    example: "manual_trigger",
   })
   @IsOptional()
   @IsString()
@@ -103,8 +110,8 @@ export class TriggerRebalanceDto {
 
 export class ExecuteJobDto {
   @ApiProperty({
-    description: 'Rebalance job ID',
-    example: '660e8400-e29b-41d4-a716-446655440001',
+    description: "Rebalance job ID",
+    example: "660e8400-e29b-41d4-a716-446655440001",
   })
   @IsString()
   jobId: string;

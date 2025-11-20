@@ -6,7 +6,7 @@ export class RebalanceExecutionSnapshot {
   id: string;
 
   @Column()
-  userId: string;
+  deploymentId: string;
 
   @Column()
   jobId: string;

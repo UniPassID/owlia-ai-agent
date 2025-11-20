@@ -16,7 +16,7 @@ export class RebalanceJob {
   id: string;
 
   @Column()
-  userId: string;
+  deploymentId: string;
 
   @Column()
   trigger: string;

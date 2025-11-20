@@ -5,6 +5,7 @@ import { PositionsResponseDto } from './dto/position.response.dto';
 import { GetDeploymentSnapshotsDto } from './dto/get-snapshot.dto';
 import { DeploymentSnapshotsResponseDto } from './dto/snapshot.response.dto';
 import { ApiTags } from '@nestjs/swagger';
+import { RegisterAccountDto } from './dto/register-account.dto';
 
 @Controller({
   path: 'account',
@@ -16,6 +17,14 @@ export class AccountController {
   @ApiOk(AccountResponseDto)
   async getAccountInfo(
     @Query('wallet') wallet: string,
+  ): Promise<AccountResponseDto> {
+    throw new Error('Not implemented');
+  }
+
+  @Post('register')
+  @ApiOk(AccountResponseDto)
+  async registerAccount(
+    @Body() body: RegisterAccountDto,
   ): Promise<AccountResponseDto> {
     throw new Error('Not implemented');
   }

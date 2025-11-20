@@ -1,59 +1,29 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { AppModule } from './app.module';
-import { ConfigService } from '@nestjs/config';
+import { VersioningType } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { AllExceptionsFilter } from './common/filters/all-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
-  // Enable validation
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
-
-  // Set global prefix
-  app.setGlobalPrefix('api/v1');
-
-  // Enable CORS
-  app.enableCors({
-    origin: process.env.CORS_ORIGIN || '*',
-    credentials: true,
+  app.setGlobalPrefix('api');
+  app.enableVersioning({
+    type: VersioningType.URI,
   });
+  app.useGlobalInterceptors(new TransformInterceptor());
+  app.useGlobalFilters(new AllExceptionsFilter());
 
-  // Get config
-  const configService = app.get(ConfigService);
-  const apiPrefix = configService.get('API_PREFIX') || '';
-
-  // Setup Swagger/OpenAPI
-  const configBuilder = new DocumentBuilder()
-    .setTitle('DeFi AI Agent API')
-    .setDescription('API for managing DeFi portfolio rebalancing with AI agent')
+  const config = new DocumentBuilder()
+    .setTitle('Owlia AI Agent')
+    .setDescription('Owlia AI Agent API description')
     .setVersion('1.0')
-    .addTag('user', 'User registration and management')
-    .addTag('rebalance', 'Portfolio rebalancing and policy management');
+    .addTag('Owlia AI Agent')
+    .build();
+  const documentFactory = () => SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('api/docs', app, documentFactory);
 
-  // Add server with configurable prefix
-  if (apiPrefix) {
-    configBuilder.addServer(apiPrefix, 'API Server with prefix');
-  } else {
-    configBuilder.addServer('/', 'Direct access');
-  }
-
-  const config = configBuilder.build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
-
-  const port = configService.get('PORT') || 3000;
-
-  await app.listen(port);
-  console.log(`🚀 DeFi AI Agent Backend running on http://localhost:${port}`);
-  console.log(`📚 API Documentation available at http://localhost:${port}/api/docs`);
-  console.log(`📊 Environment: ${configService.get('NODE_ENV')}`);
+  await app.listen(process.env.PORT ?? 3000);
 }
-
 bootstrap();

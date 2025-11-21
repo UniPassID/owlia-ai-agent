@@ -143,4 +143,20 @@ export class VenusV4ProtocolBlockResponseDto {
     example: '1.00',
   })
   netApy: string;
+
+  @ApiProperty({
+    description: 'The supplied assets of the protocol',
+    type: [VenusV4SupplyResponseDto],
+  })
+  supplied: VenusV4SupplyResponseDto[];
+  @ApiProperty({
+    description: 'The borrowed assets of the protocol',
+    type: [VenusV4BorrowResponseDto],
+  })
+  borrowed: VenusV4BorrowResponseDto[];
+  @ApiProperty({
+    description: 'The rewards of the protocol',
+    type: [VenusV4RewardsResponseDto],
+  })
+  rewards: VenusV4RewardsResponseDto[];
 }

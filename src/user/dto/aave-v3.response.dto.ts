@@ -143,4 +143,20 @@ export class AaveV3ProtocolBlockResponseDto {
     example: '1.00',
   })
   netApy: string;
+
+  @ApiProperty({
+    description: 'The supplied assets of the protocol',
+    type: [AaveV3SupplyResponseDto],
+  })
+  supplied: AaveV3SupplyResponseDto[];
+  @ApiProperty({
+    description: 'The borrowed assets of the protocol',
+    type: [AaveV3BorrowResponseDto],
+  })
+  borrowed: AaveV3BorrowResponseDto[];
+  @ApiProperty({
+    description: 'The rewards of the protocol',
+    type: [AaveV3RewardsResponseDto],
+  })
+  rewards: AaveV3RewardsResponseDto[];
 }

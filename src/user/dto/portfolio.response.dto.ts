@@ -93,19 +93,19 @@ export class PortfolioTokenResponseDto {
 
 export class PortfolioWalletResponseDto {
   @ApiProperty({
-    description: 'The wallet address',
+    description: 'The token address',
     example: '0x1234567890abcdef',
   })
   tokenAddress: string;
 
   @ApiProperty({
-    description: 'The amount of the wallet',
+    description: 'The amount of the token',
     example: '1.00',
   })
   amount: string;
 
   @ApiProperty({
-    description: 'The amount in USD of the wallet',
+    description: 'The amount in USD of the token',
     example: '1.00',
   })
   amountUsd: string;

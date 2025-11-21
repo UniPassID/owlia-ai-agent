@@ -10,10 +10,10 @@ export class RegisterUserDto {
   network: NetworkDto;
 
   @ApiProperty({
-    description: 'The wallet address of the user',
+    description: 'The owner of the user',
     example: '0x1234567890abcdef',
   })
-  walletAddress: string;
+  owner: string;
 
   @ApiProperty({
     description: 'The registered signature of the user',

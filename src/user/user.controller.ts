@@ -18,7 +18,7 @@ export class UserController {
   @Get('')
   @ApiOk(UserResponseDto)
   async getUserInfo(@Query('owner') owner: string): Promise<UserResponseDto> {
-    throw new Error('Not implemented');
+    return this.userService.getUserInfo(owner);
   }
 
   @Post('register')

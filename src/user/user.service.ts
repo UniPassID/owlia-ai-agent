@@ -11,9 +11,9 @@ import { toBytes } from 'viem';
 import Safe, { PredictedSafeProps } from '@safe-global/protocol-kit';
 import { getChainId, NetworkDto } from './dto/common.dto';
 import { UserDeployment } from './entities/user-deployment.entity';
-import { DEFAULT_DEPLOYMENT_CONFIGS } from '../deployment/dto/deployment.response.dt';
 import blockchainsConfig from '../config/blockchains.config';
 import { ConfigType } from '@nestjs/config';
+import { DeploymentService } from '../deployment/deployment.service';
 
 @Injectable()
 export class UserService {
@@ -26,8 +26,9 @@ export class UserService {
     private userRepository: Repository<User>,
     @InjectRepository(UserDeployment)
     private userDeploymentRepository: Repository<UserDeployment>,
+    private deploymentService: DeploymentService,
     @Inject(blockchainsConfig.KEY)
-    private readonly blockchains: ConfigType<typeof blockchainsConfig>,
+    blockchains: ConfigType<typeof blockchainsConfig>,
   ) {
     const bsc_rpc_url = blockchains.bsc.rpcUrl;
     const base_rpc_url = blockchains.base.rpcUrl;
@@ -37,8 +38,8 @@ export class UserService {
     };
   }
 
-  async getUserInfo(owner: `0x${string}`): Promise<UserResponseDto> {
-    const ownerBuffer = Buffer.from(toBytes(owner));
+  async getUserInfo(owner: string): Promise<UserResponseDto> {
+    const ownerBuffer = Buffer.from(toBytes(owner as `0x${string}`));
     const user = await this.userRepository.findOne({
       where: {
         owner: ownerBuffer,
@@ -54,7 +55,7 @@ export class UserService {
       return getUserResponseDto(user, deployments);
     } else {
       const deployments = await Promise.all(
-        Object.entries(DEFAULT_DEPLOYMENT_CONFIGS).map(
+        Object.entries(this.deploymentService.getDeploymentConfigs()).map(
           async ([network, deploymentConfig]) => {
             const networkDto = network as NetworkDto;
             const chainId = getChainId(networkDto);

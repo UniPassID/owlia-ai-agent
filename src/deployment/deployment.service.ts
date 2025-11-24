@@ -12,4 +12,8 @@ export class DeploymentService {
   getDeploymentConfig(network: NetworkDto): DeploymentConfigResponseDto {
     return DEFAULT_DEPLOYMENT_CONFIGS[network];
   }
+
+  getDeploymentConfigs(): Record<NetworkDto, DeploymentConfigResponseDto> {
+    return DEFAULT_DEPLOYMENT_CONFIGS;
+  }
 }

@@ -27,6 +27,10 @@ import blockchainsConfig from './config/blockchains.config';
         username: configService.get('database.username'),
         password: configService.get('database.password'),
         database: configService.get('database.database'),
+
+        entities: [__dirname + '/**/*.entity{.ts,.js}'],
+        synchronize: false, // 生产环境禁止
+        logging: ['error'],
       }),
       inject: [ConfigService],
     }),

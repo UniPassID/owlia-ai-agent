@@ -5,6 +5,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { RegisterUserDto } from './dto/register-user.dto';
 import { NetworkDto } from './dto/common.dto';
 import { PortfolioResponseDto } from './dto/portfolio.response.dto';
+import { UserService } from './user.service';
 
 @Controller({
   path: 'user',
@@ -12,6 +13,8 @@ import { PortfolioResponseDto } from './dto/portfolio.response.dto';
 })
 @ApiTags('User')
 export class UserController {
+  constructor(private readonly userService: UserService) {}
+
   @Get('')
   @ApiOk(UserResponseDto)
   async getUserInfo(@Query('owner') owner: string): Promise<UserResponseDto> {

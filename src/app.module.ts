@@ -3,7 +3,6 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UserModule } from './user/user.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import appConfig from './config/app.config';
 import { DeploymentModule } from './deployment/deployment.module';
 import { DeploymentController } from './deployment/deployment.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -15,7 +14,7 @@ import blockchainsConfig from './config/blockchains.config';
     UserModule,
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [appConfig, databaseConfig, blockchainsConfig],
+      load: [databaseConfig, blockchainsConfig],
     }),
     DeploymentModule,
     TypeOrmModule.forRootAsync({

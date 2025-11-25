@@ -8,6 +8,15 @@ import {
 
 export enum ResponseCodeDto {
   Success = 0,
+
+  NetworkNotSupported = 4001,
+  InvalidSignature = 4002,
+  UserAlreadyRegistered = 4003,
+  ValidatorNotSupported = 4004,
+  PoolNotSupported = 4005,
+  AssetNotSupported = 4006,
+  VaultNotSupported = 4007,
+
   UnknownError = 10000,
 }
 

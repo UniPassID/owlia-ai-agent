@@ -1,3 +1,5 @@
+import { ValidatorTypeDto } from '../../deployment/dto/deployment.response.dto';
+import { NetworkDto } from '../../user/dto/common.dto';
 import { ResponseCodeDto, ResponseDto } from '../dto/response.dto';
 
 export class BaseException extends Error {
@@ -20,5 +22,65 @@ export class BaseException extends Error {
 export class UnknownException extends BaseException {
   constructor() {
     super(ResponseCodeDto.UnknownError, 'Unknown error');
+  }
+}
+
+export class NetworkNotSupportedException extends BaseException {
+  constructor(network: NetworkDto) {
+    super(
+      ResponseCodeDto.NetworkNotSupported,
+      `Network ${network} not supported`,
+    );
+  }
+}
+
+export class InvalidSignatureException extends BaseException {
+  constructor() {
+    super(ResponseCodeDto.InvalidSignature, 'Invalid signature');
+  }
+}
+
+export class UserAlreadyRegisteredException extends BaseException {
+  constructor(owner: string) {
+    super(
+      ResponseCodeDto.UserAlreadyRegistered,
+      `User already registered for owner: ${owner}`,
+    );
+  }
+}
+
+export class ValidatorNotSupportedException extends BaseException {
+  constructor(network: NetworkDto, validatorType: ValidatorTypeDto) {
+    super(
+      ResponseCodeDto.ValidatorNotSupported,
+      `Validator ${validatorType} is not supported on network ${network}`,
+    );
+  }
+}
+
+export class PoolNotSupportedException extends BaseException {
+  constructor(network: NetworkDto, poolAddress: string) {
+    super(
+      ResponseCodeDto.PoolNotSupported,
+      `Pool ${poolAddress} is not supported on network ${network}`,
+    );
+  }
+}
+
+export class AssetNotSupportedException extends BaseException {
+  constructor(network: NetworkDto, asset: string) {
+    super(
+      ResponseCodeDto.AssetNotSupported,
+      `Asset ${asset} is not supported on network ${network}`,
+    );
+  }
+}
+
+export class VaultNotSupportedException extends BaseException {
+  constructor(network: NetworkDto, vault: string) {
+    super(
+      ResponseCodeDto.VaultNotSupported,
+      `Vault ${vault} is not supported on network ${network}`,
+    );
   }
 }

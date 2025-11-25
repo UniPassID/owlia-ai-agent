@@ -1,4 +1,5 @@
 import { Column, Entity, Index } from 'typeorm';
+import { ValidatorDto } from '../dto/register-user.dto';
 
 @Index('user_id_chain_id_uk', ['userId', 'chainId'], { unique: true })
 @Entity('user_deployments')
@@ -20,6 +21,9 @@ export class UserDeployment {
 
   @Column('varbinary', { name: 'guard', length: 32 })
   guard: Buffer;
+
+  @Column('json', { name: 'validators', nullable: true })
+  validators: ValidatorDto[] | null;
 
   @Column('varbinary', {
     name: 'setGuardSignature',

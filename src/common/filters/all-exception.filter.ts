@@ -12,14 +12,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const req = ctx.getRequest();
     const { method, originalUrl } = req;
 
+    this.logger.error(
+      `[HTTP] ${method} ${originalUrl} ${response.statusCode} failed: ${exception}`,
+    );
+
     let error: BaseException;
 
     if (exception instanceof BaseException) {
       error = exception;
     } else {
-      this.logger.error(
-        `[HTTP] ${method} ${originalUrl} ${response.statusCode} failed: ${exception}`,
-      );
       error = new UnknownException();
     }
 

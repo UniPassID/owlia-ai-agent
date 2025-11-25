@@ -24,7 +24,12 @@ export class UserController {
   @Post('register')
   @ApiOk(UserResponseDto)
   async registerUser(@Body() body: RegisterUserDto): Promise<UserResponseDto> {
-    throw new Error('Not implemented');
+    return this.userService.registerUser(
+      body.network,
+      body.owner,
+      body.validators,
+      body.signature,
+    );
   }
 
   @Get('portfolio')

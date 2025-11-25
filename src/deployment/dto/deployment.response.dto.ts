@@ -241,6 +241,7 @@ export class DeploymentConfigResponseDto {
 
   @ApiProperty({
     description: 'The validators',
+    type: 'array',
     oneOf: [
       { $ref: getSchemaPath(ValidatorUniswapV3ResponseDto) },
       { $ref: getSchemaPath(ValidatorAerodromeCLResponseDto) },

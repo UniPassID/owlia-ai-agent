@@ -18,6 +18,8 @@ import { EULER_V2_OWLIA_VALIDATOR_ABI } from '../src/user/abis/eulerV2OwliaValid
 import { VENUS_V4_OWLIA_VALIDATOR_ABI } from '../src/user/abis/venusV4OwliaValidator.abi';
 import { KYBER_SWAP_OWLIA_VALIDATOR_ABI } from '../src/user/abis/kyberSwapOwliaValidator.abi';
 import { MetaTransactionData } from '@safe-global/types-kit';
+import Safe from '@safe-global/protocol-kit';
+import { SAFE_ABI } from '../src/user/abis/safe.abi';
 
 export class AgentClient {
   #validatorConfigs: Record<NetworkDto, ValidatorConfig> = VALIDATOR_CONFIGS;
@@ -56,6 +58,22 @@ export class AgentClient {
       throw new Error(`Failed to register user: ${data.message}`);
     }
     return data.data;
+  }
+
+  async setGuardTx(
+    safe: Safe,
+    deploymentConfig: DeploymentConfigResponseDto,
+  ): Promise<MetaTransactionData> {
+    const address = await safe.getAddress();
+    return {
+      to: address,
+      data: encodeFunctionData({
+        abi: SAFE_ABI,
+        functionName: 'setGuard',
+        args: [deploymentConfig.guard],
+      }),
+      value: '0',
+    };
   }
 
   getValidatorTxs(
@@ -268,5 +286,38 @@ export class AgentClient {
       }
     });
     return validatorTxs;
+  }
+
+  async getSafe(
+    deploymentConfig: DeploymentConfigResponseDto,
+    owner: string,
+    ownerPrivateKey: string,
+    rpcUrl: string,
+  ): Promise<Safe> {
+    const safe = await Safe.init({
+      predictedSafe: {
+        safeAccountConfig: {
+          owners: [deploymentConfig.operator, owner],
+          threshold: 1,
+        },
+        safeDeploymentConfig: {
+          deploymentType: 'canonical',
+          saltNonce: deploymentConfig.saltNonce,
+          safeVersion: '1.4.1',
+        },
+      },
+      signer: ownerPrivateKey,
+      provider: rpcUrl,
+    });
+    return safe;
+  }
+
+  async getUserInfo(owner: string): Promise<UserResponseDto> {
+    const response = await request(this.app).get(`/api/v1/user?owner=${owner}`);
+    const data = response.body as ResponseDto<UserResponseDto>;
+    if (data.code !== ResponseCodeDto.Success) {
+      throw new Error(`Failed to get user info: ${data.message}`);
+    }
+    return data.data;
   }
 }

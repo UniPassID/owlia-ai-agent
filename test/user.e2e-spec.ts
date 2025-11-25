@@ -7,9 +7,6 @@ import { NetworkDto } from '../src/user/dto/common.dto';
 import { UserModule } from '../src/user/user.module';
 import { AgentClient } from './agent-client';
 import { generatePrivateKey, privateKeyToAddress } from 'viem/accounts';
-import { encodeFunctionData } from 'viem';
-import Safe from '@safe-global/protocol-kit';
-import { SAFE_ABI } from '../src/user/abis/safe.abi';
 import { DeploymentModule } from '../src/deployment/deployment.module';
 import blockchainsConfig from '../src/config/blockchains.config';
 import { DataSource } from 'typeorm';
@@ -101,38 +98,21 @@ describe('AppController (e2e)', () => {
     await app.close();
   });
 
-  it('should register user', async () => {
-    const deploymentConfig = await agentClient.deploymentConfig(NetworkDto.Bsc);
+  it('Register user on Bsc should success', async () => {
+    const network = NetworkDto.Bsc;
+    const rpcUrl = bscRpcUrl;
+    const deploymentConfig = await agentClient.deploymentConfig(network);
     const ownerPrivateKey = generatePrivateKey();
     const owner = privateKeyToAddress(ownerPrivateKey);
-    const network = NetworkDto.Bsc;
 
-    const safe = await Safe.init({
-      predictedSafe: {
-        safeAccountConfig: {
-          owners: [deploymentConfig.operator, owner],
-          threshold: 1,
-        },
-        safeDeploymentConfig: {
-          deploymentType: 'canonical',
-          saltNonce: deploymentConfig.saltNonce,
-          safeVersion: '1.4.1',
-        },
-      },
-      signer: ownerPrivateKey,
-      provider: bscRpcUrl,
-    });
+    const safe = await agentClient.getSafe(
+      deploymentConfig,
+      owner,
+      ownerPrivateKey,
+      rpcUrl,
+    );
 
-    const address = await safe.getAddress();
-    const setGuardTx = {
-      to: address,
-      data: encodeFunctionData({
-        abi: SAFE_ABI,
-        functionName: 'setGuard',
-        args: [deploymentConfig.guard],
-      }),
-      value: '0',
-    };
+    const setGuardTx = await agentClient.setGuardTx(safe, deploymentConfig);
 
     const validatorTxs = agentClient.getValidatorTxs(network, deploymentConfig);
 
@@ -159,5 +139,8 @@ describe('AppController (e2e)', () => {
         );
       }
     });
+
+    const userInfo = await agentClient.getUserInfo(owner);
+    assert.deepStrictEqual(userInfo, userResponse);
   });
 });

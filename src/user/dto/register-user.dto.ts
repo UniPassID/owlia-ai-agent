@@ -38,7 +38,7 @@ export class ValidatorUniswapV3PoolDto {
 export class ValidatorUniswapV3Dto {
   @ApiProperty({
     description: 'The type of the validator',
-    enum: ValidatorTypeDto,
+    example: ValidatorTypeDto.UniswapV3,
   })
   type: ValidatorTypeDto.UniswapV3;
 
@@ -70,7 +70,7 @@ export class ValidatorAerodromeCLPoolDto {
 export class ValidatorAerodromeCLDto {
   @ApiProperty({
     description: 'The type of the validator',
-    enum: ValidatorTypeDto,
+    example: ValidatorTypeDto.AerodromeCL,
   })
   type: ValidatorTypeDto.AerodromeCL;
 
@@ -84,7 +84,7 @@ export class ValidatorAerodromeCLDto {
 export class ValidatorAaveV3Dto {
   @ApiProperty({
     description: 'The type of the validator',
-    enum: ValidatorTypeDto,
+    example: ValidatorTypeDto.AaveV3,
   })
   type: ValidatorTypeDto.AaveV3;
 
@@ -98,7 +98,7 @@ export class ValidatorAaveV3Dto {
 export class ValidatorEulerV2Dto {
   @ApiProperty({
     description: 'The type of the validator',
-    enum: ValidatorTypeDto,
+    example: ValidatorTypeDto.EulerV2,
   })
   type: ValidatorTypeDto.EulerV2;
 
@@ -112,7 +112,7 @@ export class ValidatorEulerV2Dto {
 export class ValidatorVenusV4Dto {
   @ApiProperty({
     description: 'The type of the validator',
-    enum: ValidatorTypeDto,
+    example: ValidatorTypeDto.VenusV4,
   })
   type: ValidatorTypeDto.VenusV4;
 
@@ -126,7 +126,7 @@ export class ValidatorVenusV4Dto {
 export class ValidatorKyberSwapDto {
   @ApiProperty({
     description: 'The type of the validator',
-    enum: ValidatorTypeDto,
+    example: ValidatorTypeDto.KyberSwap,
   })
   type: ValidatorTypeDto.KyberSwap;
 
@@ -169,6 +169,7 @@ export class RegisterUserDto {
 
   @ApiProperty({
     description: 'The validators of the user',
+    type: 'array',
     oneOf: [
       { $ref: getSchemaPath(ValidatorUniswapV3Dto) },
       { $ref: getSchemaPath(ValidatorAerodromeCLDto) },

@@ -146,6 +146,27 @@ export class TransactionParserService {
       },
     },
 
+    // KyberSwap Meta Aggregation RouterV2 Swap
+    {
+      name: 'Swapped',
+      signature: 'Swapped(address,address,address,address,uint256,uint256)',
+      protocol: Protocol.KYBERSWAP_ROUTER,
+      actionType: RebalanceActionType.SWAP,
+      abi: {
+        anonymous: false,
+        inputs: [
+          { indexed: false, name: 'sender', type: 'address' },
+          { indexed: false, name: 'srcToken', type: 'address' },
+          { indexed: false, name: 'dstToken', type: 'address' },
+          { indexed: false, name: 'dstReceiver', type: 'address' },
+          { indexed: false, name: 'spentAmount', type: 'uint256' },
+          { indexed: false, name: 'returnAmount', type: 'uint256' },
+        ],
+        name: 'Swapped',
+        type: 'event',
+      },
+    },
+
     // Aave
     {
       name: 'Supply',
@@ -823,6 +844,27 @@ export class TransactionParserService {
 
       tokens.push({
         token: toToken,
+        amount: returnAmount.toString(),
+      });
+
+      return tokens;
+    }
+
+    // KyberSwap Meta Aggregation RouterV2 Swapped event
+    if (eventSig.protocol === Protocol.KYBERSWAP_ROUTER && eventSig.name === 'Swapped') {
+      // Swapped(address sender, address srcToken, address dstToken, address dstReceiver, uint256 spentAmount, uint256 returnAmount)
+      const srcToken = decoded.args.srcToken;
+      const dstToken = decoded.args.dstToken;
+      const spentAmount = decoded.args.spentAmount;
+      const returnAmount = decoded.args.returnAmount;
+
+      tokens.push({
+        token: srcToken,
+        amount: spentAmount.toString(),
+      });
+
+      tokens.push({
+        token: dstToken,
         amount: returnAmount.toString(),
       });
 

@@ -8,44 +8,46 @@ import { config } from 'dotenv';
 import { RebalancePrecheckService } from '../src/monitor/rebalance-precheck.service';
 import { AgentService } from '../src/agent/agent.service';
 import { ConfigService } from '@nestjs/config';
-import { User } from '../src/entities/user.entity';
-import { UserPolicy } from '../src/entities/user-policy.entity';
+import { UserV2Deployment, UserV2DeploymentStatus } from '../src/entities/user-v2-deployment.entity';
 import { MarginalOptimizerService } from '../src/monitor/portfolio-optimizer/marginal-optimizer.service';
 import { OpportunityConverterService } from '../src/monitor/portfolio-optimizer/opportunity-converter.service';
 import { CostCalculatorService } from '../src/monitor/portfolio-optimizer/cost-calculator.service';
 import { APYCalculatorService } from '../src/monitor/portfolio-optimizer/apy-calculator.service';
+import { randomUUID } from 'crypto';
 
 // Load environment variables
 config();
 
-// Mock User object
-function createMockUser(address: string, chainId: string): User {
-  const user = new User();
-  user.id = `test-user-${Date.now()}`;
-  user.address = address;
-  user.safeOwner = address; // Use same address as safe owner
-  user.chainId = parseInt(chainId, 10);
-  user.createdAt = new Date();
-  user.updatedAt = new Date();
-  return user;
+/**
+ * Helper to convert hex address to 32-byte Buffer
+ */
+function addressToBuffer(address: string): Buffer {
+  const hex = address.startsWith('0x') ? address.slice(2) : address;
+  // Pad to 64 hex chars (32 bytes) with leading zeros
+  return Buffer.from(hex.padStart(40, '0'), 'hex');
 }
 
-// Mock UserPolicy object (optional, can be null)
-function createMockPolicy(userId: string): UserPolicy | null {
-  const policy = new UserPolicy();
-  policy.userId = userId;
-  policy.chains = ['8453', '1']; // Base and Ethereum
-  policy.assetWhitelist = [];
-  policy.minAprLiftBps = 50; // 0.5%
-  policy.minNetUsd = 10;
-  policy.minHealthFactor = 1.5;
-  policy.maxSlippageBps = 100; // 1%
-  policy.maxGasUsd = 50;
-  policy.maxPerTradeUsd = 10000;
-  policy.autoEnabled = true;
-  policy.createdAt = new Date();
-  policy.updatedAt = new Date();
-  return policy;
+/**
+ * Mock UserV2Deployment object for testing
+ */
+function createMockDeployment(address: string, chainId: string): UserV2Deployment {
+  const deployment = new UserV2Deployment();
+  deployment.id = randomUUID();
+  deployment.userId = `test-user-${Date.now()}`;
+  deployment.chainId = parseInt(chainId, 10);
+
+  // Convert addresses to Buffer (required by entity definition)
+  const addressBuffer = addressToBuffer(address);
+  deployment.address = addressBuffer;
+  deployment.operator = addressBuffer; // Use same address for testing
+  deployment.guard = addressBuffer;    // Use same address for testing
+  deployment.setGuardSignature = null;
+
+  deployment.status = UserV2DeploymentStatus.setGuardSuccess;
+  deployment.createdAt = new Date();
+  deployment.updatedAt = new Date();
+
+  return deployment;
 }
 
 // Main test function
@@ -92,9 +94,8 @@ async function testPrecheck() {
       opportunityConverter,
     );
 
-    // Create mock user and policy
-    const mockUser = createMockUser(address, chainId);
-    const mockPolicy = createMockPolicy(mockUser.id);
+    // Create mock deployment
+    const mockDeployment = createMockDeployment(address, chainId);
 
     console.log('Starting precheck evaluation...');
     console.log('-'.repeat(80));
@@ -102,7 +103,7 @@ async function testPrecheck() {
     const startTime = Date.now();
 
     // Run the evaluation
-    const result = await precheckService.evaluate(mockUser, mockPolicy);
+    const result = await precheckService.evaluate(mockDeployment);
 
     const endTime = Date.now();
     const duration = ((endTime - startTime) / 1000).toFixed(2);
@@ -133,8 +134,9 @@ async function testPrecheck() {
       console.log(`Failure Reason:         ${result.failureReason}`);
     }
 
-    if (result.strategyEvaluations!== undefined) {
-      console.log(`Break-even Time:        ${JSON.stringify(result.strategyEvaluations)}`);
+    if (result.strategyEvaluations !== undefined) {
+      console.log(`\nStrategy Evaluations:`);
+      console.log(JSON.stringify(result.strategyEvaluations, null, 2));
     }
 
     console.log('='.repeat(80));

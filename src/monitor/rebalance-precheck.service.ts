@@ -98,6 +98,19 @@ export interface StrategyEvaluationRecord {
   totalSwapCost: number;
 }
 
+export enum PositionStatus {
+  LP_IN_RANGE = "LP_IN_RANGE", // LP position exists and is in range
+  LP_OUT_OF_RANGE = "LP_OUT_OF_RANGE", // LP position exists but is out of range
+  LENDING_ONLY = "LENDING_ONLY", // Only lending positions, no LP
+  NO_POSITION = "NO_POSITION", // No active positions
+}
+
+export interface RebalanceConstraints {
+  maxBreakEvenHours: number;
+  minRelativeApyIncrease: number; // e.g., 1.1 means 10% increase
+  minAbsoluteApyIncrease: number; // in percentage points
+}
+
 export interface RebalancePrecheckResult {
   shouldTrigger: boolean;
   portfolioApy: number;
@@ -143,6 +156,12 @@ export class RebalancePrecheckService {
     const { lpSimulations, supplyOpportunities, dexPools } =
       await this.fetchOpportunities(deployment, chainId, totalAssetsUsd);
 
+    // Determine current position status to apply appropriate constraints
+    const positionStatus = this.determinePositionStatus(yieldSummary, dexPools);
+    this.logger.log(
+      `Position status for user ${deployment.userId}: ${positionStatus}`
+    );
+
     // Build optimized strategies
     const allStrategies = await this.buildOptimizedStrategies(
       lpSimulations,
@@ -182,7 +201,8 @@ export class RebalancePrecheckService {
       supplyOpportunities,
       dexPools,
       totalAssetsUsd,
-      portfolioApy
+      portfolioApy,
+      positionStatus
     );
 
     // // Check if any strategy meets constraints
@@ -210,6 +230,7 @@ export class RebalancePrecheckService {
       breakEvenTimeHours,
       netGainUsd,
       deployment.userId,
+      positionStatus,
       evaluationRecords
     );
   }
@@ -243,6 +264,162 @@ export class RebalancePrecheckService {
         portfolioApy: 0,
         currentHoldings: {},
       };
+    }
+  }
+
+  /**
+   * Determine the current position status based on active investments
+   * Used to apply different rebalancing constraints
+   */
+  private determinePositionStatus(
+    yieldSummary: AccountYieldSummaryResponse | null,
+    dexPools: Record<string, any>
+  ): PositionStatus {
+    if (!yieldSummary?.activeInvestments) {
+      return PositionStatus.NO_POSITION;
+    }
+
+    const { activeInvestments } = yieldSummary;
+    let hasLpPosition = false;
+    let hasInRangeLp = false;
+    let hasLendingPosition = false;
+
+    // Check Uniswap V3 LP positions
+    if (activeInvestments.uniswapV3LiquidityInvestments?.positions) {
+      for (const liquidityPosition of activeInvestments
+        .uniswapV3LiquidityInvestments.positions) {
+        for (const protocolPosition of liquidityPosition.protocolPositions ||
+          []) {
+          for (const deposit of protocolPosition.deposits || []) {
+            const extraData = deposit.extraData;
+            if (extraData) {
+              hasLpPosition = true;
+
+              // Get pool address to look up current tick from dexPools
+              const poolAddress = protocolPosition.poolInfo?.poolAddress;
+              if (!poolAddress) continue;
+
+              // Get current tick from dexPools
+              const poolData = dexPools[poolAddress.toLowerCase()];
+              const currentTick =
+                this.parseNumber(poolData?.pricePosition?.currentTick) ??
+                this.parseNumber(poolData?.currentSnapshot?.currentTick);
+
+              const tickLower = this.parseNumber(extraData.tickLower);
+              const tickUpper = this.parseNumber(extraData.tickUpper);
+
+              if (
+                currentTick !== null &&
+                tickLower !== null &&
+                tickUpper !== null
+              ) {
+                if (currentTick >= tickLower && currentTick <= tickUpper) {
+                  hasInRangeLp = true;
+                  break;
+                }
+              }
+            }
+          }
+          if (hasInRangeLp) break;
+        }
+        if (hasInRangeLp) break;
+      }
+    }
+
+    // Check Aerodrome Slipstream LP positions
+    if (
+      !hasInRangeLp &&
+      activeInvestments.aerodromeSlipstreamLiquidityInvestments?.positions
+    ) {
+      for (const liquidityPosition of activeInvestments
+        .aerodromeSlipstreamLiquidityInvestments.positions) {
+        for (const protocolPosition of liquidityPosition.protocolPositions ||
+          []) {
+          for (const deposit of protocolPosition.deposits || []) {
+            const extraData = deposit.extraData;
+            if (extraData) {
+              hasLpPosition = true;
+
+              // Get pool address to look up current tick from dexPools
+              const poolAddress = protocolPosition.poolInfo?.poolAddress;
+              if (!poolAddress) continue;
+
+              // Get current tick from dexPools
+              const poolData = dexPools[poolAddress.toLowerCase()];
+              const currentTick =
+                this.parseNumber(poolData?.pricePosition?.currentTick) ??
+                this.parseNumber(poolData?.currentSnapshot?.currentTick);
+
+              const tickLower = this.parseNumber(extraData.tickLower);
+              const tickUpper = this.parseNumber(extraData.tickUpper);
+
+              if (
+                currentTick !== null &&
+                tickLower !== null &&
+                tickUpper !== null
+              ) {
+                if (currentTick >= tickLower && currentTick <= tickUpper) {
+                  hasInRangeLp = true;
+                  break;
+                }
+              }
+            }
+          }
+          if (hasInRangeLp) break;
+        }
+        if (hasInRangeLp) break;
+      }
+    }
+
+    // Check Lending positions
+    if (activeInvestments.lendingInvestments?.positions) {
+      for (const lendingPosition of activeInvestments.lendingInvestments
+        .positions) {
+        const supplies = lendingPosition.protocolPositions?.supplies || [];
+        if (supplies.length > 0) {
+          hasLendingPosition = true;
+          break;
+        }
+      }
+    }
+
+    // Determine status based on positions
+    if (hasInRangeLp) {
+      return PositionStatus.LP_IN_RANGE;
+    } else if (hasLpPosition) {
+      return PositionStatus.LP_OUT_OF_RANGE;
+    } else if (hasLendingPosition) {
+      return PositionStatus.LENDING_ONLY;
+    } else {
+      return PositionStatus.NO_POSITION;
+    }
+  }
+
+  /**
+   * Get rebalancing constraints based on current position status
+   */
+  private getConstraintsByPositionStatus(
+    status: PositionStatus
+  ): RebalanceConstraints {
+    switch (status) {
+      case PositionStatus.LP_IN_RANGE:
+        // Very strict constraints: only rebalance for "super high APY" opportunities
+        return {
+          maxBreakEvenHours: 2,
+          minRelativeApyIncrease: 1.0, // Not used for LP_IN_RANGE
+          minAbsoluteApyIncrease: 20, // 20 percentage points
+        };
+
+      case PositionStatus.LP_OUT_OF_RANGE:
+      case PositionStatus.LENDING_ONLY:
+      case PositionStatus.NO_POSITION:
+      default:
+        // Standard constraints: find best APY opportunities
+        return {
+          maxBreakEvenHours: 4,
+          minRelativeApyIncrease: 1.1, // 10% relative increase
+          minAbsoluteApyIncrease: 2, // 2 percentage points
+        };
     }
   }
 
@@ -577,11 +754,20 @@ export class RebalancePrecheckService {
     supplyData: GetSupplyOpportunitiesResponse[],
     dexPools: Record<string, any>,
     totalAssetsUsd: number,
-    portfolioApy: number
+    portfolioApy: number,
+    positionStatus: PositionStatus
   ) {
-    const maxBreakEvenHours = 4;
-    const minRelativeApyIncrease = 1.1;
-    const minAbsoluteApyIncrease = 2;
+    const constraints = this.getConstraintsByPositionStatus(positionStatus);
+    const maxBreakEvenHours = constraints.maxBreakEvenHours;
+    const minRelativeApyIncrease = constraints.minRelativeApyIncrease;
+    const minAbsoluteApyIncrease = constraints.minAbsoluteApyIncrease;
+
+    this.logger.log(
+      `Evaluating strategies with constraints for ${positionStatus}: ` +
+        `maxBreakEvenHours=${maxBreakEvenHours}h, ` +
+        `minRelativeApyIncrease=${minRelativeApyIncrease}x, ` +
+        `minAbsoluteApyIncrease=${minAbsoluteApyIncrease}pp`
+    );
 
     let gasEstimate = 0;
     let breakEvenTimeHours = 0;
@@ -739,6 +925,7 @@ export class RebalancePrecheckService {
     breakEvenTimeHours: number,
     netGainUsd: number,
     userId: string,
+    positionStatus: PositionStatus,
     evaluationRecords?: StrategyEvaluationRecord[]
   ): RebalancePrecheckResult {
     const opportunityApy = bestStrategy.apy;
@@ -746,12 +933,28 @@ export class RebalancePrecheckService {
       portfolioApy > 0 ? opportunityApy / portfolioApy : Infinity;
     const absoluteIncrease = opportunityApy - portfolioApy;
 
+    const constraints = this.getConstraintsByPositionStatus(positionStatus);
+
     // Note: breakEvenTimeHours constraint is already checked in evaluateStrategies()
 
-    if (relativeIncrease < 1.1 || absoluteIncrease < 2) {
+    // For LP_IN_RANGE, only check absolute APY increase (20pp)
+    // For other statuses, check both relative (10%) and absolute (2pp) increase
+    let meetsApyConstraint = false;
+
+    if (positionStatus === PositionStatus.LP_IN_RANGE) {
+      meetsApyConstraint =
+        absoluteIncrease >= constraints.minAbsoluteApyIncrease;
+    } else {
+      meetsApyConstraint =
+        relativeIncrease >= constraints.minRelativeApyIncrease &&
+        absoluteIncrease >= constraints.minAbsoluteApyIncrease;
+    }
+
+    if (!meetsApyConstraint) {
       this.logger.log(
-        `Precheck REJECTED: APY conditions not met. ` +
-          `Relative=${relativeIncrease.toFixed(2)}x, Absolute=${absoluteIncrease.toFixed(2)}pp`
+        `Precheck REJECTED (${positionStatus}): APY conditions not met. ` +
+          `Relative=${relativeIncrease.toFixed(2)}x, Absolute=${absoluteIncrease.toFixed(2)}pp, ` +
+          `Required: relative>=${constraints.minRelativeApyIncrease}x, absolute>=${constraints.minAbsoluteApyIncrease}pp`
       );
       return {
         shouldTrigger: false,
@@ -764,7 +967,7 @@ export class RebalancePrecheckService {
         gasEstimate,
         breakEvenTimeHours,
         netGainUsd,
-        failureReason: "APY improvement insufficient",
+        failureReason: `APY improvement insufficient for ${positionStatus}`,
         strategyEvaluations: evaluationRecords,
       };
     }

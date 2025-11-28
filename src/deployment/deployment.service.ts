@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { NetworkDto } from '../user/dto/common.dto';
+import { NetworkDto } from '../common/dto/network.dto';
 import {
   DEFAULT_DEPLOYMENT_CONFIGS,
   DeploymentConfigResponseDto,

@@ -15,6 +15,7 @@ import {
   InvalidSignatureException,
   NetworkNotSupportedException,
   UserAlreadyRegisteredException,
+  UserNotFoundException,
   ValidatorNotSupportedException,
 } from '../common/exceptions/base.exception';
 import blockchainsConfig from '../config/blockchains.config';
@@ -31,7 +32,7 @@ import { SAFE_ABI } from './abis/safe.abi';
 import { UNISWAP_V3_OWLIA_VALIDATOR_ABI } from './abis/uniswap-v3-owlia-validator.abi';
 import { VENUS_V4_OWLIA_VALIDATOR_ABI } from './abis/venus-v4-owlia-validator.abi';
 import { VALIDATOR_CONFIGS, ValidatorConfig } from './constants';
-import { getChainId, NetworkDto } from './dto/common.dto';
+import { getChainId, NetworkDto } from '../common/dto/network.dto';
 import { toValidatorResponseDto, ValidatorDto } from './dto/register-user.dto';
 import {
   getUninitializedUserDeploymentResponseDto,
@@ -49,12 +50,16 @@ import {
   EIP712TypedDataTx,
   SafeEIP712Args,
 } from '@safe-global/types-kit';
+import { UserChainManager } from './utils/user-chain-manager';
+import trackerConfig from '../config/tracker.config';
+import { PortfolioResponseDto } from './dto/portfolio.response.dto';
 
 @Injectable()
 export class UserService {
   private readonly logger = new Logger(UserService.name);
 
-  private readonly rpcUrls: Record<number, string>;
+  private readonly rpcUrls: Record<NetworkDto, string[]>;
+  private readonly userChainManager: Record<NetworkDto, UserChainManager>;
 
   constructor(
     @InjectRepository(User)
@@ -64,14 +69,45 @@ export class UserService {
     private deploymentService: DeploymentService,
     @Inject(blockchainsConfig.KEY)
     blockchains: ConfigType<typeof blockchainsConfig>,
+    @Inject(trackerConfig.KEY)
+    tracker: ConfigType<typeof trackerConfig>,
     private dataSource: DataSource,
   ) {
-    const bsc_rpc_url = blockchains.bsc.rpcUrl;
-    const base_rpc_url = blockchains.base.rpcUrl;
+    const bsc_rpc_urls = blockchains.bsc.rpcUrls;
+    const base_rpc_urls = blockchains.base.rpcUrls;
     this.rpcUrls = {
-      56: bsc_rpc_url,
-      8453: base_rpc_url,
+      [NetworkDto.Bsc]: bsc_rpc_urls,
+      [NetworkDto.Base]: base_rpc_urls,
     };
+    this.userChainManager = {
+      [NetworkDto.Bsc]: new UserChainManager(
+        NetworkDto.Bsc,
+        bsc_rpc_urls,
+        tracker.url,
+      ),
+      [NetworkDto.Base]: new UserChainManager(
+        NetworkDto.Base,
+        base_rpc_urls,
+        tracker.url,
+      ),
+    };
+  }
+
+  async getUserPortfolio(
+    network: NetworkDto,
+    address: string,
+  ): Promise<PortfolioResponseDto> {
+    const addressBuffer = Buffer.from(toBytes(address as `0x${string}`));
+    const deployment = await this.userDeploymentRepository.findOne({
+      where: {
+        chainId: getChainId(network),
+        address: addressBuffer,
+      },
+    });
+    if (!deployment) {
+      throw new UserNotFoundException(network, address);
+    }
+    return this.userChainManager[network].getUserPortfolio(address);
   }
 
   async getUserInfo(owner: string): Promise<UserResponseDto> {
@@ -100,7 +136,7 @@ export class UserService {
               deploymentConfig.operator,
               owner,
               deploymentConfig.saltNonce,
-              chainId,
+              networkDto,
             );
             return getUninitializedUserDeploymentResponseDto(safe, chainId);
           },
@@ -115,7 +151,7 @@ export class UserService {
     operator: string,
     owner: string,
     saltNonce: string,
-    chainId: number,
+    network: NetworkDto,
   ): Promise<Safe> {
     const predictedSafe: PredictedSafeProps = {
       safeAccountConfig: {
@@ -128,9 +164,9 @@ export class UserService {
         safeVersion: '1.4.1',
       },
     };
-    const rpcUrl = this.rpcUrls[chainId];
+    const rpcUrl = this.rpcUrls[network][0];
     if (!rpcUrl) {
-      throw new Error(`Unsupported chain: ${chainId}`);
+      throw new NetworkNotSupportedException(network);
     }
     const protocolKit = await Safe.init({
       predictedSafe,
@@ -185,7 +221,7 @@ export class UserService {
               deploymentConfig.operator,
               owner,
               deploymentConfig.saltNonce,
-              chainId,
+              network,
             );
             const transaction = await this.getSetGuardTransaction(
               network,
@@ -253,7 +289,7 @@ export class UserService {
               deploymentConfig.operator,
               owner,
               deploymentConfig.saltNonce,
-              currentChainId,
+              networkDto,
             );
             const address = await safe.getAddress();
             const transaction = await this.getSetGuardTransaction(
@@ -296,7 +332,7 @@ export class UserService {
               deploymentConfig.operator,
               owner,
               deploymentConfig.saltNonce,
-              currentChainId,
+              networkDto,
             );
             const address = await safe.getAddress();
             const deployment = new UserDeployment();
@@ -398,7 +434,6 @@ export class UserService {
     owner: string,
     sig: string,
   ) {
-    const chainId = getChainId(network);
     const deploymentConfig =
       this.deploymentService.getDeploymentConfig(network);
     if (!deploymentConfig) {
@@ -412,7 +447,7 @@ export class UserService {
       deploymentConfig.operator,
       owner,
       deploymentConfig.saltNonce,
-      chainId,
+      network,
     );
     const tx = await this.getSetGuardTransaction(
       network,

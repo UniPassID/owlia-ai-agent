@@ -84,17 +84,6 @@ export class EulerV2LendingPositionResponseDto {
   borrowApy: string;
 
   @ApiProperty({
-    description: 'The collateral value in USD',
-    example: '100.10',
-  })
-  collateralValueUsd: string;
-  @ApiProperty({
-    description: 'The liability value in USD',
-    example: '100.10',
-  })
-  liabilityValueUsd: string;
-
-  @ApiProperty({
     description: 'The collateral factor',
     example: '0.1',
   })

@@ -1,5 +1,5 @@
 import { ApiExtraModels, ApiProperty, getSchemaPath } from '@nestjs/swagger';
-import { NetworkDto } from './common.dto';
+import { NetworkDto } from '../../common/dto/network.dto';
 import { UniswapV3ProtocolBlockResponseDto } from './uniswap-v3.response.dto';
 import { AerodromeCLProtocolBlockResponseDto } from './aerodrome-cl.response.dto';
 import { AaveV3ProtocolBlockResponseDto } from './aave-v3.response.dto';
@@ -64,6 +64,13 @@ export class PortfolioSummaryResponseDto {
   })
   claimableUsd: string;
 }
+
+export type ProtocolBlockResponseDto =
+  | UniswapV3ProtocolBlockResponseDto
+  | AerodromeCLProtocolBlockResponseDto
+  | AaveV3ProtocolBlockResponseDto
+  | EulerV2ProtocolBlockResponseDto
+  | VenusV4ProtocolBlockResponseDto;
 
 export class PortfolioTokenResponseDto {
   @ApiProperty({
@@ -157,11 +164,5 @@ export class PortfolioResponseDto {
       { $ref: getSchemaPath(VenusV4ProtocolBlockResponseDto) },
     ],
   })
-  protocols: (
-    | UniswapV3ProtocolBlockResponseDto
-    | AerodromeCLProtocolBlockResponseDto
-    | AaveV3ProtocolBlockResponseDto
-    | EulerV2ProtocolBlockResponseDto
-    | VenusV4ProtocolBlockResponseDto
-  )[];
+  protocols: ProtocolBlockResponseDto[];
 }

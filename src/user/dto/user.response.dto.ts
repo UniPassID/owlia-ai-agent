@@ -1,6 +1,5 @@
 import { ApiExtraModels, ApiProperty, getSchemaPath } from '@nestjs/swagger';
 import { IsArray } from 'class-validator';
-import { getNetworkDto, NetworkDto } from './common.dto';
 import { User } from '../entities/user.entity';
 import {
   UserDeployment,
@@ -20,6 +19,7 @@ import {
   ValidatorVenusV4ResponseDto,
 } from '../../deployment/dto/deployment.response.dto';
 import { toValidatorResponseDto } from './register-user.dto';
+import { getNetworkDto, NetworkDto } from '../../common/dto/network.dto';
 
 export enum UserDeploymentStatusDto {
   Uninitialized = 'uninitialized',

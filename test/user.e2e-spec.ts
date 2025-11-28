@@ -1,26 +1,30 @@
 import { INestApplication } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
-import { getDataSourceToken, TypeOrmModule } from '@nestjs/typeorm';
 import { initApp } from '../src/app.init';
-import { NetworkDto } from '../src/user/dto/common.dto';
+import { NetworkDto } from '../src/common/dto/network.dto';
 import { UserModule } from '../src/user/user.module';
 import { AgentClient } from './agent-client';
 import { generatePrivateKey, privateKeyToAddress } from 'viem/accounts';
 import { DeploymentModule } from '../src/deployment/deployment.module';
-import blockchainsConfig from '../src/config/blockchains.config';
-import { DataSource } from 'typeorm';
 import { MySqlContainer, StartedMySqlContainer } from '@testcontainers/mysql';
 import { AppModule } from '../src/app.module';
 import * as assert from 'assert';
 import { UserDeploymentStatusDto } from '../src/user/dto/user.response.dto';
+import { DataSource } from 'typeorm';
 
-describe('AppController (e2e)', () => {
+describe('UserController (e2e)', () => {
   let app: INestApplication;
   let databaseContainer: StartedMySqlContainer;
   let agentClient: AgentClient;
   const bscRpcUrl: string = 'http://127.0.0.1:8545';
   const baseRpcUrl: string = 'http://127.0.0.1:8546';
+  const trackerUrl: string = 'http://65.21.45.43:3511';
+
+  before(() => {
+    process.env.BSC_RPC_URLS = bscRpcUrl;
+    process.env.BASE_RPC_URLS = baseRpcUrl;
+    process.env.TRACKER_URL = trackerUrl;
+  });
 
   beforeEach(async () => {
     databaseContainer = await new MySqlContainer('mysql:8').start();
@@ -30,66 +34,28 @@ describe('AppController (e2e)', () => {
     const password = databaseContainer.getUserPassword();
     const database = databaseContainer.getDatabase();
 
+    process.env.DB_HOST = host;
+    process.env.DB_PORT = port.toString();
+    process.env.DB_USERNAME = username;
+    process.env.DB_PASSWORD = password;
+    process.env.DB_DATABASE = database;
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [
-        ConfigModule.forRoot({
-          isGlobal: true,
-          ignoreEnvFile: true,
-          load: [
-            blockchainsConfig,
-            () => ({
-              database: {
-                host,
-                port,
-                username,
-                password,
-                database,
-              },
-              blockchains: {
-                bsc: {
-                  rpcUrl: bscRpcUrl,
-                },
-                base: {
-                  rpcUrl: baseRpcUrl,
-                },
-              },
-            }),
-          ],
-        }),
-        TypeOrmModule.forRootAsync({
-          imports: [ConfigModule],
-          useFactory: () => {
-            return {
-              type: 'mysql',
-              host: host,
-              port: port,
-              username: username,
-              password: password,
-              database: database,
-              entities: [__dirname + '/../src/**/*.entity{.ts,.js}'],
-              migrations: [__dirname + '/../src/migrations/*.ts'],
-              synchronize: true,
-              logging: ['error'],
-              extra: {
-                connectionLimit: 1,
-                connectTimeout: 60000,
-              },
-            };
-          },
-        }),
-        AppModule,
-        UserModule,
-        DeploymentModule,
-      ],
+      imports: [AppModule, UserModule, DeploymentModule],
     }).compile();
 
     app = moduleFixture.createNestApplication();
+
+    const dataSource = app.get(DataSource);
+
+    if (!dataSource.isInitialized) await dataSource.initialize();
+
+    await dataSource.runMigrations();
+
     app = initApp(app);
 
     await app.init();
 
-    const dataSource = app.get<DataSource>(getDataSourceToken());
-    await dataSource.runMigrations();
     agentClient = new AgentClient(app.getHttpServer());
   });
 
@@ -105,27 +71,12 @@ describe('AppController (e2e)', () => {
     const ownerPrivateKey = generatePrivateKey();
     const owner = privateKeyToAddress(ownerPrivateKey);
 
-    const safe = await agentClient.getSafe(
+    const userResponse = await agentClient.registerUserWithOwner(
+      network,
       deploymentConfig,
-      owner,
+      owner.toLowerCase(),
       ownerPrivateKey,
       rpcUrl,
-    );
-
-    const setGuardTx = await agentClient.setGuardTx(safe, deploymentConfig);
-
-    const validatorTxs = agentClient.getValidatorTxs(network, deploymentConfig);
-
-    const transaction = await safe.createTransaction({
-      transactions: [setGuardTx, ...validatorTxs],
-    });
-    const signedTransaction = await safe.signTransaction(transaction);
-    const sig = signedTransaction.encodedSignatures();
-    const userResponse = await agentClient.registerUser(
-      network,
-      owner,
-      deploymentConfig.validators,
-      sig,
     );
 
     assert.ok(userResponse.deployments.length > 0);
@@ -142,5 +93,13 @@ describe('AppController (e2e)', () => {
 
     const userInfo = await agentClient.getUserInfo(owner);
     assert.deepStrictEqual(userInfo, userResponse);
+  });
+
+  it('Get user portfolio on Bsc should success', async () => {
+    const network = NetworkDto.Bsc;
+    const address = '0x9e2a65a9aea1556ba741b6c35cd55f3f7aadbbb0';
+
+    const portfolio = await agentClient.getUserPortfolio(network, address);
+    console.log(JSON.stringify(portfolio, null, 2));
   });
 });

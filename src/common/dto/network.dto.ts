@@ -1,3 +1,6 @@
+import { Chain } from 'viem';
+import { bsc, base } from 'viem/chains';
+
 export enum NetworkDto {
   Bsc = 'bsc',
   Base = 'base',
@@ -19,4 +22,13 @@ export function getChainId(network: NetworkDto): number {
     return 8453;
   }
   throw new Error('Invalid network');
+}
+
+export function getChain(network: NetworkDto): Chain {
+  switch (network) {
+    case NetworkDto.Bsc:
+      return bsc;
+    case NetworkDto.Base:
+      return base;
+  }
 }

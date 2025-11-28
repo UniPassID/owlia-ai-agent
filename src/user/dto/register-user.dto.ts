@@ -1,5 +1,5 @@
 import { ApiExtraModels, ApiProperty, getSchemaPath } from '@nestjs/swagger';
-import { NetworkDto } from './common.dto';
+import { NetworkDto } from '../../common/dto/network.dto';
 import {
   ValidatorAaveV3ResponseDto,
   ValidatorAerodromeCLResponseDto,
@@ -16,12 +16,17 @@ import {
   ValidatorNotSupportedException,
   VaultNotSupportedException,
 } from '../../common/exceptions/base.exception';
+import {
+  Address,
+  AddressArray,
+} from '../../common/decorators/address.decorator';
 
 export class ValidatorUniswapV3PoolDto {
   @ApiProperty({
     description: 'The address of the pool',
     example: '0x1234567890abcdef',
   })
+  @Address()
   address: string;
   @ApiProperty({
     description: 'The tick lower of the pool',
@@ -54,6 +59,7 @@ export class ValidatorAerodromeCLPoolDto {
     description: 'The address of the pool',
     example: '0x1234567890abcdef',
   })
+  @Address()
   address: string;
   @ApiProperty({
     description: 'The tick lower of the pool',
@@ -92,6 +98,7 @@ export class ValidatorAaveV3Dto {
     description: 'The assets of the validator',
     type: [String],
   })
+  @AddressArray()
   assets: string[];
 }
 
@@ -102,6 +109,7 @@ export class ValidatorEulerV2Dto {
   })
   type: ValidatorTypeDto.EulerV2;
 
+  @AddressArray()
   @ApiProperty({
     description: 'The vaults of the validator',
     type: [String],
@@ -120,6 +128,7 @@ export class ValidatorVenusV4Dto {
     description: 'The vaults of the validator',
     type: [String],
   })
+  @AddressArray()
   vaults: string[];
 }
 
@@ -134,6 +143,7 @@ export class ValidatorKyberSwapDto {
     description: 'The tokens of the validator',
     type: [String],
   })
+  @AddressArray()
   tokens: string[];
 }
 
@@ -165,6 +175,7 @@ export class RegisterUserDto {
     description: 'The owner of the user',
     example: '0x1234567890abcdef',
   })
+  @Address()
   owner: string;
 
   @ApiProperty({
@@ -208,7 +219,7 @@ export function toValidatorResponseDto(
           validator: validatorResponse.validator,
           pools: validator.pools.map((p) => {
             const pool = validatorResponse.pools.find(
-              (vp) => vp.address.toLowerCase() === p.address.toLowerCase(),
+              (vp) => vp.address === p.address,
             );
             if (!pool) {
               throw new PoolNotSupportedException(network, p.address);
@@ -238,7 +249,7 @@ export function toValidatorResponseDto(
           validator: validatorResponse.validator,
           pools: validator.pools.map((p) => {
             const pool = validatorResponse.pools.find(
-              (vp) => vp.address.toLowerCase() === p.address.toLowerCase(),
+              (vp) => vp.address === p.address,
             );
             if (!pool) {
               throw new PoolNotSupportedException(network, p.address);
@@ -266,9 +277,7 @@ export function toValidatorResponseDto(
           type: ValidatorTypeDto.AaveV3,
           validator: validatorResponse.validator,
           assets: validator.assets.map((a) => {
-            const asset = validatorResponse.assets.find(
-              (va) => va.toLowerCase() === a.toLowerCase(),
-            );
+            const asset = validatorResponse.assets.find((va) => va === a);
             if (!asset) {
               throw new AssetNotSupportedException(network, a);
             }
@@ -288,9 +297,7 @@ export function toValidatorResponseDto(
           type: ValidatorTypeDto.EulerV2,
           validator: validatorResponse.validator,
           vaults: validator.vaults.map((v) => {
-            const vault = validatorResponse.vaults.find(
-              (vv) => vv.toLowerCase() === v.toLowerCase(),
-            );
+            const vault = validatorResponse.vaults.find((vv) => vv === v);
             if (!vault) {
               throw new VaultNotSupportedException(network, v);
             }
@@ -310,9 +317,7 @@ export function toValidatorResponseDto(
           type: ValidatorTypeDto.VenusV4,
           validator: validatorResponse.validator,
           vaults: validator.vaults.map((v) => {
-            const vault = validatorResponse.vaults.find(
-              (vv) => vv.toLowerCase() === v.toLowerCase(),
-            );
+            const vault = validatorResponse.vaults.find((vv) => vv === v);
             if (!vault) {
               throw new VaultNotSupportedException(network, v);
             }
@@ -332,9 +337,7 @@ export function toValidatorResponseDto(
           type: ValidatorTypeDto.KyberSwap,
           validator: validatorResponse.validator,
           tokens: validator.tokens.map((t) => {
-            const token = validatorResponse.tokens.find(
-              (vt) => vt.toLowerCase() === t.toLowerCase(),
-            );
+            const token = validatorResponse.tokens.find((vt) => vt === t);
             if (!token) {
               throw new AssetNotSupportedException(network, t);
             }

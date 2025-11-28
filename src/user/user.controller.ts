@@ -3,7 +3,7 @@ import { UserResponseDto } from './dto/user.response.dto';
 import { ApiOk } from '../common/dto/response.dto';
 import { ApiTags } from '@nestjs/swagger';
 import { RegisterUserDto } from './dto/register-user.dto';
-import { NetworkDto } from './dto/common.dto';
+import { NetworkDto } from '../common/dto/network.dto';
 import { PortfolioResponseDto } from './dto/portfolio.response.dto';
 import { UserService } from './user.service';
 
@@ -38,6 +38,6 @@ export class UserController {
     @Query('network') network: NetworkDto,
     @Query('address') address: string,
   ): Promise<PortfolioResponseDto> {
-    throw new Error('Not implemented');
+    return this.userService.getUserPortfolio(network, address);
   }
 }

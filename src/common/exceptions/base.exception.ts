@@ -1,6 +1,6 @@
 import { ValidatorTypeDto } from '../../deployment/dto/deployment.response.dto';
-import { NetworkDto } from '../../user/dto/common.dto';
 import { ResponseCodeDto, ResponseDto } from '../dto/response.dto';
+import { NetworkDto } from '../dto/network.dto';
 
 export class BaseException extends Error {
   public readonly code: ResponseCodeDto;
@@ -82,5 +82,20 @@ export class VaultNotSupportedException extends BaseException {
       ResponseCodeDto.VaultNotSupported,
       `Vault ${vault} is not supported on network ${network}`,
     );
+  }
+}
+
+export class UserNotFoundException extends BaseException {
+  constructor(network: NetworkDto, address: string) {
+    super(
+      ResponseCodeDto.UserNotFound,
+      `User not found for address: ${address} on network ${network}`,
+    );
+  }
+}
+
+export class InvalidParameterException extends BaseException {
+  constructor(message: string) {
+    super(ResponseCodeDto.InvalidParameter, message);
   }
 }

@@ -14,6 +14,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     this.logger.error(
       `[HTTP] ${method} ${originalUrl} ${response.statusCode} failed: ${exception}`,
+      exception instanceof Error ? exception.stack : String,
     );
 
     let error: BaseException;

@@ -1,4 +1,4 @@
-import { NetworkDto } from './dto/common.dto';
+import { NetworkDto } from '../common/dto/network.dto';
 
 export type ValidatorConfig = {
   uniswapV3NonFungiblePositionManager: string;

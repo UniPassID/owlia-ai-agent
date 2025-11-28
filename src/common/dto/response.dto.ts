@@ -16,6 +16,8 @@ export enum ResponseCodeDto {
   PoolNotSupported = 4005,
   AssetNotSupported = 4006,
   VaultNotSupported = 4007,
+  UserNotFound = 4008,
+  InvalidParameter = 4009,
 
   UnknownError = 10000,
 }

@@ -6,7 +6,7 @@ import {
   DeploymentConfigResponseDto,
   ValidatorTypeDto,
 } from '../src/deployment/dto/deployment.response.dto';
-import { NetworkDto } from '../src/user/dto/common.dto';
+import { NetworkDto } from '../src/common/dto/network.dto';
 import { UserResponseDto } from '../src/user/dto/user.response.dto';
 import { ValidatorDto } from '../src/user/dto/register-user.dto';
 import { VALIDATOR_CONFIGS, ValidatorConfig } from '../src/user/constants';
@@ -20,6 +20,7 @@ import { KYBER_SWAP_OWLIA_VALIDATOR_ABI } from '../src/user/abis/kyber-swap-owli
 import { MetaTransactionData } from '@safe-global/types-kit';
 import Safe from '@safe-global/protocol-kit';
 import { SAFE_ABI } from '../src/user/abis/safe.abi';
+import { PortfolioResponseDto } from '../src/user/dto/portfolio.response.dto';
 
 export class AgentClient {
   #validatorConfigs: Record<NetworkDto, ValidatorConfig> = VALIDATOR_CONFIGS;
@@ -56,6 +57,46 @@ export class AgentClient {
     const data = response.body as ResponseDto<UserResponseDto>;
     if (data.code !== ResponseCodeDto.Success) {
       throw new Error(`Failed to register user: ${data.message}`);
+    }
+    return data.data;
+  }
+
+  async registerUserWithOwner(
+    network: NetworkDto,
+    deploymentConfig: DeploymentConfigResponseDto,
+    owner: string,
+    ownerPrivateKey: string,
+    rpcUrl: string,
+  ): Promise<UserResponseDto> {
+    const safe = await this.getSafe(
+      deploymentConfig,
+      owner,
+      ownerPrivateKey,
+      rpcUrl,
+    );
+
+    const setGuardTx = await this.setGuardTx(safe, deploymentConfig);
+
+    const validatorTxs = this.getValidatorTxs(network, deploymentConfig);
+
+    const transaction = await safe.createTransaction({
+      transactions: [setGuardTx, ...validatorTxs],
+    });
+    const signedTransaction = await safe.signTransaction(transaction);
+    const sig = signedTransaction.encodedSignatures();
+    return this.registerUser(network, owner, deploymentConfig.validators, sig);
+  }
+
+  async getUserPortfolio(
+    network: NetworkDto,
+    address: string,
+  ): Promise<PortfolioResponseDto> {
+    const response = await request(this.app).get(
+      `/api/v1/user/portfolio?network=${network}&address=${address}`,
+    );
+    const data = response.body as ResponseDto<PortfolioResponseDto>;
+    if (data.code !== ResponseCodeDto.Success) {
+      throw new Error(`Failed to get user portfolio: ${data.message}`);
     }
     return data.data;
   }

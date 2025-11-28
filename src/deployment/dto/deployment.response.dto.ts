@@ -1,5 +1,5 @@
 import { ApiExtraModels, ApiProperty, getSchemaPath } from '@nestjs/swagger';
-import { NetworkDto } from '../../user/dto/common.dto';
+import { NetworkDto } from '../../common/dto/network.dto';
 
 export enum ValidatorTypeDto {
   UniswapV3 = 'uniswap-v3',

@@ -52,7 +52,7 @@ import {
 } from '@safe-global/types-kit';
 import { UserChainManager } from './utils/user-chain-manager';
 import trackerConfig from '../config/tracker.config';
-import { PortfolioResponseDto } from './dto/portfolio.response.dto';
+import { PortfolioResponseDto } from './dto/user-portfolio.response.dto';
 
 @Injectable()
 export class UserService {

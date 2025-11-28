@@ -300,9 +300,9 @@ export const DEFAULT_DEPLOYMENT_CONFIGS: Record<
         type: ValidatorTypeDto.AaveV3,
         validator: '0xdccEBb8BC784EdbBf38b0f4da3EC89d262CDC5F4',
         assets: [
-          '0x55d398326f99059ff775485246999027b3197955',
-          '0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d',
-          '0x8d0d000ee44948fc98c9b98a4fa4921476f08b0d',
+          '0x55d398326f99059fF775485246999027B3197955',
+          '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+          '0x8d0D000Ee44948FC98c9B98A4FA4921476f08B0d',
         ],
       },
       {
@@ -348,8 +348,8 @@ export const DEFAULT_DEPLOYMENT_CONFIGS: Record<
         type: ValidatorTypeDto.AaveV3,
         validator: '0x4D3CB1E122a513939728f4d09AceD5B43BaCe793',
         assets: [
-          '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
-          '0xfde4c96c8593536e31f229ea8f37b2ada2699bb2',
+          '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+          '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
         ],
       },
       {

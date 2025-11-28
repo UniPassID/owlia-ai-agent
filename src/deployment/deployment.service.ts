@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { NetworkDto } from '../common/dto/network.dto';
 import {
   DEFAULT_DEPLOYMENT_CONFIGS,
@@ -7,8 +7,6 @@ import {
 
 @Injectable()
 export class DeploymentService {
-  private readonly logger = new Logger(DeploymentService.name);
-
   getDeploymentConfig(network: NetworkDto): DeploymentConfigResponseDto {
     return DEFAULT_DEPLOYMENT_CONFIGS[network];
   }

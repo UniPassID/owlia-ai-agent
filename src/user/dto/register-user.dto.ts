@@ -20,6 +20,7 @@ import {
   Address,
   AddressArray,
 } from '../../common/decorators/address.decorator';
+import { Type } from 'class-transformer';
 
 export class ValidatorUniswapV3PoolDto {
   @ApiProperty({
@@ -51,6 +52,7 @@ export class ValidatorUniswapV3Dto {
     description: 'The pools of the validator',
     type: [ValidatorUniswapV3PoolDto],
   })
+  @Type(() => ValidatorUniswapV3PoolDto)
   pools: ValidatorUniswapV3PoolDto[];
 }
 
@@ -84,6 +86,7 @@ export class ValidatorAerodromeCLDto {
     description: 'The pools of the validator',
     type: [ValidatorAerodromeCLPoolDto],
   })
+  @Type(() => ValidatorAerodromeCLPoolDto)
   pools: ValidatorAerodromeCLPoolDto[];
 }
 
@@ -189,6 +192,20 @@ export class RegisterUserDto {
       { $ref: getSchemaPath(ValidatorVenusV4Dto) },
       { $ref: getSchemaPath(ValidatorKyberSwapDto) },
     ],
+  })
+  @Type(() => Object, {
+    keepDiscriminatorProperty: true,
+    discriminator: {
+      property: 'type',
+      subTypes: [
+        { value: ValidatorUniswapV3Dto, name: ValidatorTypeDto.UniswapV3 },
+        { value: ValidatorAerodromeCLDto, name: ValidatorTypeDto.AerodromeCL },
+        { value: ValidatorAaveV3Dto, name: ValidatorTypeDto.AaveV3 },
+        { value: ValidatorEulerV2Dto, name: ValidatorTypeDto.EulerV2 },
+        { value: ValidatorVenusV4Dto, name: ValidatorTypeDto.VenusV4 },
+        { value: ValidatorKyberSwapDto, name: ValidatorTypeDto.KyberSwap },
+      ],
+    },
   })
   validators: ValidatorDto[];
 

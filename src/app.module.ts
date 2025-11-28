@@ -4,7 +4,6 @@ import { AppService } from './app.service';
 import { UserModule } from './user/user.module';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { DeploymentModule } from './deployment/deployment.module';
-import { DeploymentController } from './deployment/deployment.controller';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import databaseConfig from './config/database.config';
 import blockchainsConfig from './config/blockchains.config';
@@ -36,7 +35,7 @@ import trackerConfig from './config/tracker.config';
       inject: [ConfigService],
     }),
   ],
-  controllers: [AppController, DeploymentController],
+  controllers: [AppController],
   providers: [AppService],
 })
 export class AppModule {}

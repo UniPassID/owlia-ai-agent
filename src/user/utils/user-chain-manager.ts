@@ -1,9 +1,5 @@
 import { Logger } from '@nestjs/common';
 import { getChain, getChainId, NetworkDto } from '../../common/dto/network.dto';
-import {
-  PortfolioResponseDto,
-  PortfolioTokenResponseDto,
-} from '../dto/portfolio.response.dto';
 import { AaveV3Manager } from './aave-v3-manager';
 import { AerodromeCLManager } from './aerodrome-cl-manager';
 import { EulerV2Manager } from './euler-v2-manager';
@@ -18,6 +14,10 @@ import { fallback } from '../../common/fallback-transport';
 import { ERC20_ABI } from '../abis/erc-20.abi';
 import { UnknownException } from '../../common/exceptions/base.exception';
 import Decimal from 'decimal.js';
+import {
+  PortfolioResponseDto,
+  PortfolioTokenResponseDto,
+} from '../dto/user-portfolio.response.dto';
 
 const DEFAULT_TOKENS: Record<NetworkDto, string[]> = {
   [NetworkDto.Bsc]: [

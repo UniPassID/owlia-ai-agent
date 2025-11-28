@@ -3,9 +3,9 @@ import { UserResponseDto } from './dto/user.response.dto';
 import { ApiOk } from '../common/dto/response.dto';
 import { ApiTags } from '@nestjs/swagger';
 import { RegisterUserDto } from './dto/register-user.dto';
-import { NetworkDto } from '../common/dto/network.dto';
-import { PortfolioResponseDto } from './dto/portfolio.response.dto';
+import { PortfolioResponseDto } from './dto/user-portfolio.response.dto';
 import { UserService } from './user.service';
+import { UserPortfolioRequestDto } from './dto/user-portfolio.dto';
 
 @Controller({
   path: 'user',
@@ -35,9 +35,8 @@ export class UserController {
   @Get('portfolio')
   @ApiOk(PortfolioResponseDto)
   async getPositions(
-    @Query('network') network: NetworkDto,
-    @Query('address') address: string,
+    @Query() query: UserPortfolioRequestDto,
   ): Promise<PortfolioResponseDto> {
-    return this.userService.getUserPortfolio(network, address);
+    return this.userService.getUserPortfolio(query.network, query.address);
   }
 }

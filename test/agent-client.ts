@@ -20,7 +20,7 @@ import { KYBER_SWAP_OWLIA_VALIDATOR_ABI } from '../src/user/abis/kyber-swap-owli
 import { MetaTransactionData } from '@safe-global/types-kit';
 import Safe from '@safe-global/protocol-kit';
 import { SAFE_ABI } from '../src/user/abis/safe.abi';
-import { PortfolioResponseDto } from '../src/user/dto/portfolio.response.dto';
+import { PortfolioResponseDto } from '../src/user/dto/user-portfolio.response.dto';
 
 export class AgentClient {
   #validatorConfigs: Record<NetworkDto, ValidatorConfig> = VALIDATOR_CONFIGS;
@@ -84,7 +84,33 @@ export class AgentClient {
     });
     const signedTransaction = await safe.signTransaction(transaction);
     const sig = signedTransaction.encodedSignatures();
-    return this.registerUser(network, owner, deploymentConfig.validators, sig);
+    return this.registerUser(
+      network,
+      owner,
+      deploymentConfig.validators.map((validator) => {
+        switch (validator.type) {
+          case ValidatorTypeDto.UniswapV3:
+            validator.validator = validator.validator.toLowerCase();
+            return validator;
+          case ValidatorTypeDto.AerodromeCL:
+            validator.validator = validator.validator.toLowerCase();
+            return validator;
+          case ValidatorTypeDto.AaveV3:
+            validator.validator = validator.validator.toLowerCase();
+            return validator;
+          case ValidatorTypeDto.EulerV2:
+            validator.validator = validator.validator.toLowerCase();
+            return validator;
+          case ValidatorTypeDto.VenusV4:
+            validator.validator = validator.validator.toLowerCase();
+            return validator;
+          case ValidatorTypeDto.KyberSwap:
+            validator.validator = validator.validator.toLowerCase();
+            return validator;
+        }
+      }),
+      sig,
+    );
   }
 
   async getUserPortfolio(

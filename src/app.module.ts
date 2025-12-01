@@ -8,6 +8,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import databaseConfig from './config/database.config';
 import blockchainsConfig from './config/blockchains.config';
 import trackerConfig from './config/tracker.config';
+import { ScheduleModule } from '@nestjs/schedule';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import trackerConfig from './config/tracker.config';
       }),
       inject: [ConfigService],
     }),
+    ScheduleModule.forRoot(),
   ],
   controllers: [AppController],
   providers: [AppService],

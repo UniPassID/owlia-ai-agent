@@ -63,6 +63,12 @@ export class PortfolioSummaryResponseDto {
     example: '100.10',
   })
   claimableUsd: string;
+
+  @ApiProperty({
+    description: 'The net deposit USD of the portfolio',
+    example: '100.10',
+  })
+  netDepositUsd: string;
 }
 
 export type ProtocolBlockResponseDto =

@@ -107,7 +107,10 @@ export class UserService {
     if (!deployment) {
       throw new UserNotFoundException(network, address);
     }
-    return this.userChainManager[network].getUserPortfolio(address);
+    return this.userChainManager[network].getUserPortfolio(
+      address,
+      deployment.status === UserDeploymentStatus.Deployed,
+    );
   }
 
   async getUserInfo(owner: string): Promise<UserResponseDto> {

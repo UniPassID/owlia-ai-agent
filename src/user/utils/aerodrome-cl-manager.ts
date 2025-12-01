@@ -22,8 +22,10 @@ import { Logger } from '@nestjs/common';
 import { UnknownException } from '../../common/exceptions/base.exception';
 import { AERODROME_CL_POOL_ABI } from '../abis/aerodrome-cl-pool.abi';
 import {
+  DexKeyDto,
   TokenPriceResponseDto,
   TokenPricesResponseDto,
+  TrackerClient,
 } from '../../common/tracker-client';
 
 const FACTORY_ADDRESS: Record<NetworkDto, string | null> = {
@@ -49,10 +51,12 @@ export class AerodromeCLManager {
 
   private readonly client: PublicClient;
   private readonly logger: Logger = new Logger(AerodromeCLManager.name);
+  private readonly trackerClient: TrackerClient;
 
   constructor(
     private readonly network: NetworkDto,
     private readonly rpcUrls: string[],
+    private readonly trackerUrl: string,
   ) {
     const nonfungiblePositionManagerAddress =
       NONFUNGIBLE_POSITION_MANAGER_ADDRESS[this.network];
@@ -83,6 +87,7 @@ export class AerodromeCLManager {
       chain: getChain(this.network),
       transport: fallback(this.rpcUrls.map((rpcUrl) => http(rpcUrl))),
     });
+    this.trackerClient = new TrackerClient(this.trackerUrl);
   }
 
   async getAerodromeCLAccountPortfolio(
@@ -318,7 +323,19 @@ export class AerodromeCLManager {
           );
         }
       }
-      const liquidityRets = await Promise.all(liquidityPromises);
+      const [liquidityRets, poolSnapshotCaches] = await Promise.all([
+        Promise.all(liquidityPromises),
+        Promise.all(
+          poolAddresses.map((poolAddress) =>
+            this.trackerClient.getPoolSnapshotCaches(
+              this.network,
+              DexKeyDto.AerodromeCL,
+              poolAddress,
+            ),
+          ),
+        ),
+      ]);
+
       for (let i = 0; i < liquidityRets.length; i++) {
         const {
           aerodromeClPosition,
@@ -340,6 +357,58 @@ export class AerodromeCLManager {
         assetUsd = assetUsd.add(lpAmount0Usd).add(lpAmount1Usd);
         netUsd = netUsd.add(lpAmount0Usd).add(lpAmount1Usd);
         claimableUsd = claimableUsd.add(lpAmount0Usd).add(lpAmount1Usd);
+        const caches = poolSnapshotCaches.find((cache) =>
+          cache.snapshots.some(
+            (snapshot) =>
+              snapshot.dexKey === DexKeyDto.AerodromeCL &&
+              snapshot.poolAddress === aerodromeClPosition.poolAddress,
+          ),
+        );
+
+        let apy = '0';
+        if (caches) {
+          const holderAmountSum = caches.currentSnapshot.ticks
+            .filter(
+              (tick) =>
+                BigInt(tick.tick) >= BigInt(aerodromeClPosition.tickLower) &&
+                BigInt(tick.tick) < BigInt(aerodromeClPosition.tickUpper),
+            )
+            .reduce((acc, tick) => {
+              acc = acc
+                .add(new Decimal(tick.token0AmountUsd))
+                .add(new Decimal(tick.token1AmountUsd));
+              return acc;
+            }, new Decimal(0));
+
+          if (holderAmountSum.gt(0)) {
+            const tradingVolumeSum = caches.snapshots.reduce(
+              (acc, snapshot) => {
+                snapshot.ticks
+                  .filter(
+                    (tick) =>
+                      BigInt(tick.tick) >=
+                        BigInt(aerodromeClPosition.tickLower) &&
+                      BigInt(tick.tick) < BigInt(aerodromeClPosition.tickUpper),
+                  )
+                  .forEach((tick) => {
+                    acc = acc.add(new Decimal(tick.tradingVolume));
+                  });
+                return acc;
+              },
+              new Decimal(0),
+            );
+
+            apy = tradingVolumeSum
+              .mul(caches.currentSnapshot.fee)
+              .div(1000000n)
+              .mul(60n * 24n * 365n)
+              .mul(100)
+              .div(holderAmountSum)
+              .div(caches.snapshots.length)
+              .toString();
+          }
+        }
+
         positions.push({
           ...aerodromeClPosition,
           amount0: lpAmount0.toString(),
@@ -347,7 +416,7 @@ export class AerodromeCLManager {
           amount1: lpAmount1.toString(),
           amount1Usd: lpAmount1Usd.toString(),
           positionUsd: lpAmount0Usd.add(lpAmount1Usd).toString(),
-          apy: '0',
+          apy,
         });
       }
     }

@@ -20,8 +20,10 @@ import { UNISWAP_V3_NONFUNGIBLE_POSITION_MANAGER_ABI } from '../abis/uniswap-v3-
 import { Logger } from '@nestjs/common';
 import { UnknownException } from '../../common/exceptions/base.exception';
 import {
+  DexKeyDto,
   TokenPriceResponseDto,
   TokenPricesResponseDto,
+  TrackerClient,
 } from '../../common/tracker-client';
 import Decimal from 'decimal.js';
 import { UNISWAP_V3_POOL_ABI } from '../abis/uniswap-v3-pool.abi';
@@ -50,10 +52,12 @@ export class UniswapV3Manager {
 
   private readonly logger: Logger = new Logger(UniswapV3Manager.name);
   private readonly client: PublicClient;
+  private readonly trackerClient: TrackerClient;
 
   constructor(
     private readonly network: NetworkDto,
     private readonly rpcUrls: string[],
+    private readonly trackerUrl: string,
   ) {
     this.nonfungiblePositionManagerAddress =
       NONFUNGIBLE_POSITION_MANAGER_ADDRESS[network];
@@ -64,6 +68,7 @@ export class UniswapV3Manager {
       chain: getChain(this.network),
       transport: fallback(this.rpcUrls.map((rpcUrl) => http(rpcUrl))),
     });
+    this.trackerClient = new TrackerClient(this.trackerUrl);
   }
 
   async getUserUniswapV3Portfolio(
@@ -229,11 +234,13 @@ export class UniswapV3Manager {
         const tokenId = tokenIds[i / 2];
         const poolAddress = getCreate2Address({
           from: this.factorAddress,
-          bytecode: encodeAbiParameters(
-            parseAbiParameters(['address', 'address', 'uint24']),
-            [positionRet.token0, positionRet.token1, positionRet.fee],
+          bytecodeHash: this.initHash as `0x${string}`,
+          salt: keccak256(
+            encodeAbiParameters(
+              parseAbiParameters(['address', 'address', 'uint24']),
+              [positionRet.token0, positionRet.token1, positionRet.fee],
+            ),
           ),
-          salt: this.initHash as `0x${string}`,
         });
         const token0InfoWithPrice = tokenPrices.tokenPrices.find(
           (tokenPrice) =>
@@ -302,7 +309,18 @@ export class UniswapV3Manager {
           );
         }
       }
-      const liquidityRets = await Promise.all(liquidityPromises);
+      const [liquidityRets, poolSnapshotCaches] = await Promise.all([
+        Promise.all(liquidityPromises),
+        Promise.all(
+          poolAddresses.map((poolAddress) =>
+            this.trackerClient.getPoolSnapshotCaches(
+              this.network,
+              DexKeyDto.UniswapV3,
+              poolAddress,
+            ),
+          ),
+        ),
+      ]);
 
       for (let i = 0; i < liquidityRets.length; i++) {
         const { uniswapV3Position, token0InfoWithPrice, token1InfoWithPrice } =
@@ -324,6 +342,57 @@ export class UniswapV3Manager {
         netUsd = netUsd.add(lpAmount0Usd).add(lpAmount1Usd);
         claimableUsd = claimableUsd.add(lpAmount0Usd).add(lpAmount1Usd);
 
+        let apy = '0';
+        const caches = poolSnapshotCaches.find((cache) =>
+          cache.snapshots.some(
+            (snapshot) =>
+              snapshot.dexKey === DexKeyDto.UniswapV3 &&
+              snapshot.poolAddress === uniswapV3Position.poolAddress,
+          ),
+        );
+
+        if (caches) {
+          const holderAmountSum = caches.currentSnapshot.ticks
+            .filter(
+              (tick) =>
+                BigInt(tick.tick) >= BigInt(uniswapV3Position.tickLower) &&
+                BigInt(tick.tick) < BigInt(uniswapV3Position.tickUpper),
+            )
+            .reduce((acc, tick) => {
+              acc = acc
+                .add(new Decimal(tick.token0AmountUsd))
+                .add(new Decimal(tick.token1AmountUsd));
+              return acc;
+            }, new Decimal(0));
+
+          if (holderAmountSum.gt(0)) {
+            const tradingVolumeSum = caches.snapshots.reduce(
+              (acc, snapshot) => {
+                snapshot.ticks
+                  .filter(
+                    (tick) =>
+                      BigInt(tick.tick) >=
+                        BigInt(uniswapV3Position.tickLower) &&
+                      BigInt(tick.tick) < BigInt(uniswapV3Position.tickUpper),
+                  )
+                  .forEach((tick) => {
+                    acc = acc.add(new Decimal(tick.tradingVolume));
+                  });
+                return acc;
+              },
+              new Decimal(0),
+            );
+
+            apy = tradingVolumeSum
+              .mul(caches.currentSnapshot.fee)
+              .div(1000000n)
+              .mul(60n * 24n * 365n)
+              .mul(100)
+              .div(holderAmountSum)
+              .div(caches.snapshots.length)
+              .toString();
+          }
+        }
         positions.push({
           ...uniswapV3Position,
           amount0: lpAmount0.toString(),
@@ -331,7 +400,7 @@ export class UniswapV3Manager {
           amount1: lpAmount1.toString(),
           amount1Usd: lpAmount1Usd.toString(),
           positionUsd: lpAmount0Usd.add(lpAmount1Usd).toString(),
-          apy: '0',
+          apy,
         });
       }
     }

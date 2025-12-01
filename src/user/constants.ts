@@ -28,3 +28,10 @@ export const VALIDATOR_CONFIGS: Record<NetworkDto, ValidatorConfig> = {
     eulerV2EVC: '0x5301c7dD20bD945D2013b48ed0DEE3A284ca8989',
   },
 };
+
+export const OWLIA_ACCOUNT_SUBGRAPH_URL: Record<NetworkDto, string> = {
+  [NetworkDto.Bsc]:
+    'https://gateway.thegraph.com/api/subgraphs/id/CfR3HV42wdxJAziDrrLpR3NAfKCipKiJNRZBpmRwCGpm',
+  [NetworkDto.Base]:
+    'https://gateway.thegraph.com/api/subgraphs/id/FiPXezS3b4DSj88UJgTrQssoek8fuSHqJwo6HoKt8NTM',
+};

@@ -9,7 +9,13 @@ import {
   TokenPricesResponseDto,
   TrackerClient,
 } from '../../common/tracker-client';
-import { createPublicClient, http, PublicClient } from 'viem';
+import {
+  createPublicClient,
+  http,
+  padBytes,
+  PublicClient,
+  toBytes,
+} from 'viem';
 import { fallback } from '../../common/fallback-transport';
 import { ERC20_ABI } from '../abis/erc-20.abi';
 import { UnknownException } from '../../common/exceptions/base.exception';
@@ -18,6 +24,8 @@ import {
   PortfolioResponseDto,
   PortfolioTokenResponseDto,
 } from '../dto/user-portfolio.response.dto';
+import { OWLIA_ACCOUNT_SUBGRAPH_URL } from '../constants';
+import request, { gql } from 'graphql-request';
 
 const DEFAULT_TOKENS: Record<NetworkDto, string[]> = {
   [NetworkDto.Bsc]: [
@@ -39,6 +47,7 @@ export class UserChainManager {
   venusV4Manager: VenusV4Manager | null = null;
 
   allowedTokens: string[];
+  subgraphUrl: string;
 
   private readonly logger: Logger = new Logger(UserChainManager.name);
   private readonly trackerClient: TrackerClient;
@@ -50,7 +59,11 @@ export class UserChainManager {
     private readonly trackerUrl: string,
   ) {
     try {
-      this.uniswapV3Manager = new UniswapV3Manager(this.network, this.rpcUrls);
+      this.uniswapV3Manager = new UniswapV3Manager(
+        this.network,
+        this.rpcUrls,
+        this.trackerUrl,
+      );
     } catch (error) {
       this.logger.warn(`Failed to create UniswapV3Manager: ${error}`);
     }
@@ -58,6 +71,7 @@ export class UserChainManager {
       this.aerodromeCLManager = new AerodromeCLManager(
         this.network,
         this.rpcUrls,
+        this.trackerUrl,
       );
     } catch (error) {
       this.logger.warn(`Failed to create AerodromeCLManager: ${error}`);
@@ -89,9 +103,14 @@ export class UserChainManager {
       chain: getChain(this.network),
       transport: fallback(this.rpcUrls.map((rpcUrl) => http(rpcUrl))),
     });
+
+    this.subgraphUrl = OWLIA_ACCOUNT_SUBGRAPH_URL[this.network];
   }
 
-  async getUserPortfolio(account: string): Promise<PortfolioResponseDto> {
+  async getUserPortfolio(
+    account: string,
+    isDeployed: boolean,
+  ): Promise<PortfolioResponseDto> {
     const tokenPrices = await this.trackerClient.tokenPrices({
       tokens: this.allowedTokens.map((token) => ({
         network: this.network,
@@ -106,6 +125,7 @@ export class UserChainManager {
       eulerV2Portfolio,
       venusV4Portfolio,
       walletPortfolio,
+      netDepositUsdResponse,
     ] = await Promise.all([
       this.uniswapV3Manager?.getUserUniswapV3Portfolio(account, tokenPrices),
       this.aerodromeCLManager?.getAerodromeCLAccountPortfolio(
@@ -116,6 +136,7 @@ export class UserChainManager {
       this.eulerV2Manager?.getEulerAccountPortfolio(account, tokenPrices),
       this.venusV4Manager?.getVenusV4AccountPortfolio(account, tokenPrices),
       this.getUserWalletPortfolio(account, tokenPrices),
+      this.getUserNetDeposit(account, isDeployed),
     ]);
 
     const netUsd = walletPortfolio.wallet
@@ -127,6 +148,11 @@ export class UserChainManager {
       .add(aaveV3Portfolio?.netUsd ?? 0)
       .add(eulerV2Portfolio?.netUsd ?? 0)
       .add(venusV4Portfolio?.netUsd ?? 0);
+
+    const netDepositUsd =
+      netDepositUsdResponse === null
+        ? netUsd
+        : new Decimal(netDepositUsdResponse);
 
     const walletUsd = walletPortfolio.wallet.reduce((acc, wallet) => {
       return acc.add(new Decimal(wallet.amountUsd));
@@ -166,6 +192,7 @@ export class UserChainManager {
         address: account,
       },
       summary: {
+        netDepositUsd: netDepositUsd.toString(),
         netUsd: netUsd.toString(),
         assetUsd: assetUsd.toString(),
         debtUsd: debtUsd.toString(),
@@ -194,6 +221,31 @@ export class UserChainManager {
         venusV4Portfolio,
       ].filter((protocol) => protocol !== undefined),
     };
+  }
+
+  async getUserNetDeposit(
+    account: string,
+    isDeployed: boolean,
+  ): Promise<string | null> {
+    if (!isDeployed) {
+      return null;
+    }
+
+    const id = padBytes(toBytes(account as `0x${string}`), {
+      size: 32,
+      dir: 'left',
+    });
+
+    const query = gql`
+      {
+        owliaAccounts(where: { id: "${id}" }, orderBy: sortKey, orderDirection: asc) {
+          netDeposit
+        }
+      }
+    `;
+
+    const response = await request(this.subgraphUrl, query);
+    return response.owliaAccounts[0].netDeposit;
   }
 
   async getUserWalletPortfolio(

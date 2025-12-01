@@ -7,9 +7,15 @@ import Safe, {
   generateTypedData,
   PredictedSafeProps,
 } from '@safe-global/protocol-kit';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, In, MoreThan, Repository } from 'typeorm';
 import { parse as uuidParse, v7 as uuidV7 } from 'uuid';
-import { encodeFunctionData, toBytes, verifyTypedData } from 'viem';
+import {
+  encodeFunctionData,
+  fromBytes,
+  getAddress,
+  toBytes,
+  verifyTypedData,
+} from 'viem';
 
 import {
   InvalidSignatureException,
@@ -32,7 +38,11 @@ import { SAFE_ABI } from './abis/safe.abi';
 import { UNISWAP_V3_OWLIA_VALIDATOR_ABI } from './abis/uniswap-v3-owlia-validator.abi';
 import { VENUS_V4_OWLIA_VALIDATOR_ABI } from './abis/venus-v4-owlia-validator.abi';
 import { VALIDATOR_CONFIGS, ValidatorConfig } from './constants';
-import { getChainId, NetworkDto } from '../common/dto/network.dto';
+import {
+  getChainId,
+  getNetworkDto,
+  NetworkDto,
+} from '../common/dto/network.dto';
 import { toValidatorResponseDto, ValidatorDto } from './dto/register-user.dto';
 import {
   getUninitializedUserDeploymentResponseDto,
@@ -52,7 +62,13 @@ import {
 } from '@safe-global/types-kit';
 import { UserChainManager } from './utils/user-chain-manager';
 import trackerConfig from '../config/tracker.config';
-import { PortfolioResponseDto } from './dto/user-portfolio.response.dto';
+import {
+  PortfolioResponseDto,
+  UserPortfoliosResponseDto,
+} from './dto/user-portfolio.response.dto';
+import { Cron } from '@nestjs/schedule';
+import { UserPortfolio } from './entities/user-portfolio.entity';
+import { UserPortfoliosRequestDto } from './dto/user-portfolio.dto';
 
 @Injectable()
 export class UserService {
@@ -66,6 +82,8 @@ export class UserService {
     private userRepository: Repository<User>,
     @InjectRepository(UserDeployment)
     private userDeploymentRepository: Repository<UserDeployment>,
+    @InjectRepository(UserPortfolio)
+    private userPortfolioRepository: Repository<UserPortfolio>,
     private deploymentService: DeploymentService,
     @Inject(blockchainsConfig.KEY)
     blockchains: ConfigType<typeof blockchainsConfig>,
@@ -93,6 +111,34 @@ export class UserService {
     };
   }
 
+  @Cron('0 */10 * * * *', { timeZone: 'UTC' })
+  async storeUserPortfolios() {
+    const snapTime = new Date(Math.floor(Date.now() / 1000 / 600) * 600 * 1000);
+    const deployments = await this.userDeploymentRepository.find({
+      where: {
+        id: MoreThan(Buffer.from(new Array(16).fill(0))),
+      },
+    });
+
+    deployments.forEach(async (deployment) => {
+      const portfolio = await this.userChainManager[
+        getNetworkDto(deployment.chainId)
+      ].getUserPortfolio(
+        getAddress(fromBytes(deployment.address, 'hex')),
+        deployment.status === UserDeploymentStatus.Deployed,
+      );
+      const now = new Date();
+      const userPortfolio = new UserPortfolio();
+      userPortfolio.id = Buffer.from(uuidParse(uuidV7()));
+      userPortfolio.deploymentId = deployment.id;
+      userPortfolio.data = portfolio;
+      userPortfolio.snapTime = snapTime;
+      userPortfolio.createdAt = now;
+      userPortfolio.updatedAt = now;
+      await this.userPortfolioRepository.save(userPortfolio);
+    });
+  }
+
   async getUserPortfolio(
     network: NetworkDto,
     address: string,
@@ -111,6 +157,40 @@ export class UserService {
       address,
       deployment.status === UserDeploymentStatus.Deployed,
     );
+  }
+
+  async getUserPortfolios({
+    network,
+    address,
+    inMultiTimestampMs,
+    limit,
+  }: UserPortfoliosRequestDto): Promise<UserPortfoliosResponseDto> {
+    const addressBuffer = Buffer.from(toBytes(address as `0x${string}`));
+    const deployment = await this.userDeploymentRepository.findOne({
+      where: {
+        chainId: getChainId(network),
+        address: addressBuffer,
+      },
+    });
+    if (!deployment) {
+      throw new UserNotFoundException(network, address);
+    }
+
+    const snapTimes =
+      inMultiTimestampMs.length > 0
+        ? inMultiTimestampMs.map((timestamp) => new Date(parseInt(timestamp)))
+        : undefined;
+
+    const portfolios = await this.userPortfolioRepository.find({
+      where: {
+        deploymentId: deployment.id,
+        snapTime: snapTimes ? In(snapTimes) : undefined,
+      },
+      take: limit,
+    });
+    return {
+      portfolios: portfolios.map((portfolio) => portfolio.data),
+    };
   }
 
   async getUserInfo(owner: string): Promise<UserResponseDto> {

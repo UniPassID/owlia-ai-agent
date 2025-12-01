@@ -20,7 +20,10 @@ import { KYBER_SWAP_OWLIA_VALIDATOR_ABI } from '../src/user/abis/kyber-swap-owli
 import { MetaTransactionData } from '@safe-global/types-kit';
 import Safe from '@safe-global/protocol-kit';
 import { SAFE_ABI } from '../src/user/abis/safe.abi';
-import { PortfolioResponseDto } from '../src/user/dto/user-portfolio.response.dto';
+import {
+  PortfolioResponseDto,
+  UserPortfoliosResponseDto,
+} from '../src/user/dto/user-portfolio.response.dto';
 
 export class AgentClient {
   #validatorConfigs: Record<NetworkDto, ValidatorConfig> = VALIDATOR_CONFIGS;
@@ -123,6 +126,27 @@ export class AgentClient {
     const data = response.body as ResponseDto<PortfolioResponseDto>;
     if (data.code !== ResponseCodeDto.Success) {
       throw new Error(`Failed to get user portfolio: ${data.message}`);
+    }
+    return data.data;
+  }
+
+  async getUserPortfolios(
+    network: NetworkDto,
+    address: string,
+    inMultiTimestampMs: string[],
+    limit: number,
+  ): Promise<UserPortfoliosResponseDto> {
+    const response = await request(this.app)
+      .post(`/api/v1/user/portfolios`)
+      .send({
+        network,
+        address,
+        inMultiTimestampMs,
+        limit,
+      });
+    const data = response.body as ResponseDto<UserPortfoliosResponseDto>;
+    if (data.code !== ResponseCodeDto.Success) {
+      throw new Error(`Failed to get user portfolios: ${data.message}`);
     }
     return data.data;
   }

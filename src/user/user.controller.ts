@@ -3,9 +3,15 @@ import { UserResponseDto } from './dto/user.response.dto';
 import { ApiOk } from '../common/dto/response.dto';
 import { ApiTags } from '@nestjs/swagger';
 import { RegisterUserDto } from './dto/register-user.dto';
-import { PortfolioResponseDto } from './dto/user-portfolio.response.dto';
+import {
+  PortfolioResponseDto,
+  UserPortfoliosResponseDto,
+} from './dto/user-portfolio.response.dto';
 import { UserService } from './user.service';
-import { UserPortfolioRequestDto } from './dto/user-portfolio.dto';
+import {
+  UserPortfolioRequestDto,
+  UserPortfoliosRequestDto,
+} from './dto/user-portfolio.dto';
 
 @Controller({
   path: 'user',
@@ -38,5 +44,13 @@ export class UserController {
     @Query() query: UserPortfolioRequestDto,
   ): Promise<PortfolioResponseDto> {
     return this.userService.getUserPortfolio(query.network, query.address);
+  }
+
+  @Post('portfolios')
+  @ApiOk(UserPortfoliosResponseDto)
+  async getPortfolios(
+    @Body() body: UserPortfoliosRequestDto,
+  ): Promise<UserPortfoliosResponseDto> {
+    return this.userService.getUserPortfolios(body);
   }
 }

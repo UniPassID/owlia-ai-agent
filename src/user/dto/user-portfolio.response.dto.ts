@@ -172,3 +172,11 @@ export class PortfolioResponseDto {
   })
   protocols: ProtocolBlockResponseDto[];
 }
+
+export class UserPortfoliosResponseDto {
+  @ApiProperty({
+    description: 'The portfolios of the user',
+    type: [PortfolioResponseDto],
+  })
+  portfolios: PortfolioResponseDto[];
+}

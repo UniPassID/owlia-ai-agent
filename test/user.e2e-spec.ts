@@ -102,4 +102,18 @@ describe('UserController (e2e)', () => {
     const portfolio = await agentClient.getUserPortfolio(network, address);
     console.log(JSON.stringify(portfolio, null, 2));
   });
+
+  it('Get user portfolios on Bsc should success', async () => {
+    const network = NetworkDto.Bsc;
+    const address = '0x9e2a65a9aea1556ba741b6c35cd55f3f7aadbbb0';
+    const inMultiTimestampMs = ['1717331200000'];
+    const limit = 10;
+    const portfolios = await agentClient.getUserPortfolios(
+      network,
+      address,
+      inMultiTimestampMs,
+      limit,
+    );
+    console.log(JSON.stringify(portfolios, null, 2));
+  });
 });

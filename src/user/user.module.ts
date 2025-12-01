@@ -6,12 +6,13 @@ import { User } from './entities/user.entity';
 import { UserDeployment } from './entities/user-deployment.entity';
 import { DeploymentModule } from '../deployment/deployment.module';
 import { ConfigModule } from '@nestjs/config';
+import { UserPortfolio } from './entities/user-portfolio.entity';
 
 @Module({
   providers: [UserService],
   controllers: [UserController],
   imports: [
-    TypeOrmModule.forFeature([User, UserDeployment]),
+    TypeOrmModule.forFeature([User, UserDeployment, UserPortfolio]),
     DeploymentModule,
     ConfigModule,
   ],

@@ -11,15 +11,15 @@ import { UserResponseDto } from '../src/user/dto/user.response.dto';
 import { ValidatorDto } from '../src/user/dto/register-user.dto';
 import { VALIDATOR_CONFIGS, ValidatorConfig } from '../src/user/constants';
 import { encodeFunctionData } from 'viem';
-import { OWLIA_GUARD_ABI } from '../src/user/abis/owlia-guard.abi';
-import { UNISWAP_V3_OWLIA_VALIDATOR_ABI } from '../src/user/abis/uniswap-v3-owlia-validator.abi';
-import { AAVE_V3_OWLIA_VALIDATOR_ABI } from '../src/user/abis/aave-v3-owlia-validator.abi';
-import { EULER_V2_OWLIA_VALIDATOR_ABI } from '../src/user/abis/euler-v2-owlia-validator.abi';
-import { VENUS_V4_OWLIA_VALIDATOR_ABI } from '../src/user/abis/venus-v4-owlia-validator.abi';
-import { KYBER_SWAP_OWLIA_VALIDATOR_ABI } from '../src/user/abis/kyber-swap-owlia-validator.abi';
+import { OWLIA_GUARD_ABI } from '../src/abis/owlia-guard.abi';
+import { UNISWAP_V3_OWLIA_VALIDATOR_ABI } from '../src/abis/uniswap-v3-owlia-validator.abi';
+import { AAVE_V3_OWLIA_VALIDATOR_ABI } from '../src/abis/aave-v3-owlia-validator.abi';
+import { EULER_V2_OWLIA_VALIDATOR_ABI } from '../src/abis/euler-v2-owlia-validator.abi';
+import { VENUS_V4_OWLIA_VALIDATOR_ABI } from '../src/abis/venus-v4-owlia-validator.abi';
+import { KYBER_SWAP_OWLIA_VALIDATOR_ABI } from '../src/abis/kyber-swap-owlia-validator.abi';
 import { MetaTransactionData } from '@safe-global/types-kit';
 import Safe from '@safe-global/protocol-kit';
-import { SAFE_ABI } from '../src/user/abis/safe.abi';
+import { SAFE_ABI } from '../src/abis/safe.abi';
 import {
   PortfolioResponseDto,
   UserPortfoliosResponseDto,

@@ -11,10 +11,6 @@ import {
   PublicClient,
 } from 'viem';
 import { getChain, NetworkDto } from '../../common/dto/network.dto';
-import {
-  AerodromeCLPositionResponseDto,
-  AerodromeCLProtocolBlockResponseDto,
-} from '../dto/aerodrome-cl.response.dto';
 import { fallback } from '../../common/fallback-transport';
 import { AERODROME_CL_NONFUNGIBLE_POSITION_MANAGER_ABI } from '../../abis/aerodrome-cl-nonfungible-position-manager.abi';
 import Decimal from 'decimal.js';
@@ -22,27 +18,22 @@ import { Logger } from '@nestjs/common';
 import { UnknownException } from '../../common/exceptions/base.exception';
 import { AERODROME_CL_POOL_ABI } from '../../abis/aerodrome-cl-pool.abi';
 import {
-  DexKeyDto,
   TokenPriceResponseDto,
   TokenPricesResponseDto,
-  TrackerClient,
-} from '../../common/tracker-client';
-
-const FACTORY_ADDRESS: Record<NetworkDto, string | null> = {
-  [NetworkDto.Bsc]: null,
-  [NetworkDto.Base]: '0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A',
-};
-
-const NONFUNGIBLE_POSITION_MANAGER_ADDRESS: Record<NetworkDto, string | null> =
-  {
-    [NetworkDto.Bsc]: null,
-    [NetworkDto.Base]: '0x827922686190790b37229fd06084350E74485b72',
-  };
-
-const IMPLEMENTATION_ADDRESS: Record<NetworkDto, string | null> = {
-  [NetworkDto.Bsc]: null,
-  [NetworkDto.Base]: '0xeC8E5342B19977B4eF8892e02D8DAEcfa1315831',
-};
+} from '../../tracker/dto/token-price.response';
+import {
+  AERODROME_CL_IMPLEMENTATION_ADDRESS,
+  AERODROME_CL_FACTORY_ADDRESS,
+  AERODROME_CL_NONFUNGIBLE_POSITION_MANAGER_ADDRESS,
+} from '../../common/constants';
+import {
+  AerodromeCLLiquidityPositionResponseDto,
+  AerodromeCLPoolInfoResponseDto,
+  AerodromeCLPositionResponseDto,
+  AerodromeCLProtocolBlockResponseDto,
+} from '../dto/aerodrome-cl.response.dto';
+import { TrackerService } from '../../tracker/tracker.service';
+import { DexKeyDto } from '../../tracker/dto/pool-snapshot.dto';
 
 export class AerodromeCLManager {
   nonfungiblePositionManagerAddress: string;
@@ -51,15 +42,14 @@ export class AerodromeCLManager {
 
   private readonly client: PublicClient;
   private readonly logger: Logger = new Logger(AerodromeCLManager.name);
-  private readonly trackerClient: TrackerClient;
 
   constructor(
     private readonly network: NetworkDto,
     private readonly rpcUrls: string[],
-    private readonly trackerUrl: string,
+    private readonly trackerService: TrackerService,
   ) {
     const nonfungiblePositionManagerAddress =
-      NONFUNGIBLE_POSITION_MANAGER_ADDRESS[this.network];
+      AERODROME_CL_NONFUNGIBLE_POSITION_MANAGER_ADDRESS[this.network];
     if (!nonfungiblePositionManagerAddress) {
       throw new Error(
         `Nonfungible position manager address not found for network: ${network}`,
@@ -67,7 +57,7 @@ export class AerodromeCLManager {
     }
     this.nonfungiblePositionManagerAddress = nonfungiblePositionManagerAddress;
 
-    const factorAddress = FACTORY_ADDRESS[this.network];
+    const factorAddress = AERODROME_CL_FACTORY_ADDRESS[this.network];
     if (!factorAddress) {
       throw new Error(
         `Aerodrome Slipstream factory address not found for network: ${network}`,
@@ -75,7 +65,8 @@ export class AerodromeCLManager {
     }
     this.factorAddress = factorAddress;
 
-    const implementationAddress = IMPLEMENTATION_ADDRESS[this.network];
+    const implementationAddress =
+      AERODROME_CL_IMPLEMENTATION_ADDRESS[this.network];
     if (!implementationAddress) {
       throw new Error(
         `Aerodrome Slipstream implementation address not found for network: ${network}`,
@@ -87,7 +78,6 @@ export class AerodromeCLManager {
       chain: getChain(this.network),
       transport: fallback(this.rpcUrls.map((rpcUrl) => http(rpcUrl))),
     });
-    this.trackerClient = new TrackerClient(this.trackerUrl);
   }
 
   async getAerodromeCLAccountPortfolio(
@@ -172,12 +162,6 @@ export class AerodromeCLManager {
         token1InfoWithPrice: TokenPriceResponseDto;
       }[] = [];
       const liquidityPromises: Promise<CallReturnType>[] = [];
-      const creationCode = [
-        '0x3d602d80600a3d3981f3363d3d373d3d3d363d73', // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/proxy/Clones.sol#L110
-        this.implementationAddress.replace(/0x/, ''),
-        '5af43d82803e903d91602b57fd5bf3', // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/proxy/Clones.sol#L108
-      ].join('');
-      const salt = keccak256(creationCode as `0x${string}`);
 
       let poolAddresses: string[] = [];
       for (let i = 0; i < feesAndPositionsRets.length; i += 2) {
@@ -187,20 +171,11 @@ export class AerodromeCLManager {
         ) {
           continue;
         }
-        const poolAddress = getCreate2Address({
-          from: this.factorAddress,
-          salt: salt,
-          bytecodeHash: keccak256(
-            encodeAbiParameters(
-              parseAbiParameters(['address', 'address', 'int24']),
-              [
-                feesAndPositionsRets[i + 1][2],
-                feesAndPositionsRets[i + 1][3],
-                feesAndPositionsRets[i + 1][4],
-              ],
-            ),
-          ),
-        });
+        const poolAddress = this.getPoolAddress(
+          feesAndPositionsRets[i + 1][2],
+          feesAndPositionsRets[i + 1][3],
+          feesAndPositionsRets[i + 1][4],
+        );
         poolAddresses.push(poolAddress);
       }
 
@@ -246,14 +221,11 @@ export class AerodromeCLManager {
         }
 
         const tokenId = tokenIds[i / 2];
-        const poolAddress = getCreate2Address({
-          from: this.factorAddress,
-          salt: salt,
-          bytecode: encodeAbiParameters(
-            parseAbiParameters(['address', 'address', 'int24']),
-            [positionRet.token0, positionRet.token1, positionRet.tickSpacing],
-          ),
-        });
+        const poolAddress = this.getPoolAddress(
+          positionRet.token0,
+          positionRet.token1,
+          positionRet.tickSpacing,
+        );
         const token0InfoWithPrice = tokenPrices.tokenPrices.find(
           (tokenPrice) =>
             tokenPrice.network === this.network &&
@@ -327,7 +299,7 @@ export class AerodromeCLManager {
         Promise.all(liquidityPromises),
         Promise.all(
           poolAddresses.map((poolAddress) =>
-            this.trackerClient.getPoolSnapshotCaches(
+            this.trackerService.getPoolSnapshotCaches(
               this.network,
               DexKeyDto.AerodromeCL,
               poolAddress,
@@ -429,6 +401,131 @@ export class AerodromeCLManager {
       netUsd: netUsd.toString(),
       claimableUsd: claimableUsd.toString(),
       positions,
+    };
+  }
+
+  async getLiquidityPosition(
+    tokenId: bigint,
+  ): Promise<AerodromeCLLiquidityPositionResponseDto> {
+    const ret = await this.client.readContract({
+      address: this.nonfungiblePositionManagerAddress,
+      abi: AERODROME_CL_NONFUNGIBLE_POSITION_MANAGER_ABI,
+      functionName: 'positions',
+      args: [tokenId],
+    });
+
+    const poolAddress = this.getPoolAddress(ret[2], ret[3], ret[4]);
+
+    return {
+      poolAddress,
+      nonce: ret[0].toString(),
+      operator: ret[1],
+      token0: ret[2],
+      token1: ret[3],
+      tickSpacing: ret[4],
+      tickLower: ret[5],
+      tickUpper: ret[6],
+      liquidity: ret[7].toString(),
+      feeGrowthInside0LastX128: ret[8].toString(),
+      feeGrowthInside1LastX128: ret[9].toString(),
+      tokensOwed0: ret[10].toString(),
+      tokensOwed1: ret[11].toString(),
+    };
+  }
+
+  getPoolAddress(token0: string, token1: string, tickSpacing: number): string {
+    const creationCode = [
+      '0x3d602d80600a3d3981f3363d3d373d3d3d363d73', // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/proxy/Clones.sol#L110
+      this.implementationAddress.replace(/0x/, ''),
+      '5af43d82803e903d91602b57fd5bf3', // https://github.com/OpenZeppelin/openzeppelin-contracts/blob/master/contracts/proxy/Clones.sol#L108
+    ].join('');
+    const salt = keccak256(creationCode as `0x${string}`);
+
+    const poolAddress = getCreate2Address({
+      from: this.factorAddress,
+      salt: salt,
+      bytecodeHash: keccak256(
+        encodeAbiParameters(
+          parseAbiParameters(['address', 'address', 'int24']),
+          [token0, token1, tickSpacing],
+        ),
+      ),
+    });
+    return poolAddress;
+  }
+
+  async getPoolInfo(
+    poolAddress: string,
+  ): Promise<AerodromeCLPoolInfoResponseDto> {
+    const [
+      slot0Result,
+      token0Result,
+      token1Result,
+      feeResult,
+      tickSpacingResult,
+    ] = await this.client.multicall({
+      contracts: [
+        {
+          address: poolAddress,
+          abi: AERODROME_CL_POOL_ABI,
+          functionName: 'slot0',
+        },
+        {
+          address: poolAddress,
+          abi: AERODROME_CL_POOL_ABI,
+          functionName: 'token0',
+        },
+        {
+          address: poolAddress,
+          abi: AERODROME_CL_POOL_ABI,
+          functionName: 'token1',
+        },
+        {
+          address: poolAddress,
+          abi: AERODROME_CL_POOL_ABI,
+          functionName: 'fee',
+        },
+        {
+          address: poolAddress,
+          abi: AERODROME_CL_POOL_ABI,
+          functionName: 'tickSpacing',
+        },
+      ],
+    });
+
+    if (slot0Result.status === 'failure') {
+      this.logger.error(`got slot0 failed: ${slot0Result.error}`);
+      throw new UnknownException();
+    }
+    if (token0Result.status === 'failure') {
+      this.logger.error(`got token0 failed: ${token0Result.error}`);
+      throw new UnknownException();
+    }
+    if (token1Result.status === 'failure') {
+      this.logger.error(`got token1 failed: ${token1Result.error}`);
+      throw new UnknownException();
+    }
+    if (feeResult.status === 'failure') {
+      this.logger.error(`got fee failed: ${feeResult.error}`);
+      throw new UnknownException();
+    }
+    if (tickSpacingResult.status === 'failure') {
+      this.logger.error(`got tickSpacing failed: ${tickSpacingResult.error}`);
+      throw new UnknownException();
+    }
+
+    const [sqrtPriceX96, tick] = slot0Result.result;
+    const token0 = token0Result.result;
+    const token1 = token1Result.result;
+    const fee = feeResult.result;
+    const tickSpacing = tickSpacingResult.result;
+    return {
+      sqrtPriceX96: sqrtPriceX96.toString(),
+      token0,
+      token1,
+      fee,
+      tickSpacing,
+      tick,
     };
   }
 }

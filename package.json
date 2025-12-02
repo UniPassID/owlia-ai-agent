@@ -25,6 +25,7 @@
     "@nestjs/typeorm": "^11.0.0",
     "@safe-global/protocol-kit": "^6.1.2",
     "@safe-global/types-kit": "^3.0.0",
+    "axios": "^1.13.2",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "decimal.js": "^10.6.0",

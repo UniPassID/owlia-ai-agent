@@ -1,10 +1,10 @@
 import { ApiExtraModels, ApiProperty, getSchemaPath } from '@nestjs/swagger';
 import { NetworkDto } from '../../common/dto/network.dto';
-import { UniswapV3ProtocolBlockResponseDto } from './uniswap-v3.response.dto';
-import { AerodromeCLProtocolBlockResponseDto } from './aerodrome-cl.response.dto';
-import { AaveV3ProtocolBlockResponseDto } from './aave-v3.response.dto';
-import { EulerV2ProtocolBlockResponseDto } from './euler-v2.response.dto';
-import { VenusV4ProtocolBlockResponseDto } from './venus-v4.response.dto';
+import { UniswapV3ProtocolBlockResponseDto } from '../../uniswap-v3/dto/uniswap-v3.response.dto';
+import { AerodromeCLProtocolBlockResponseDto } from '../../aerodrome-cl/dto/aerodrome-cl.response.dto';
+import { AaveV3ProtocolBlockResponseDto } from '../../aave-v3/dto/aave-v3.response.dto';
+import { EulerV2ProtocolBlockResponseDto } from '../../euler-v2/dto/euler-v2.response.dto';
+import { VenusV4ProtocolBlockResponseDto } from '../../venus-v4/dto/venus-v4.response.dto';
 
 export class PortfolioMetaResponseDto {
   @ApiProperty({

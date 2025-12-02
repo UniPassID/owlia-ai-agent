@@ -11,30 +11,25 @@ import {
 } from '../dto/aave-v3.response.dto';
 import { AAVE_V3_ABI } from '../../abis/aave-v3.abi';
 import { AAVE_V3_DATA_PROVIDER_ABI } from '../../abis/aave-v3-data-provider.abi';
-import { UnknownException } from '../../common/exceptions/base.exception';
 import { Logger } from '@nestjs/common';
 import Decimal from 'decimal.js';
 import { getChain, NetworkDto } from '../../common/dto/network.dto';
-import { TokenPricesResponseDto } from '../../common/tracker-client';
 import { fallback } from '../../common/fallback-transport';
+import {
+  AAVE_V3_DATA_PROVIDER_ADDRESS,
+  AAVE_V3_POOL_ADDRESS,
+} from '../../common/constants';
+import { UnknownException } from '../../common/exceptions/base.exception';
+import { TokenPricesResponseDto } from '../../tracker/dto/token-price.response';
 
-const AAVE_POOL_ADDRESS: Record<NetworkDto, string> = {
-  [NetworkDto.Bsc]: '0x6807dc923806fe8fd134338eabca509979a7e0cb',
-  [NetworkDto.Base]: '0xa238dd80c259a72e81d7e4664a9801593f98d1c5',
-};
-const AAVE_DATA_PROVIDER_ADDRESS: Record<NetworkDto, string> = {
-  [NetworkDto.Bsc]: '0x1e26247502e90b4fab9d0d17e4775e90085d2a35',
-  [NetworkDto.Base]: '0x0f43731eb8d45a581f4a36dd74f5f358bc90c73a',
-};
-
-export type UserReserveData = ContractFunctionReturnType<
+type UserReserveData = ContractFunctionReturnType<
   typeof AAVE_V3_DATA_PROVIDER_ABI,
   'view',
   'getUserReserveData',
   [string, string]
 >;
 
-export type ReserveData = ContractFunctionReturnType<
+type ReserveData = ContractFunctionReturnType<
   typeof AAVE_V3_DATA_PROVIDER_ABI,
   'view',
   'getReserveData',
@@ -57,14 +52,14 @@ export class AaveV3Manager {
       transport: fallback(this.rpcUrls.map((rpcUrl) => http(rpcUrl))),
     });
 
-    this.aavePoolAddress = AAVE_POOL_ADDRESS[this.network];
+    this.aavePoolAddress = AAVE_V3_POOL_ADDRESS[this.network];
     if (!this.aavePoolAddress) {
       throw new Error(
         `Aave pool address not found for network: ${this.network}`,
       );
     }
 
-    this.aaveDataProviderAddress = AAVE_DATA_PROVIDER_ADDRESS[this.network];
+    this.aaveDataProviderAddress = AAVE_V3_DATA_PROVIDER_ADDRESS[this.network];
     if (!this.aaveDataProviderAddress) {
       throw new Error(
         `Aave data provider address not found for network: ${this.network}`,

@@ -1,471 +1,1139 @@
 export const VENUS_V4_COMPTROLLER_ABI = [
   {
-    constant: true,
-    inputs: [],
-    name: 'getAllMarkets',
-    outputs: [{ internalType: 'address[]', name: '', type: 'address[]' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    anonymous: false,
     inputs: [
       {
-        components: [
-          {
-            internalType: 'address',
-            name: 'facetAddress',
-            type: 'address',
-          },
-          {
-            internalType: 'enum IDiamondCut.FacetCutAction',
-            name: 'action',
-            type: 'uint8',
-          },
-          {
-            internalType: 'bytes4[]',
-            name: 'functionSelectors',
-            type: 'bytes4[]',
-          },
-        ],
-        indexed: false,
-        internalType: 'struct IDiamondCut.FacetCut[]',
-        name: '_diamondCut',
-        type: 'tuple[]',
-      },
-    ],
-    name: 'DiamondCut',
-    type: 'event',
-  },
-  { payable: true, stateMutability: 'payable', type: 'fallback' },
-  {
-    constant: false,
-    inputs: [
-      {
-        internalType: 'contract Unitroller',
-        name: 'unitroller',
+        internalType: 'address',
+        name: 'market',
         type: 'address',
       },
+      {
+        internalType: 'enum Action',
+        name: 'action',
+        type: 'uint8',
+      },
     ],
-    name: '_become',
-    outputs: [],
-    payable: false,
-    stateMutability: 'nonpayable',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [
-      { internalType: 'address', name: '', type: 'address' },
-      { internalType: 'uint256', name: '', type: 'uint256' },
+    name: 'actionPaused',
+    outputs: [
+      {
+        internalType: 'bool',
+        name: '',
+        type: 'bool',
+      },
     ],
-    name: 'accountAssets',
-    outputs: [{ internalType: 'contract VToken', name: '', type: 'address' }],
-    payable: false,
     stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: true,
-    inputs: [],
-    name: 'admin',
-    outputs: [{ internalType: 'address', name: '', type: 'address' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    name: 'allMarkets',
-    outputs: [{ internalType: 'contract VToken', name: '', type: 'address' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
     inputs: [
-      { internalType: 'address', name: '', type: 'address' },
-      { internalType: 'address', name: '', type: 'address' },
+      {
+        internalType: 'address',
+        name: 'borrower',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'delegate',
+        type: 'address',
+      },
     ],
     name: 'approvedDelegates',
-    outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [],
-    name: 'borrowCapGuardian',
-    outputs: [{ internalType: 'address', name: '', type: 'address' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [{ internalType: 'address', name: '', type: 'address' }],
-    name: 'borrowCaps',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [],
-    name: 'closeFactorMantissa',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [],
-    name: 'comptrollerImplementation',
-    outputs: [{ internalType: 'address', name: '', type: 'address' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [],
-    name: 'comptrollerLens',
     outputs: [
       {
-        internalType: 'contract ComptrollerLensInterface',
+        internalType: 'bool',
         name: '',
+        type: 'bool',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'account',
         type: 'address',
       },
     ],
-    payable: false,
+    name: 'authorizedFlashLoan',
+    outputs: [
+      {
+        internalType: 'bool',
+        name: '',
+        type: 'bool',
+      },
+    ],
     stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: false,
     inputs: [
       {
-        components: [
-          {
-            internalType: 'address',
-            name: 'facetAddress',
-            type: 'address',
-          },
-          {
-            internalType: 'enum IDiamondCut.FacetCutAction',
-            name: 'action',
-            type: 'uint8',
-          },
-          {
-            internalType: 'bytes4[]',
-            name: 'functionSelectors',
-            type: 'bytes4[]',
-          },
-        ],
-        internalType: 'struct IDiamondCut.FacetCut[]',
-        name: 'diamondCut_',
-        type: 'tuple[]',
+        internalType: 'address',
+        name: 'vToken',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'borrower',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: 'borrowAmount',
+        type: 'uint256',
       },
     ],
-    name: 'diamondCut',
-    outputs: [],
-    payable: false,
+    name: 'borrowAllowed',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
     stateMutability: 'nonpayable',
     type: 'function',
   },
   {
-    constant: true,
     inputs: [
-      { internalType: 'bytes4', name: 'functionSelector', type: 'bytes4' },
-    ],
-    name: 'facetAddress',
-    outputs: [
       {
-        components: [
-          {
-            internalType: 'address',
-            name: 'facetAddress',
-            type: 'address',
-          },
-          {
-            internalType: 'uint96',
-            name: 'functionSelectorPosition',
-            type: 'uint96',
-          },
-        ],
-        internalType: 'struct ComptrollerV13Storage.FacetAddressAndPosition',
-        name: '',
-        type: 'tuple',
+        internalType: 'address',
+        name: 'vToken',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'borrower',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: 'borrowAmount',
+        type: 'uint256',
       },
     ],
-    payable: false,
-    stateMutability: 'view',
+    name: 'borrowVerify',
+    outputs: [],
+    stateMutability: 'nonpayable',
     type: 'function',
   },
   {
-    constant: true,
-    inputs: [],
-    name: 'facetAddresses',
-    outputs: [{ internalType: 'address[]', name: '', type: 'address[]' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [{ internalType: 'address', name: 'facet', type: 'address' }],
-    name: 'facetFunctionSelectors',
-    outputs: [{ internalType: 'bytes4[]', name: '', type: 'bytes4[]' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [{ internalType: 'address', name: 'facet', type: 'address' }],
-    name: 'facetPosition',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [],
-    name: 'facets',
-    outputs: [
+    inputs: [
       {
-        components: [
-          {
-            internalType: 'address',
-            name: 'facetAddress',
-            type: 'address',
-          },
-          {
-            internalType: 'bytes4[]',
-            name: 'functionSelectors',
-            type: 'bytes4[]',
-          },
-        ],
-        internalType: 'struct Diamond.Facet[]',
+        internalType: 'address',
         name: '',
-        type: 'tuple[]',
+        type: 'address',
       },
     ],
-    payable: false,
-    stateMutability: 'view',
+    name: 'claimVenus',
+    outputs: [],
+    stateMutability: 'nonpayable',
     type: 'function',
   },
   {
-    constant: true,
-    inputs: [{ internalType: 'address', name: '', type: 'address' }],
-    name: 'isForcedLiquidationEnabled',
-    outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [
-      { internalType: 'address', name: '', type: 'address' },
-      { internalType: 'address', name: '', type: 'address' },
+    inputs: [],
+    name: 'corePoolId',
+    outputs: [
+      {
+        internalType: 'uint96',
+        name: '',
+        type: 'uint96',
+      },
     ],
-    name: 'isForcedLiquidationEnabledForUser',
-    outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
-    payable: false,
+    stateMutability: 'pure',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address[]',
+        name: 'vTokens',
+        type: 'address[]',
+      },
+    ],
+    name: 'enterMarkets',
+    outputs: [
+      {
+        internalType: 'uint256[]',
+        name: '',
+        type: 'uint256[]',
+      },
+    ],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address payable',
+        name: 'onBehalf',
+        type: 'address',
+      },
+      {
+        internalType: 'address payable',
+        name: 'receiver',
+        type: 'address',
+      },
+      {
+        internalType: 'contract VToken[]',
+        name: 'vTokens',
+        type: 'address[]',
+      },
+      {
+        internalType: 'uint256[]',
+        name: 'underlyingAmounts',
+        type: 'uint256[]',
+      },
+      {
+        internalType: 'bytes',
+        name: 'param',
+        type: 'bytes',
+      },
+    ],
+    name: 'executeFlashLoan',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'vToken',
+        type: 'address',
+      },
+    ],
+    name: 'exitMarket',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: '',
+        type: 'address',
+      },
+    ],
+    name: 'getAccountLiquidity',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
     stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: true,
     inputs: [],
-    name: 'liquidationIncentiveMantissa',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    payable: false,
+    name: 'getAllMarkets',
+    outputs: [
+      {
+        internalType: 'contract VToken[]',
+        name: '',
+        type: 'address[]',
+      },
+    ],
     stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: true,
+    inputs: [
+      {
+        internalType: 'address',
+        name: '',
+        type: 'address',
+      },
+    ],
+    name: 'getAssetsIn',
+    outputs: [
+      {
+        internalType: 'contract VToken[]',
+        name: '',
+        type: 'address[]',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'account',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'vToken',
+        type: 'address',
+      },
+    ],
+    name: 'getEffectiveLiquidationIncentive',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'account',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'vToken',
+        type: 'address',
+      },
+      {
+        internalType: 'enum WeightFunction',
+        name: 'weightingStrategy',
+        type: 'uint8',
+      },
+    ],
+    name: 'getEffectiveLtvFactor',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'vToken',
+        type: 'address',
+      },
+    ],
+    name: 'getLiquidationIncentive',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'uint96',
+        name: 'poolId',
+        type: 'uint96',
+      },
+    ],
+    name: 'getPoolVTokens',
+    outputs: [
+      {
+        internalType: 'address[]',
+        name: '',
+        type: 'address[]',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
     inputs: [],
-    name: 'liquidatorContract',
-    outputs: [{ internalType: 'address', name: '', type: 'address' }],
-    payable: false,
+    name: 'getXVSAddress',
+    outputs: [
+      {
+        internalType: 'address',
+        name: '',
+        type: 'address',
+      },
+    ],
     stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: true,
-    inputs: [{ internalType: 'address', name: '', type: 'address' }],
+    inputs: [],
+    name: 'isComptroller',
+    outputs: [
+      {
+        internalType: 'bool',
+        name: '',
+        type: 'bool',
+      },
+    ],
+    stateMutability: 'pure',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'isFlashLoanPaused',
+    outputs: [
+      {
+        internalType: 'bool',
+        name: '',
+        type: 'bool',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'lastPoolId',
+    outputs: [
+      {
+        internalType: 'uint96',
+        name: '',
+        type: 'uint96',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'vTokenBorrowed',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'vTokenCollateral',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'liquidator',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'borrower',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: 'repayAmount',
+        type: 'uint256',
+      },
+    ],
+    name: 'liquidateBorrowAllowed',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'vTokenBorrowed',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'vTokenCollateral',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'liquidator',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'borrower',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: 'repayAmount',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: 'seizeTokens',
+        type: 'uint256',
+      },
+    ],
+    name: 'liquidateBorrowVerify',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'borrower',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'vTokenBorrowed',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'vTokenCollateral',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: 'repayAmount',
+        type: 'uint256',
+      },
+    ],
+    name: 'liquidateCalculateSeizeTokens',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'vTokenBorrowed',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'vTokenCollateral',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: 'repayAmount',
+        type: 'uint256',
+      },
+    ],
+    name: 'liquidateCalculateSeizeTokens',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'vTokenCollateral',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: 'repayAmount',
+        type: 'uint256',
+      },
+    ],
+    name: 'liquidateVAICalculateSeizeTokens',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: '',
+        type: 'address',
+      },
+    ],
     name: 'markets',
     outputs: [
-      { internalType: 'bool', name: 'isListed', type: 'bool' },
+      {
+        internalType: 'bool',
+        name: '',
+        type: 'bool',
+      },
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+      {
+        internalType: 'bool',
+        name: '',
+        type: 'bool',
+      },
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint96',
+        name: '',
+        type: 'uint96',
+      },
+      {
+        internalType: 'bool',
+        name: '',
+        type: 'bool',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'vToken',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'minter',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: 'mintAmount',
+        type: 'uint256',
+      },
+    ],
+    name: 'mintAllowed',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'vToken',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'minter',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: 'mintAmount',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: 'mintTokens',
+        type: 'uint256',
+      },
+    ],
+    name: 'mintVerify',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'user',
+        type: 'address',
+      },
+    ],
+    name: 'mintedVAIs',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [],
+    name: 'oracle',
+    outputs: [
+      {
+        internalType: 'contract ResilientOracleInterface',
+        name: '',
+        type: 'address',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'uint96',
+        name: 'poolId',
+        type: 'uint96',
+      },
+      {
+        internalType: 'address',
+        name: 'vToken',
+        type: 'address',
+      },
+    ],
+    name: 'poolMarkets',
+    outputs: [
+      {
+        internalType: 'bool',
+        name: 'isListed',
+        type: 'bool',
+      },
       {
         internalType: 'uint256',
         name: 'collateralFactorMantissa',
         type: 'uint256',
       },
-      { internalType: 'bool', name: 'isVenus', type: 'bool' },
+      {
+        internalType: 'bool',
+        name: 'isVenus',
+        type: 'bool',
+      },
+      {
+        internalType: 'uint256',
+        name: 'liquidationThresholdMantissa',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: 'liquidationIncentiveMantissa',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint96',
+        name: 'marketPoolId',
+        type: 'uint96',
+      },
+      {
+        internalType: 'bool',
+        name: 'isBorrowAllowed',
+        type: 'bool',
+      },
     ],
-    payable: false,
     stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: true,
-    inputs: [],
-    name: 'maxAssets',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [],
-    name: 'minReleaseAmount',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [],
-    name: 'mintVAIGuardianPaused',
-    outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [{ internalType: 'address', name: '', type: 'address' }],
-    name: 'mintedVAIs',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [],
-    name: 'oracle',
+    inputs: [
+      {
+        internalType: 'uint96',
+        name: 'poolId',
+        type: 'uint96',
+      },
+    ],
+    name: 'pools',
     outputs: [
-      { internalType: 'contract PriceOracle', name: '', type: 'address' },
+      {
+        internalType: 'string',
+        name: 'label',
+        type: 'string',
+      },
+      {
+        internalType: 'bool',
+        name: 'isActive',
+        type: 'bool',
+      },
+      {
+        internalType: 'bool',
+        name: 'allowCorePoolFallback',
+        type: 'bool',
+      },
     ],
-    payable: false,
     stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: true,
-    inputs: [],
-    name: 'pauseGuardian',
-    outputs: [{ internalType: 'address', name: '', type: 'address' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [],
-    name: 'pendingAdmin',
-    outputs: [{ internalType: 'address', name: '', type: 'address' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [],
-    name: 'pendingComptrollerImplementation',
-    outputs: [{ internalType: 'address', name: '', type: 'address' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [],
-    name: 'prime',
-    outputs: [{ internalType: 'contract IPrime', name: '', type: 'address' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
     inputs: [],
     name: 'protocolPaused',
-    outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
-    payable: false,
+    outputs: [
+      {
+        internalType: 'bool',
+        name: '',
+        type: 'bool',
+      },
+    ],
     stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: true,
-    inputs: [],
-    name: 'releaseStartBlock',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    payable: false,
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'vToken',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'redeemer',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: 'redeemTokens',
+        type: 'uint256',
+      },
+    ],
+    name: 'redeemAllowed',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'vToken',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'redeemer',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: 'redeemAmount',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: 'redeemTokens',
+        type: 'uint256',
+      },
+    ],
+    name: 'redeemVerify',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'vToken',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'payer',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'borrower',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: 'repayAmount',
+        type: 'uint256',
+      },
+    ],
+    name: 'repayBorrowAllowed',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'vToken',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'payer',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'borrower',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: 'repayAmount',
+        type: 'uint256',
+      },
+      {
+        internalType: 'uint256',
+        name: 'borrowerIndex',
+        type: 'uint256',
+      },
+    ],
+    name: 'repayBorrowVerify',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'vTokenCollateral',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'vTokenBorrowed',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'liquidator',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'borrower',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: 'seizeTokens',
+        type: 'uint256',
+      },
+    ],
+    name: 'seizeAllowed',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'vTokenCollateral',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'vTokenBorrowed',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'liquidator',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'borrower',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: 'seizeTokens',
+        type: 'uint256',
+      },
+    ],
+    name: 'seizeVerify',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'owner',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: 'amount',
+        type: 'uint256',
+      },
+    ],
+    name: 'setMintedVAIOf',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'vToken',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'src',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'dst',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: 'transferTokens',
+        type: 'uint256',
+      },
+    ],
+    name: 'transferAllowed',
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'vToken',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'src',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: 'dst',
+        type: 'address',
+      },
+      {
+        internalType: 'uint256',
+        name: 'transferTokens',
+        type: 'uint256',
+      },
+    ],
+    name: 'transferVerify',
+    outputs: [],
+    stateMutability: 'nonpayable',
+    type: 'function',
+  },
+  {
+    inputs: [
+      {
+        internalType: 'address',
+        name: 'account',
+        type: 'address',
+      },
+    ],
+    name: 'userPoolId',
+    outputs: [
+      {
+        internalType: 'uint96',
+        name: '',
+        type: 'uint96',
+      },
+    ],
     stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: true,
-    inputs: [],
-    name: 'repayVAIGuardianPaused',
-    outputs: [{ internalType: 'bool', name: '', type: 'bool' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [{ internalType: 'address', name: '', type: 'address' }],
-    name: 'supplyCaps',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [],
-    name: 'treasuryAddress',
-    outputs: [{ internalType: 'address', name: '', type: 'address' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [],
-    name: 'treasuryGuardian',
-    outputs: [{ internalType: 'address', name: '', type: 'address' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [],
-    name: 'treasuryPercent',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
     inputs: [],
     name: 'vaiController',
     outputs: [
@@ -475,109 +1143,185 @@ export const VENUS_V4_COMPTROLLER_ABI = [
         type: 'address',
       },
     ],
-    payable: false,
     stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: true,
     inputs: [],
     name: 'vaiMintRate',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    payable: false,
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
     stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: true,
-    inputs: [],
-    name: 'vaiVaultAddress',
-    outputs: [{ internalType: 'address', name: '', type: 'address' }],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [{ internalType: 'address', name: '', type: 'address' }],
+    inputs: [
+      {
+        internalType: 'address',
+        name: '',
+        type: 'address',
+      },
+    ],
     name: 'venusAccrued',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    payable: false,
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
     stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: true,
-    inputs: [{ internalType: 'address', name: '', type: 'address' }],
+    inputs: [
+      {
+        internalType: 'address',
+        name: '',
+        type: 'address',
+      },
+    ],
     name: 'venusBorrowSpeeds',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    payable: false,
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
     stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: true,
-    inputs: [{ internalType: 'address', name: '', type: 'address' }],
+    inputs: [
+      {
+        internalType: 'address',
+        name: '',
+        type: 'address',
+      },
+    ],
     name: 'venusBorrowState',
     outputs: [
-      { internalType: 'uint224', name: 'index', type: 'uint224' },
-      { internalType: 'uint32', name: 'block', type: 'uint32' },
+      {
+        internalType: 'uint224',
+        name: '',
+        type: 'uint224',
+      },
+      {
+        internalType: 'uint32',
+        name: '',
+        type: 'uint32',
+      },
     ],
-    payable: false,
     stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: true,
     inputs: [
-      { internalType: 'address', name: '', type: 'address' },
-      { internalType: 'address', name: '', type: 'address' },
+      {
+        internalType: 'address',
+        name: '',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: '',
+        type: 'address',
+      },
     ],
     name: 'venusBorrowerIndex',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    payable: false,
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
     stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: true,
+    inputs: [],
+    name: 'venusInitialIndex',
+    outputs: [
+      {
+        internalType: 'uint224',
+        name: '',
+        type: 'uint224',
+      },
+    ],
+    stateMutability: 'view',
+    type: 'function',
+  },
+  {
     inputs: [
-      { internalType: 'address', name: '', type: 'address' },
-      { internalType: 'address', name: '', type: 'address' },
+      {
+        internalType: 'address',
+        name: '',
+        type: 'address',
+      },
+      {
+        internalType: 'address',
+        name: '',
+        type: 'address',
+      },
     ],
     name: 'venusSupplierIndex',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    payable: false,
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
     stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: true,
-    inputs: [{ internalType: 'address', name: '', type: 'address' }],
+    inputs: [
+      {
+        internalType: 'address',
+        name: '',
+        type: 'address',
+      },
+    ],
     name: 'venusSupplySpeeds',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    payable: false,
+    outputs: [
+      {
+        internalType: 'uint256',
+        name: '',
+        type: 'uint256',
+      },
+    ],
     stateMutability: 'view',
     type: 'function',
   },
   {
-    constant: true,
-    inputs: [{ internalType: 'address', name: '', type: 'address' }],
+    inputs: [
+      {
+        internalType: 'address',
+        name: '',
+        type: 'address',
+      },
+    ],
     name: 'venusSupplyState',
     outputs: [
-      { internalType: 'uint224', name: 'index', type: 'uint224' },
-      { internalType: 'uint32', name: 'block', type: 'uint32' },
+      {
+        internalType: 'uint224',
+        name: '',
+        type: 'uint224',
+      },
+      {
+        internalType: 'uint32',
+        name: '',
+        type: 'uint32',
+      },
     ],
-    payable: false,
-    stateMutability: 'view',
-    type: 'function',
-  },
-  {
-    constant: true,
-    inputs: [],
-    name: 'venusVAIVaultRate',
-    outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }],
-    payable: false,
     stateMutability: 'view',
     type: 'function',
   },

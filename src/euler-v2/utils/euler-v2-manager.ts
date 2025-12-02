@@ -17,24 +17,13 @@ import { UnknownException } from '../../common/exceptions/base.exception';
 import { EULER_V2_GOVERNED_PERSPECTIVE_ABI } from '../../abis/euler-v2-governed-perspective.abi';
 import { EULER_V2_ACCOUNT_LENS_ABI } from '../../abis/euler-v2-account-lens.abi';
 import Decimal from 'decimal.js';
-import { TokenPricesResponseDto } from '../../common/tracker-client';
-
-const ACCOUNT_LENS_ADDRESS: Record<NetworkDto, string> = {
-  [NetworkDto.Bsc]: '0x505f3214df11f3e7c7351e7c262e2ba1459fea60',
-  [NetworkDto.Base]: '0xe523607fb5c1e9e7092f4e173cbfd1beb32d524a',
-};
-const EV_ADDRESS: Record<NetworkDto, string> = {
-  [NetworkDto.Bsc]: '0xb2e5a73cee08593d1a076a2ae7a6e02925a640ea',
-  [NetworkDto.Base]: '0x5301c7dd20bd945d2013b48ed0dee3a284ca8989',
-};
-const GOVERNED_PERSPECTIVE_ADDRESS: Record<NetworkDto, string> = {
-  [NetworkDto.Bsc]: '0x775231e5da4f548555eee633ebf7355a83a0fc03',
-  [NetworkDto.Base]: '0xafc8545c49df2c8216305922d9753bf60bf8c14a',
-};
-const UTILS_LENS_ADDRESS: Record<NetworkDto, string> = {
-  [NetworkDto.Bsc]: '0x30be272d1441e9935bcbea2cd924cd5e568a052e',
-  [NetworkDto.Base]: '0xe055fa087e836efacafa257e5f6cf90936c26cb5',
-};
+import {
+  EULER_V2_UTILS_LENS_ADDRESS,
+  EULER_V2_ACCOUNT_LENS_ADDRESS,
+  EULER_V2_EVC_ADDRESS,
+  EULER_V2_GOVERNED_PERSPECTIVE_ADDRESS,
+} from '../../common/constants';
+import { TokenPricesResponseDto } from '../../tracker/dto/token-price.response';
 
 type GetVaultAccountInfoReturnType = ContractFunctionReturnType<
   typeof EULER_V2_ACCOUNT_LENS_ABI,
@@ -69,10 +58,11 @@ export class EulerV2Manager {
     private readonly network: NetworkDto,
     private readonly rpcUrls: string[],
   ) {
-    this.accountLensAddress = ACCOUNT_LENS_ADDRESS[network];
-    this.evAddress = EV_ADDRESS[network];
-    this.governedPerspectiveAddress = GOVERNED_PERSPECTIVE_ADDRESS[network];
-    this.utilsLensAddress = UTILS_LENS_ADDRESS[network];
+    this.accountLensAddress = EULER_V2_ACCOUNT_LENS_ADDRESS[network];
+    this.evAddress = EULER_V2_EVC_ADDRESS[network];
+    this.governedPerspectiveAddress =
+      EULER_V2_GOVERNED_PERSPECTIVE_ADDRESS[network];
+    this.utilsLensAddress = EULER_V2_UTILS_LENS_ADDRESS[network];
 
     this.client = createPublicClient({
       chain: getChain(this.network),

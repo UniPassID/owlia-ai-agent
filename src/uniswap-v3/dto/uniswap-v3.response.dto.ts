@@ -1,6 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-export class AerodromeCLPositionResponseDto {
+export class UniswapV3PositionResponseDto {
   @ApiProperty({
     description: 'The pool address of the position',
     example: '0x1234567890abcdef',
@@ -98,22 +98,22 @@ export class AerodromeCLPositionResponseDto {
   apy: string;
 }
 
-export class AerodromeCLProtocolBlockResponseDto {
+export class UniswapV3ProtocolBlockResponseDto {
   @ApiProperty({
     description: 'The ID of the protocol block',
-    example: 'aerodrome-cl',
+    example: 'uniswap-v3',
   })
-  id: 'aerodrome-cl';
+  id: 'uniswap-v3';
   @ApiProperty({
     description: 'The name of the protocol',
-    example: 'Aerodrome',
+    example: 'Uniswap',
   })
-  name: 'Aerodrome';
+  name: 'Uniswap';
   @ApiProperty({
     description: 'The version of the protocol',
-    example: 'v2',
+    example: 'v3',
   })
-  version: 'v2';
+  version: 'v3';
 
   @ApiProperty({
     description: 'The asset USD of the protocol',
@@ -138,7 +138,112 @@ export class AerodromeCLProtocolBlockResponseDto {
 
   @ApiProperty({
     description: 'The positions of the protocol',
-    type: [AerodromeCLPositionResponseDto],
+    type: [UniswapV3PositionResponseDto],
   })
-  positions: AerodromeCLPositionResponseDto[];
+  positions: UniswapV3PositionResponseDto[];
+}
+
+export class UniswapV3LiquidityPositionResponseDto {
+  @ApiProperty({
+    description: 'The pool address of the position',
+    example: '0x1234567890abcdef',
+  })
+  poolAddress: string;
+  @ApiProperty({
+    description: 'The nonce of the position',
+    example: '1.00',
+  })
+  nonce: string;
+  @ApiProperty({
+    description: 'The operator of the position',
+    example: '0x1234567890abcdef',
+  })
+  operator: string;
+  @ApiProperty({
+    description: 'The token0 of the position',
+    example: '0x1234567890abcdef',
+  })
+  token0: string;
+  @ApiProperty({
+    description: 'The token1 of the position',
+    example: '0x1234567890abcdef',
+  })
+  token1: string;
+  @ApiProperty({
+    description: 'The fee of the position',
+    example: '1.00',
+  })
+  fee: number;
+  @ApiProperty({
+    description: 'The tick lower of the position',
+    example: '1.00',
+  })
+  tickLower: number;
+  @ApiProperty({
+    description: 'The tick upper of the position',
+    example: '1.00',
+  })
+  tickUpper: number;
+  @ApiProperty({
+    description: 'The liquidity of the position',
+    example: '1.00',
+  })
+  liquidity: string;
+  @ApiProperty({
+    description: 'The tokens owed0 of the position',
+    example: '1.00',
+  })
+  feeGrowthInside0LastX128: string;
+  @ApiProperty({
+    description: 'The tokens owed1 of the position',
+    example: '1.00',
+  })
+  feeGrowthInside1LastX128: string;
+  @ApiProperty({
+    description: 'The tokens owed0 of the position',
+    example: '1.00',
+  })
+  tokensOwed0: string;
+  @ApiProperty({
+    description: 'The tokens owed1 of the position',
+    example: '1.00',
+  })
+  tokensOwed1: string;
+}
+
+export class UniswapV3PoolInfoResponseDto {
+  @ApiProperty({
+    description: 'The sqrt price X96 of the pool',
+    example: '1.00',
+  })
+  sqrtPriceX96: string;
+
+  @ApiProperty({
+    description: 'The tick spacing of the pool',
+    example: 1,
+  })
+  tickSpacing: number;
+
+  @ApiProperty({
+    description: 'The tick of the pool',
+    example: 1,
+  })
+  tick: number;
+
+  @ApiProperty({
+    description: 'The token0 of the pool',
+    example: '0x1234567890abcdef',
+  })
+  token0: string;
+  @ApiProperty({
+    description: 'The token1 of the pool',
+    example: '0x1234567890abcdef',
+  })
+  token1: string;
+
+  @ApiProperty({
+    description: 'The fee of the pool',
+    example: 1,
+  })
+  fee: number;
 }

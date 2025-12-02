@@ -9,15 +9,24 @@ import databaseConfig from './config/database.config';
 import blockchainsConfig from './config/blockchains.config';
 import trackerConfig from './config/tracker.config';
 import { ScheduleModule } from '@nestjs/schedule';
+import { OwliaGuardModule } from './owlia-guard/owlia-guard.module';
+import { AaveV3Module } from './aave-v3/aave-v3.module';
+import { EulerV2Service } from './euler-v2/euler-v2.service';
+import { EulerV2Module } from './euler-v2/euler-v2.module';
+import { AerodromeClService } from './aerodrome-cl/aerodrome-cl.service';
+import { AerodromeClModule } from './aerodrome-cl/aerodrome-cl.module';
+import { UniswapV3Module } from './uniswap-v3/uniswap-v3.module';
+import { VenusV4Module } from './venus-v4/venus-v4.module';
+import { TrackerService } from './tracker/tracker.service';
+import { TrackerModule } from './tracker/tracker.module';
+import privateConfig from './config/private.config';
 
 @Module({
   imports: [
-    UserModule,
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [databaseConfig, blockchainsConfig, trackerConfig],
+      load: [databaseConfig, blockchainsConfig, trackerConfig, privateConfig],
     }),
-    DeploymentModule,
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
@@ -36,8 +45,17 @@ import { ScheduleModule } from '@nestjs/schedule';
       inject: [ConfigService],
     }),
     ScheduleModule.forRoot(),
+    DeploymentModule,
+    UserModule,
+    OwliaGuardModule,
+    AaveV3Module,
+    EulerV2Module,
+    AerodromeClModule,
+    UniswapV3Module,
+    VenusV4Module,
+    TrackerModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, EulerV2Service, AerodromeClService, TrackerService],
 })
 export class AppModule {}

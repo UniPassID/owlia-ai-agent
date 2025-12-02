@@ -13,6 +13,8 @@ import {
 import { getChain, NetworkDto } from '../../common/dto/network.dto';
 import { fallback } from '../../common/fallback-transport';
 import {
+  UniswapV3LiquidityPositionResponseDto,
+  UniswapV3PoolInfoResponseDto,
   UniswapV3PositionResponseDto,
   UniswapV3ProtocolBlockResponseDto,
 } from '../dto/uniswap-v3.response.dto';
@@ -20,30 +22,18 @@ import { UNISWAP_V3_NONFUNGIBLE_POSITION_MANAGER_ABI } from '../../abis/uniswap-
 import { Logger } from '@nestjs/common';
 import { UnknownException } from '../../common/exceptions/base.exception';
 import {
-  DexKeyDto,
   TokenPriceResponseDto,
   TokenPricesResponseDto,
-  TrackerClient,
-} from '../../common/tracker-client';
+} from '../../tracker/dto/token-price.response';
+import { TrackerService } from '../../tracker/tracker.service';
 import Decimal from 'decimal.js';
 import { UNISWAP_V3_POOL_ABI } from '../../abis/uniswap-v3-pool.abi';
-
-const FACTORY_ADDRESS: Record<NetworkDto, string> = {
-  [NetworkDto.Bsc]: '0xdb1d10011ad0ff90774d0c6bb92e5c5c8b4461f7',
-  [NetworkDto.Base]: '0x33128a8fC17869897dcE68Ed026d694621f6FDfD',
-};
-
-const INIT_HASH: Record<NetworkDto, string> = {
-  [NetworkDto.Bsc]:
-    '0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54',
-  [NetworkDto.Base]:
-    '0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54',
-};
-
-const NONFUNGIBLE_POSITION_MANAGER_ADDRESS: Record<NetworkDto, string> = {
-  [NetworkDto.Bsc]: '0x7b8a01b39d58278b5de7e48c8449c9f4f5170613',
-  [NetworkDto.Base]: '0x03a520b32C04BF3bEEf7BEb72E919cf822Ed34f1',
-};
+import {
+  UNISWAP_V3_FACTORY_ADDRESS,
+  UNISWAP_V3_INIT_HASH,
+  UNISWAP_V3_NONFUNGIBLE_POSITION_MANAGER_ADDRESS,
+} from '../../common/constants';
+import { DexKeyDto } from '../../tracker/dto/pool-snapshot.dto';
 
 export class UniswapV3Manager {
   nonfungiblePositionManagerAddress: string;
@@ -52,23 +42,21 @@ export class UniswapV3Manager {
 
   private readonly logger: Logger = new Logger(UniswapV3Manager.name);
   private readonly client: PublicClient;
-  private readonly trackerClient: TrackerClient;
 
   constructor(
     private readonly network: NetworkDto,
     private readonly rpcUrls: string[],
-    private readonly trackerUrl: string,
+    private readonly trackerService: TrackerService,
   ) {
     this.nonfungiblePositionManagerAddress =
-      NONFUNGIBLE_POSITION_MANAGER_ADDRESS[network];
-    this.factorAddress = FACTORY_ADDRESS[network];
-    this.initHash = INIT_HASH[network];
+      UNISWAP_V3_NONFUNGIBLE_POSITION_MANAGER_ADDRESS[network];
+    this.factorAddress = UNISWAP_V3_FACTORY_ADDRESS[network];
+    this.initHash = UNISWAP_V3_INIT_HASH[network];
 
     this.client = createPublicClient({
       chain: getChain(this.network),
       transport: fallback(this.rpcUrls.map((rpcUrl) => http(rpcUrl))),
     });
-    this.trackerClient = new TrackerClient(this.trackerUrl);
   }
 
   async getUserUniswapV3Portfolio(
@@ -145,20 +133,11 @@ export class UniswapV3Manager {
         ) {
           continue;
         }
-        const poolAddress = getCreate2Address({
-          from: this.factorAddress,
-          salt: keccak256(
-            encodeAbiParameters(
-              parseAbiParameters(['address', 'address', 'uint24']),
-              [
-                feesAndPositionsRets[i + 1][2],
-                feesAndPositionsRets[i + 1][3],
-                feesAndPositionsRets[i + 1][4],
-              ],
-            ),
-          ),
-          bytecodeHash: this.initHash as `0x${string}`,
-        });
+        const poolAddress = this.getPoolAddress(
+          feesAndPositionsRets[i + 1][2],
+          feesAndPositionsRets[i + 1][3],
+          feesAndPositionsRets[i + 1][4],
+        );
         poolAddresses.push(poolAddress);
       }
 
@@ -232,16 +211,11 @@ export class UniswapV3Manager {
         }
 
         const tokenId = tokenIds[i / 2];
-        const poolAddress = getCreate2Address({
-          from: this.factorAddress,
-          bytecodeHash: this.initHash as `0x${string}`,
-          salt: keccak256(
-            encodeAbiParameters(
-              parseAbiParameters(['address', 'address', 'uint24']),
-              [positionRet.token0, positionRet.token1, positionRet.fee],
-            ),
-          ),
-        });
+        const poolAddress = this.getPoolAddress(
+          positionRet.token0,
+          positionRet.token1,
+          positionRet.fee,
+        );
         const token0InfoWithPrice = tokenPrices.tokenPrices.find(
           (tokenPrice) =>
             tokenPrice.network === this.network &&
@@ -313,7 +287,7 @@ export class UniswapV3Manager {
         Promise.all(liquidityPromises),
         Promise.all(
           poolAddresses.map((poolAddress) =>
-            this.trackerClient.getPoolSnapshotCaches(
+            this.trackerService.getPoolSnapshotCaches(
               this.network,
               DexKeyDto.UniswapV3,
               poolAddress,
@@ -413,6 +387,125 @@ export class UniswapV3Manager {
       netUsd: netUsd.toString(),
       claimableUsd: claimableUsd.toString(),
       positions,
+    };
+  }
+
+  async getLiquidityPosition(
+    tokenId: bigint,
+  ): Promise<UniswapV3LiquidityPositionResponseDto> {
+    const ret = await this.client.readContract({
+      address: this.nonfungiblePositionManagerAddress,
+      abi: UNISWAP_V3_NONFUNGIBLE_POSITION_MANAGER_ABI,
+      functionName: 'positions',
+      args: [tokenId],
+    });
+
+    const poolAddress = this.getPoolAddress(ret[2], ret[3], ret[4]);
+
+    return {
+      poolAddress,
+      nonce: ret[0].toString(),
+      operator: ret[1],
+      token0: ret[2],
+      token1: ret[3],
+      fee: ret[4],
+      tickLower: ret[5],
+      tickUpper: ret[6],
+      liquidity: ret[7].toString(),
+      feeGrowthInside0LastX128: ret[8].toString(),
+      feeGrowthInside1LastX128: ret[9].toString(),
+      tokensOwed0: ret[10].toString(),
+      tokensOwed1: ret[11].toString(),
+    };
+  }
+
+  getPoolAddress(token0: string, token1: string, fee: number): string {
+    const poolAddress = getCreate2Address({
+      from: this.factorAddress,
+      bytecodeHash: this.initHash as `0x${string}`,
+      salt: keccak256(
+        encodeAbiParameters(
+          parseAbiParameters(['address', 'address', 'uint24']),
+          [token0, token1, fee],
+        ),
+      ),
+    });
+    return poolAddress;
+  }
+
+  async getPoolInfo(
+    poolAddress: string,
+  ): Promise<UniswapV3PoolInfoResponseDto> {
+    const [
+      slot0Result,
+      token0Result,
+      token1Result,
+      feeResult,
+      tickSpacingResult,
+    ] = await this.client.multicall({
+      contracts: [
+        {
+          address: poolAddress,
+          abi: UNISWAP_V3_POOL_ABI,
+          functionName: 'slot0',
+        },
+        {
+          address: poolAddress,
+          abi: UNISWAP_V3_POOL_ABI,
+          functionName: 'token0',
+        },
+        {
+          address: poolAddress,
+          abi: UNISWAP_V3_POOL_ABI,
+          functionName: 'token1',
+        },
+        {
+          address: poolAddress,
+          abi: UNISWAP_V3_POOL_ABI,
+          functionName: 'fee',
+        },
+        {
+          address: poolAddress,
+          abi: UNISWAP_V3_POOL_ABI,
+          functionName: 'tickSpacing',
+        },
+      ],
+    });
+
+    if (slot0Result.status === 'failure') {
+      this.logger.error(`got slot0 failed: ${slot0Result.error}`);
+      throw new UnknownException();
+    }
+    if (token0Result.status === 'failure') {
+      this.logger.error(`got token0 failed: ${token0Result.error}`);
+      throw new UnknownException();
+    }
+    if (token1Result.status === 'failure') {
+      this.logger.error(`got token1 failed: ${token1Result.error}`);
+      throw new UnknownException();
+    }
+    if (feeResult.status === 'failure') {
+      this.logger.error(`got fee failed: ${feeResult.error}`);
+      throw new UnknownException();
+    }
+    if (tickSpacingResult.status === 'failure') {
+      this.logger.error(`got tickSpacing failed: ${tickSpacingResult.error}`);
+      throw new UnknownException();
+    }
+
+    const [sqrtPriceX96, tick] = slot0Result.result;
+    const token0 = token0Result.result;
+    const token1 = token1Result.result;
+    const fee = feeResult.result;
+    const tickSpacing = tickSpacingResult.result;
+
+    return {
+      sqrtPriceX96: sqrtPriceX96.toString(),
+      tick,
+      token0,
+      token1,
+      fee,
+      tickSpacing,
     };
   }
 }

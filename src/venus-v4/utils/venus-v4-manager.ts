@@ -12,17 +12,11 @@ import { Logger } from '@nestjs/common';
 import { VENUS_V4_LENS_ABI } from '../../abis/venus-v4-lens.abi';
 import { UnknownException } from '../../common/exceptions/base.exception';
 import Decimal from 'decimal.js';
-import { TokenPricesResponseDto } from '../../common/tracker-client';
-
-const COMPTROLLER_ADDRESS: Record<NetworkDto, string | null> = {
-  [NetworkDto.Bsc]: '0xfd36e2c2a6789db23113685031d7f16329158384',
-  [NetworkDto.Base]: null,
-};
-
-const LENS_ADDRESS: Record<NetworkDto, string | null> = {
-  [NetworkDto.Bsc]: '0xe4c455cbf870a86399043b8a36a669ffa1583e95',
-  [NetworkDto.Base]: null,
-};
+import { TokenPricesResponseDto } from '../../tracker/dto/token-price.response';
+import {
+  VENUS_V4_COMPTROLLER_ADDRESS,
+  VENUS_V4_LENS_ADDRESS,
+} from '../../common/constants';
 
 export class VenusV4Manager {
   comptrollerAddress: string;
@@ -35,7 +29,7 @@ export class VenusV4Manager {
     private readonly network: NetworkDto,
     private readonly rpcUrls: string[],
   ) {
-    const comptrollerAddress = COMPTROLLER_ADDRESS[network];
+    const comptrollerAddress = VENUS_V4_COMPTROLLER_ADDRESS[network];
     if (!comptrollerAddress) {
       throw new Error(
         `Venus V4 comptroller address not found for network: ${network}`,
@@ -43,7 +37,7 @@ export class VenusV4Manager {
     }
     this.comptrollerAddress = comptrollerAddress;
 
-    const lensAddress = LENS_ADDRESS[network];
+    const lensAddress = VENUS_V4_LENS_ADDRESS[network];
     if (!lensAddress) {
       throw new Error(
         `Venus V4 lens address not found for network: ${network}`,

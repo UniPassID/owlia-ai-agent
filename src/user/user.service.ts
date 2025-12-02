@@ -58,10 +58,10 @@ import {
 import {
   EIP712TypedDataMessage,
   EIP712TypedDataTx,
+  MetaTransactionData,
   SafeEIP712Args,
 } from '@safe-global/types-kit';
 import { UserChainManager } from './utils/user-chain-manager';
-import trackerConfig from '../config/tracker.config';
 import {
   PortfolioResponseDto,
   UserPortfoliosResponseDto,
@@ -69,6 +69,12 @@ import {
 import { Cron } from '@nestjs/schedule';
 import { UserPortfolio } from './entities/user-portfolio.entity';
 import { UserPortfoliosRequestDto } from './dto/user-portfolio.dto';
+import { UniswapV3Service } from '../uniswap-v3/uniswap-v3.service';
+import { VenusV4Service } from '../venus-v4/venus-v4.service';
+import { EulerV2Service } from '../euler-v2/euler-v2.service';
+import { AerodromeClService } from '../aerodrome-cl/aerodrome-cl.service';
+import { AaveV3Service } from '../aave-v3/aave-v3.service';
+import { TrackerService } from '../tracker/tracker.service';
 
 @Injectable()
 export class UserService {
@@ -85,10 +91,14 @@ export class UserService {
     @InjectRepository(UserPortfolio)
     private userPortfolioRepository: Repository<UserPortfolio>,
     private deploymentService: DeploymentService,
+    private aaveV3Service: AaveV3Service,
+    private aerodromeCLService: AerodromeClService,
+    private eulerV2Service: EulerV2Service,
+    private venusV4Service: VenusV4Service,
+    private uniswapV3Service: UniswapV3Service,
+    private trackerService: TrackerService,
     @Inject(blockchainsConfig.KEY)
     blockchains: ConfigType<typeof blockchainsConfig>,
-    @Inject(trackerConfig.KEY)
-    tracker: ConfigType<typeof trackerConfig>,
     private dataSource: DataSource,
   ) {
     const bsc_rpc_urls = blockchains.bsc.rpcUrls;
@@ -101,12 +111,22 @@ export class UserService {
       [NetworkDto.Bsc]: new UserChainManager(
         NetworkDto.Bsc,
         bsc_rpc_urls,
-        tracker.url,
+        this.trackerService,
+        this.uniswapV3Service,
+        this.aerodromeCLService,
+        this.aaveV3Service,
+        this.eulerV2Service,
+        this.venusV4Service,
       ),
       [NetworkDto.Base]: new UserChainManager(
         NetworkDto.Base,
         base_rpc_urls,
-        tracker.url,
+        this.trackerService,
+        this.uniswapV3Service,
+        this.aerodromeCLService,
+        this.aaveV3Service,
+        this.eulerV2Service,
+        this.venusV4Service,
       ),
     };
   }
@@ -215,10 +235,9 @@ export class UserService {
           async ([network, deploymentConfig]) => {
             const networkDto = network as NetworkDto;
             const chainId = getChainId(networkDto);
-            const safe = await this.getSafe(
-              deploymentConfig.operator,
+            const safe = await this.getUndeployedSafe(
               owner,
-              deploymentConfig.saltNonce,
+              deploymentConfig,
               networkDto,
             );
             return getUninitializedUserDeploymentResponseDto(safe, chainId);
@@ -230,20 +249,19 @@ export class UserService {
     }
   }
 
-  async getSafe(
-    operator: string,
+  async getUndeployedSafe(
     owner: string,
-    saltNonce: string,
+    deploymentConfig: DeploymentConfigResponseDto,
     network: NetworkDto,
   ): Promise<Safe> {
     const predictedSafe: PredictedSafeProps = {
       safeAccountConfig: {
-        owners: [operator, owner],
+        owners: [deploymentConfig.operator, owner],
         threshold: 1,
       },
       safeDeploymentConfig: {
         deploymentType: 'canonical',
-        saltNonce,
+        saltNonce: deploymentConfig.saltNonce,
         safeVersion: '1.4.1',
       },
     };
@@ -256,6 +274,14 @@ export class UserService {
       provider: rpcUrl,
     });
     return protocolKit;
+  }
+
+  async getDeployedSafe(address: string, network: NetworkDto): Promise<Safe> {
+    const safe = await Safe.init({
+      safeAddress: address as `0x${string}`,
+      provider: this.rpcUrls[network][0],
+    });
+    return safe;
   }
 
   async registerUser(
@@ -300,13 +326,12 @@ export class UserService {
               throw new NetworkNotSupportedException(network);
             }
 
-            const safe = await this.getSafe(
-              deploymentConfig.operator,
+            const safe = await this.getUndeployedSafe(
               owner,
-              deploymentConfig.saltNonce,
+              deploymentConfig,
               network,
             );
-            const transaction = await this.getSetGuardTransaction(
+            const transaction = await this.getSetGuardUnsignedTransaction(
               network,
               deploymentConfig,
               validatorConfigs,
@@ -368,14 +393,13 @@ export class UserService {
               validators,
               deploymentConfig.validators,
             );
-            const safe = await this.getSafe(
-              deploymentConfig.operator,
+            const safe = await this.getUndeployedSafe(
               owner,
-              deploymentConfig.saltNonce,
+              deploymentConfig,
               networkDto,
             );
             const address = await safe.getAddress();
-            const transaction = await this.getSetGuardTransaction(
+            const transaction = await this.getSetGuardUnsignedTransaction(
               networkDto,
               deploymentConfig,
               validatorConfigs,
@@ -411,10 +435,9 @@ export class UserService {
             deployment.updatedAt = now;
             return deployment;
           } else {
-            const safe = await this.getSafe(
-              deploymentConfig.operator,
+            const safe = await this.getUndeployedSafe(
               owner,
-              deploymentConfig.saltNonce,
+              deploymentConfig,
               networkDto,
             );
             const address = await safe.getAddress();
@@ -475,31 +498,10 @@ export class UserService {
     safeTransaction: EthSafeTransaction,
     signature: string,
   ): Promise<boolean> {
-    const safeEIP712Args: SafeEIP712Args = {
-      safeAddress: await safe.getAddress(),
-      safeVersion: safe.getContractVersion(),
-      chainId: await safe.getChainId(),
-      data: safeTransaction.data,
-    };
-
-    const typedData = generateTypedData(safeEIP712Args);
-    const { chainId, verifyingContract } = typedData.domain;
-    const chain = chainId ? Number(chainId) : undefined; // ensure empty string becomes undefined
-    const domain = { verifyingContract: verifyingContract, chainId: chain };
-
     try {
+      const typedData = await this.getTypedData(owner, safe, safeTransaction);
       const isValid = await verifyTypedData({
-        domain,
-        types:
-          typedData.primaryType === 'SafeMessage'
-            ? {
-                SafeMessage: (typedData as EIP712TypedDataMessage).types
-                  .SafeMessage,
-              }
-            : { SafeTx: (typedData as EIP712TypedDataTx).types.SafeTx },
-        primaryType: typedData.primaryType,
-        message: typedData.message,
-        address: owner,
+        ...typedData,
         signature: signature as `0x${string}`,
       });
 
@@ -512,47 +514,39 @@ export class UserService {
     }
   }
 
-  async getWrappedDeploymentConfig(
-    network: NetworkDto,
-    owner: string,
-    sig: string,
+  async getTypedData(
+    signer: string,
+    safe: Safe,
+    safeTransaction: EthSafeTransaction,
   ) {
-    const deploymentConfig =
-      this.deploymentService.getDeploymentConfig(network);
-    if (!deploymentConfig) {
-      throw new NetworkNotSupportedException(network);
-    }
-    const validatorConfigs = VALIDATOR_CONFIGS[network];
-    if (!validatorConfigs) {
-      throw new NetworkNotSupportedException(network);
-    }
-    const safe = await this.getSafe(
-      deploymentConfig.operator,
-      owner,
-      deploymentConfig.saltNonce,
-      network,
-    );
-    const tx = await this.getSetGuardTransaction(
-      network,
-      deploymentConfig,
-      validatorConfigs,
-      safe,
-    );
-    tx.addSignature(new EthSafeSignature(owner, sig));
-    const data = await safe.getEncodedTransaction(tx);
+    const safeEIP712Args: SafeEIP712Args = {
+      safeAddress: await safe.getAddress(),
+      safeVersion: safe.getContractVersion(),
+      chainId: await safe.getChainId(),
+      data: safeTransaction.data,
+    };
+
+    const typedData = generateTypedData(safeEIP712Args);
+    const { chainId, verifyingContract } = typedData.domain;
+    const chain = chainId ? Number(chainId) : undefined; // ensure empty string becomes undefined
+    const domain = { verifyingContract: verifyingContract, chainId: chain };
+
     return {
-      predictedSafe: safe.getPredictedSafe(),
-      wrappedTx: [
-        {
-          to: await safe.getAddress(),
-          data,
-          value: '0',
-        },
-      ],
+      domain,
+      types:
+        typedData.primaryType === 'SafeMessage'
+          ? {
+              SafeMessage: (typedData as EIP712TypedDataMessage).types
+                .SafeMessage,
+            }
+          : { SafeTx: (typedData as EIP712TypedDataTx).types.SafeTx },
+      primaryType: typedData.primaryType,
+      message: typedData.message,
+      address: signer,
     };
   }
 
-  async getSetGuardTransaction(
+  async getSetGuardUnsignedTransaction(
     network: NetworkDto,
     deploymentConfig: DeploymentConfigResponseDto,
     validatorConfig: ValidatorConfig,
@@ -808,5 +802,81 @@ export class UserService {
       },
     });
     return deployment;
+  }
+
+  async getDeploymentSignedTransaction(
+    network: NetworkDto,
+    address: string,
+  ): Promise<{
+    safe: Safe;
+    wrappedTransaction?: MetaTransactionData;
+    operator: string;
+  }> {
+    const deployment = await this.getDeploymentByAddress(address, network);
+    if (!deployment) {
+      throw new UserNotFoundException(network, address);
+    }
+
+    if (deployment.status === UserDeploymentStatus.Uninitialized) {
+      throw new Error('Deployment is not deployed');
+    }
+
+    if (deployment.status === UserDeploymentStatus.Deployed) {
+      return {
+        safe: await this.getDeployedSafe(address, network),
+        operator: getAddress(fromBytes(deployment.operator, 'hex')),
+      };
+    }
+
+    if (deployment.validators === null) {
+      throw new Error('Deployment validators are not set');
+    }
+
+    if (deployment.setGuardSignature === null) {
+      throw new Error('Deployment set guard signature is not set');
+    }
+
+    const user = await this.userRepository.findOne({
+      where: {
+        id: deployment.userId,
+      },
+    });
+    if (!user) {
+      throw new UserNotFoundException(network, address);
+    }
+    const deploymentConfig =
+      this.deploymentService.getDeploymentConfig(network);
+
+    const safe = await this.getUndeployedSafe(
+      getAddress(fromBytes(user.owner, 'hex')),
+      deploymentConfig,
+      network,
+    );
+    deploymentConfig.validators = toValidatorResponseDto(
+      network,
+      deployment.validators,
+      deploymentConfig.validators,
+    );
+    const validatorConfig = VALIDATOR_CONFIGS[network];
+
+    const transaction = await this.getSetGuardUnsignedTransaction(
+      network,
+      deploymentConfig,
+      validatorConfig,
+      safe,
+    );
+    transaction.addSignature(
+      new EthSafeSignature(
+        getAddress(fromBytes(user.owner, 'hex')),
+        fromBytes(deployment.setGuardSignature, 'hex'),
+      ),
+    );
+    const wrappedTransaction =
+      await safe.wrapSafeTransactionIntoDeploymentBatch(transaction);
+    return {
+      safe,
+      wrappedTransaction,
+      operator: getAddress(fromBytes(deployment.operator, 'hex')),
+    };
   }
 }

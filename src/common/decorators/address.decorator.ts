@@ -12,6 +12,20 @@ export function Address() {
   });
 }
 
+export function AddressOptional() {
+  return Transform(({ value }) => {
+    try {
+      if (value) {
+        return getAddress(value);
+      } else {
+        return value;
+      }
+    } catch {
+      throw new InvalidParameterException(`Invalid address: ${value}`);
+    }
+  });
+}
+
 export function AddressArray() {
   return Transform(({ value }) => {
     try {

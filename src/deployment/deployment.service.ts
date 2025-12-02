@@ -1,9 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { NetworkDto } from '../common/dto/network.dto';
-import {
-  DEFAULT_DEPLOYMENT_CONFIGS,
-  DeploymentConfigResponseDto,
-} from './dto/deployment.response.dto';
+import { DeploymentConfigResponseDto } from './dto/deployment.response.dto';
+import { DEFAULT_DEPLOYMENT_CONFIGS } from './constants';
 
 @Injectable()
 export class DeploymentService {

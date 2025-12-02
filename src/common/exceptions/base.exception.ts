@@ -1,4 +1,4 @@
-import { ValidatorTypeDto } from '../../deployment/dto/deployment.response.dto';
+import { ValidatorTypeDto } from '../../modules/deployment/dto/deployment.response.dto';
 import { ResponseCodeDto, ResponseDto } from '../dto/response.dto';
 import { NetworkDto } from '../dto/network.dto';
 

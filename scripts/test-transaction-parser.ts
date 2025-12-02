@@ -23,8 +23,8 @@ import { Protocol, RebalanceActionType, TokenAmount } from '../src/monitor/types
 // Load environment variables
 dotenv.config();
 
-// Default test transaction (BSC)
-const DEFAULT_TX_HASH = '0x9448d40a76b5170877ea49f3c2d400baf4a71d7b3f05c415a01e392b82fbdb2b';
+// Default test transaction (BSC) - Rebalance transaction with LP operations and swaps
+const DEFAULT_TX_HASH = '0x6d4959a959a2cdebf6c1f30657b457e58b461ef9a30cfbf6c73af8fbaccb1627';
 const DEFAULT_CHAIN_ID = '56'; // BSC
 const REBALANCE_JOBS_BASE_URL =
   'https://beta-api.owlia.ai/api/v1/rebalance/jobs/address/0xC5dE8e48F7897b926e2c4D129Ba68af1df811229?network=bsc';

@@ -642,6 +642,22 @@ export class RebalancePrecheckService {
       `Found ${opportunities.length} opportunities for optimization`
     );
 
+    // Log detailed opportunity info for AI agent to parse
+    opportunities.forEach((opp, idx) => {
+      const initialAPY = opp.getAPY(0);
+      if (opp.type === 'lp') {
+        const token0Symbol = this.getTokenSymbol(opp.token0Address, chainId, dexPools, opp.poolAddress, 'token0');
+        const token1Symbol = this.getTokenSymbol(opp.token1Address, chainId, dexPools, opp.poolAddress, 'token1');
+        this.logger.log(
+          `Opportunity ${idx}: LP ${token0Symbol}/${token1Symbol} (${opp.poolAddress}) on ${opp.protocol}, initialAPY=${initialAPY.toFixed(2)}%`
+        );
+      } else if (opp.type === 'supply') {
+        this.logger.log(
+          `Opportunity ${idx}: Supply ${opp.asset} on ${opp.protocol}, initialAPY=${initialAPY.toFixed(2)}%`
+        );
+      }
+    });
+
     const optimizationConfigs = [
       // {
       //   name: 'Aggressive',
@@ -844,10 +860,16 @@ export class RebalancePrecheckService {
         const meetsAbsoluteApyConstraint =
           apyImprovement >= minAbsoluteApyIncrease;
 
+        // Log detailed strategy analysis for AI agent
+        const apyIncreasePercent = portfolioApy > 0
+          ? ((strategyApy - portfolioApy) / portfolioApy * 100)
+          : 0;
+
         this.logger.log(
           `Strategy ${index} (${allStrategies[index].name}): ` +
             `APY=${strategyApy.toFixed(2)}%, swap_fee=$${swapFee.toFixed(4)}, ` +
-            `break-even=${breakEven.toFixed(2)}h, score=${score.toFixed(4)}`
+            `break-even=${breakEven.toFixed(2)}h, score=${score.toFixed(4)}, ` +
+            `apyIncrease=${apyImprovement.toFixed(2)}pp (+${apyIncreasePercent.toFixed(2)}%)`
         );
 
         // Record evaluation data
@@ -988,9 +1010,15 @@ export class RebalancePrecheckService {
     }
 
     const strategyDetails = this.formatStrategyDetails(bestStrategy.strategy);
+    const apyIncreasePercent = portfolioApy > 0
+      ? ((opportunityApy - portfolioApy) / portfolioApy * 100)
+      : 0;
+    const apyIncreasePercentagePoints = opportunityApy - portfolioApy;
+
     this.logger.log(
       `Precheck APPROVED for user ${userId}: ` +
         `Portfolio APY=${portfolioApy.toFixed(2)}%, Opportunity APY=${opportunityApy.toFixed(2)}%, ` +
+        `APY Increase=${apyIncreasePercentagePoints.toFixed(2)}pp (+${apyIncreasePercent.toFixed(2)}%), ` +
         `Strategy=${bestStrategy.name}, ${strategyDetails}`
     );
 
@@ -1215,7 +1243,32 @@ export class RebalancePrecheckService {
           const poolShort = pos.poolAddress
             ? pos.poolAddress.slice(0, 8)
             : "unknown";
-          return `${poolShort}(lp/${pos.protocol}): ${amountStr} (${allocStr})`;
+
+          // Try to get token pair info from cached data
+          let pairInfo = '';
+          if (pos.poolAddress && this._cachedDexPools) {
+            const token0Symbol = this.getTokenSymbol(
+              pos.token0Address,
+              this._cachedLpSimulations[0]?.pool?.poolAddress ?
+                (this._cachedLpSimulations[0] as any).chainId || '56' : '56',
+              this._cachedDexPools,
+              pos.poolAddress,
+              'token0'
+            );
+            const token1Symbol = this.getTokenSymbol(
+              pos.token1Address,
+              this._cachedLpSimulations[0]?.pool?.poolAddress ?
+                (this._cachedLpSimulations[0] as any).chainId || '56' : '56',
+              this._cachedDexPools,
+              pos.poolAddress,
+              'token1'
+            );
+            if (token0Symbol && token1Symbol && token0Symbol !== 'UNKNOWN' && token1Symbol !== 'UNKNOWN') {
+              pairInfo = ` ${token0Symbol}/${token1Symbol}`;
+            }
+          }
+
+          return `${poolShort}${pairInfo}(lp/${pos.protocol}): ${amountStr} (${allocStr})`;
         }
       })
       .join(", ");
@@ -1291,6 +1344,40 @@ export class RebalancePrecheckService {
       amountOut && toMeta ? ` -> ${amountOut} ${toMeta.symbol}` : "";
 
     return `Swap ${amountIn} ${fromMeta.symbol}${outputPart} via ${protocol}`;
+  }
+
+  private getTokenSymbol(
+    tokenAddress: string | undefined,
+    chainId: string,
+    dexPools: Record<string, any>,
+    poolAddress?: string,
+    tokenKey?: 'token0' | 'token1'
+  ): string {
+    if (!tokenAddress) return 'UNKNOWN';
+
+    // First try to get from dexPools if poolAddress is provided
+    if (poolAddress && tokenKey && dexPools) {
+      const normalizedPoolAddress = poolAddress.toLowerCase();
+      for (const [poolAddr, poolData] of Object.entries(dexPools)) {
+        if (poolAddr === '_dataSource') continue;
+        if (poolAddr.toLowerCase() === normalizedPoolAddress) {
+          const currentSnapshot = poolData?.currentSnapshot;
+          const symbolKey = `${tokenKey}Symbol`;
+          if (currentSnapshot && currentSnapshot[symbolKey]) {
+            return currentSnapshot[symbolKey];
+          }
+        }
+      }
+    }
+
+    // Fallback to lookupTokenSymbol
+    const symbol = lookupTokenSymbol(tokenAddress, chainId);
+    if (symbol) return symbol;
+
+    // Last resort: return shortened address
+    return tokenAddress.startsWith('0x')
+      ? `${tokenAddress.slice(0, 6)}...`
+      : tokenAddress;
   }
 
   private resolveTokenMeta(

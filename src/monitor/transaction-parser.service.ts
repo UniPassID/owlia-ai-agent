@@ -416,6 +416,9 @@ export class TransactionParserService {
         tokens: action.tokens.map(token => this.enrichToken(token, chainId)),
       }));
 
+      // Log detailed rebalance path for AI agent
+      this.logRebalancePath(enrichedActions);
+
       return {
         transactionHash: txHash,
         blockNumber: receipt.blockNumber,
@@ -562,6 +565,268 @@ export class TransactionParserService {
     } catch {
       return undefined;
     }
+  }
+
+  /**
+   * Log detailed rebalance path for AI agent to understand the transaction flow
+   * Groups related actions (e.g., POOL_BURN + REMOVE_LIQUIDITY + POOL_COLLECT)
+   */
+  private logRebalancePath(actions: RebalanceAction[]): void {
+    if (actions.length === 0) return;
+
+    this.logger.log('=== REBALANCE PATH ===');
+
+    let stepNumber = 1;
+    let i = 0;
+
+    while (i < actions.length) {
+      const action = actions[i];
+
+      // Check if this is a remove liquidity group (POOL_BURN + REMOVE_LIQUIDITY + [POOL_COLLECT])
+      if (action.type === RebalanceActionType.POOL_BURN && i + 1 < actions.length) {
+        const nextAction = actions[i + 1];
+        if (nextAction.type === RebalanceActionType.REMOVE_LIQUIDITY) {
+          // Check if there's a POOL_COLLECT after
+          const collectAction = i + 2 < actions.length && actions[i + 2].type === RebalanceActionType.POOL_COLLECT
+            ? actions[i + 2]
+            : null;
+
+          const tokenId = action.tokenId || nextAction.tokenId;
+          const tokenIdStr = tokenId ? ` (tokenId: ${tokenId})` : '';
+
+          if (collectAction) {
+            // Calculate actual fees: POOL_COLLECT amount - POOL_BURN amount
+            const collectTokens = collectAction.tokens;
+            const burnTokens = action.tokens;
+
+            const liquidityParts: string[] = [];
+            const feeParts: string[] = [];
+            const totalParts: string[] = [];
+
+            collectTokens.forEach((collectToken, idx) => {
+              const burnToken = burnTokens[idx];
+              const collectAmount = parseFloat(collectToken.amountFormatted || '0');
+              const burnAmount = parseFloat(burnToken?.amountFormatted || '0');
+              const feeAmount = collectAmount - burnAmount;
+
+              const symbol = collectToken.symbol || 'TOKEN';
+
+              // Liquidity amount (from POOL_BURN)
+              liquidityParts.push(`${this.formatTokenAmount(burnToken?.amountFormatted || '0')} ${symbol}`);
+
+              // Fee amount
+              if (feeAmount > 0.000001) {
+                feeParts.push(`${this.formatTokenAmount(feeAmount.toString())} ${symbol}`);
+              } else {
+                feeParts.push(`0 ${symbol}`);
+              }
+
+              // Total amount (from POOL_COLLECT)
+              totalParts.push(`${this.formatTokenAmount(collectToken.amountFormatted || '0')} ${symbol}`);
+            });
+
+            const liquidityStr = liquidityParts.join(' + ');
+            const feeStr = feeParts.join(' + ');
+            const totalStr = totalParts.join(' + ');
+
+            // Build pool name from token symbols
+            const poolSymbols = collectTokens.map(t => t.symbol || 'TOKEN');
+            const poolName = poolSymbols.length >= 2 ? `${poolSymbols[0]}/${poolSymbols[1]}` : poolSymbols.join('/');
+
+            // Add tick range info if available
+            const tickInfo = (action.tickLower !== undefined && action.tickUpper !== undefined)
+              ? ` at ticks [${action.tickLower}, ${action.tickUpper}]`
+              : '';
+
+            this.logger.log(
+              `Step ${stepNumber}: Remove liquidity from ${this.formatProtocolName(action.protocol)} ${poolName}${tokenIdStr}${tickInfo} - ` +
+              `Liquidity: ${liquidityStr}, Fee: ${feeStr}, Total: ${totalStr}`
+            );
+
+            i += 3; // Skip POOL_BURN, REMOVE_LIQUIDITY, and POOL_COLLECT
+          } else {
+            const burnTokens = action.tokens
+              .map(t => `${this.formatTokenAmount(t.amountFormatted)} ${t.symbol || 'TOKEN'}`)
+              .join(' + ');
+            this.logger.log(
+              `Step ${stepNumber}: Remove liquidity from ${this.formatProtocolName(action.protocol)}: ${burnTokens}${tokenIdStr}`
+            );
+            i += 2; // Skip POOL_BURN and REMOVE_LIQUIDITY
+          }
+
+          stepNumber++;
+          continue;
+        }
+      }
+
+      // Check if this is an add liquidity group (POOL_MINT + ADD_LIQUIDITY)
+      if (action.type === RebalanceActionType.POOL_MINT && i + 1 < actions.length) {
+        const nextAction = actions[i + 1];
+        if (nextAction.type === RebalanceActionType.ADD_LIQUIDITY) {
+          const mintTokens = action.tokens
+            .map(t => `${this.formatTokenAmount(t.amountFormatted)} ${t.symbol || 'TOKEN'}`)
+            .join(' + ');
+          const tokenId = nextAction.tokenId || action.tokenId;
+          const tokenIdStr = tokenId ? ` (tokenId: ${tokenId})` : '';
+          const tickInfo = (action.tickLower !== undefined && action.tickUpper !== undefined)
+            ? ` at ticks [${action.tickLower}, ${action.tickUpper}]`
+            : '';
+
+          // Build pool name from token symbols
+          const poolSymbols = action.tokens.map(t => t.symbol || 'TOKEN');
+          const poolName = poolSymbols.length >= 2 ? `${poolSymbols[0]}/${poolSymbols[1]}` : poolSymbols.join('/');
+
+          this.logger.log(
+            `Step ${stepNumber}: Add liquidity to ${this.formatProtocolName(action.protocol)} ${poolName}: ${mintTokens}${tokenIdStr}${tickInfo}`
+          );
+
+          i += 2; // Skip POOL_MINT and ADD_LIQUIDITY
+          stepNumber++;
+          continue;
+        }
+      }
+
+      // Handle standalone POOL_COLLECT (if not already handled above)
+      if (action.type === RebalanceActionType.POOL_COLLECT) {
+        const feeTokens = action.tokens
+          .filter(t => parseFloat(t.amountFormatted || '0') > 0)
+          .map(t => `${this.formatTokenAmount(t.amountFormatted)} ${t.symbol || 'TOKEN'}`)
+          .join(' + ');
+
+        if (feeTokens) {
+          const tokenId = action.tokenId ? ` (tokenId: ${action.tokenId})` : '';
+          this.logger.log(
+            `Step ${stepNumber}: Collect fees from ${this.formatProtocolName(action.protocol)}: ${feeTokens}${tokenId}`
+          );
+          stepNumber++;
+        }
+        i++;
+        continue;
+      }
+
+      // For all other actions, log them individually
+      const actionDesc = this.describeAction(action);
+      this.logger.log(`Step ${stepNumber}: ${actionDesc}`);
+      stepNumber++;
+      i++;
+    }
+
+    this.logger.log('=== END REBALANCE PATH ===');
+  }
+
+  /**
+   * Format token amount for display (with proper precision)
+   */
+  private formatTokenAmount(amountFormatted: string | undefined): string {
+    if (!amountFormatted) return '?';
+    const num = parseFloat(amountFormatted);
+    if (isNaN(num)) return amountFormatted;
+
+    // For very small amounts, show more decimals
+    if (num < 0.01) {
+      return num.toFixed(6);
+    }
+    // For normal amounts, show 2 decimals
+    return num.toFixed(2);
+  }
+
+  /**
+   * Generate human-readable description of a rebalance action
+   */
+  private describeAction(action: RebalanceAction): string {
+    const protocol = this.formatProtocolName(action.protocol);
+
+    switch (action.type) {
+      case RebalanceActionType.REMOVE_LIQUIDITY:
+      case RebalanceActionType.POOL_BURN: {
+        const tokens = action.tokens
+          .map(t => `${t.amountFormatted || '?'} ${t.symbol || 'TOKEN'}`)
+          .join(' + ');
+        const tokenId = action.tokenId ? ` (tokenId: ${action.tokenId})` : '';
+        return `Remove liquidity from ${protocol}: ${tokens}${tokenId}`;
+      }
+
+      case RebalanceActionType.POOL_COLLECT: {
+        const tokens = action.tokens
+          .map(t => `${t.amountFormatted || '?'} ${t.symbol || 'TOKEN'}`)
+          .join(' + ');
+        const tokenId = action.tokenId ? ` (tokenId: ${action.tokenId})` : '';
+        return `Collect fees from ${protocol}: ${tokens}${tokenId}`;
+      }
+
+      case RebalanceActionType.SWAP: {
+        if (action.tokens.length >= 2) {
+          const tokenIn = action.tokens[0];
+          const tokenOut = action.tokens[1];
+          const amountIn = this.formatTokenAmount(tokenIn.amountFormatted);
+          const amountOut = this.formatTokenAmount(tokenOut.amountFormatted);
+          return `Swap ${amountIn} ${tokenIn.symbol || 'TOKEN'} to ${amountOut} ${tokenOut.symbol || 'TOKEN'} via ${protocol}`;
+        }
+        return `Swap via ${protocol}`;
+      }
+
+      case RebalanceActionType.ADD_LIQUIDITY:
+      case RebalanceActionType.POOL_MINT: {
+        const tokens = action.tokens
+          .map(t => `${t.amountFormatted || '?'} ${t.symbol || 'TOKEN'}`)
+          .join(' + ');
+        const tokenId = action.tokenId ? ` (tokenId: ${action.tokenId})` : '';
+        const tickInfo = (action.tickLower !== undefined && action.tickUpper !== undefined)
+          ? ` at ticks [${action.tickLower}, ${action.tickUpper}]`
+          : '';
+        return `Add liquidity to ${protocol}: ${tokens}${tokenId}${tickInfo}`;
+      }
+
+      case RebalanceActionType.SUPPLY: {
+        const token = action.tokens[0];
+        const amount = token?.amountFormatted || '?';
+        const symbol = token?.symbol || 'TOKEN';
+        const vault = action.contractAddress ? ` (vault: ${action.contractAddress.slice(0, 10)}...)` : '';
+        return `Supply ${amount} ${symbol} to ${protocol}${vault}`;
+      }
+
+      case RebalanceActionType.WITHDRAW: {
+        const token = action.tokens[0];
+        const amount = token?.amountFormatted || '?';
+        const symbol = token?.symbol || 'TOKEN';
+        const vault = action.contractAddress ? ` (vault: ${action.contractAddress.slice(0, 10)}...)` : '';
+        return `Withdraw ${amount} ${symbol} from ${protocol}${vault}`;
+      }
+
+      case RebalanceActionType.BORROW: {
+        const token = action.tokens[0];
+        const amount = token?.amountFormatted || '?';
+        const symbol = token?.symbol || 'TOKEN';
+        return `Borrow ${amount} ${symbol} from ${protocol}`;
+      }
+
+      case RebalanceActionType.REPAY: {
+        const token = action.tokens[0];
+        const amount = token?.amountFormatted || '?';
+        const symbol = token?.symbol || 'TOKEN';
+        return `Repay ${amount} ${symbol} to ${protocol}`;
+      }
+
+      default:
+        return `Unknown action: ${action.type}`;
+    }
+  }
+
+  /**
+   * Format protocol name for display
+   */
+  private formatProtocolName(protocol: Protocol): string {
+    const protocolMap: Record<Protocol, string> = {
+      [Protocol.UNISWAP_V2]: 'Uniswap V2',
+      [Protocol.UNISWAP_V3]: 'Uniswap V3',
+      [Protocol.AERODROME]: 'Aerodrome',
+      [Protocol.OKX_ROUTER]: 'OKX',
+      [Protocol.KYBERSWAP_ROUTER]: 'KyberSwap',
+      [Protocol.AAVE]: 'Aave',
+      [Protocol.EULER]: 'Euler',
+      [Protocol.VENUS]: 'Venus',
+    };
+    return protocolMap[protocol] || protocol;
   }
 
   /**

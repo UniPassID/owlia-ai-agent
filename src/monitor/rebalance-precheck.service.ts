@@ -937,13 +937,28 @@ export class RebalancePrecheckService {
 
     // Note: breakEvenTimeHours constraint is already checked in evaluateStrategies()
 
-    // For LP_IN_RANGE, only check absolute APY increase (20pp)
+    // For LP_IN_RANGE, do not rebalance
     // For other statuses, check both relative (10%) and absolute (2pp) increase
     let meetsApyConstraint = false;
 
     if (positionStatus === PositionStatus.LP_IN_RANGE) {
-      meetsApyConstraint =
-        absoluteIncrease >= constraints.minAbsoluteApyIncrease;
+      this.logger.log(
+        `Precheck REJECTED for user ${userId}: LP position is in range, no rebalancing needed`
+      );
+      return {
+        shouldTrigger: false,
+        portfolioApy,
+        opportunityApy,
+        differenceBps: (opportunityApy - portfolioApy) * 100,
+        totalPortfolioValueUsd: totalAssetsUsd,
+        yieldSummary,
+        currentHoldings,
+        gasEstimate,
+        breakEvenTimeHours,
+        netGainUsd,
+        failureReason: 'LP position is in range',
+        strategyEvaluations: evaluationRecords,
+      };
     } else {
       meetsApyConstraint =
         relativeIncrease >= constraints.minRelativeApyIncrease &&

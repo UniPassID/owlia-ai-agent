@@ -11,11 +11,11 @@ import {
   EulerV2ProtocolBlockResponseDto,
   EulerV2SubAccountResponseDto,
 } from '../dto/euler-v2.response.dto';
-import { EULER_V2_UTILS_LENS_ABI } from '../abis/euler-v2-utils-lens.abi';
+import { EULER_V2_UTILS_LENS_ABI } from '../../abis/euler-v2-utils-lens.abi';
 import { Logger } from '@nestjs/common';
 import { UnknownException } from '../../common/exceptions/base.exception';
-import { EULER_V2_GOVERNED_PERSPECTIVE_ABI } from '../abis/euler-v2-governed-perspective.abi';
-import { EULER_V2_ACCOUNT_LENS_ABI } from '../abis/euler-v2-account-lens.abi';
+import { EULER_V2_GOVERNED_PERSPECTIVE_ABI } from '../../abis/euler-v2-governed-perspective.abi';
+import { EULER_V2_ACCOUNT_LENS_ABI } from '../../abis/euler-v2-account-lens.abi';
 import Decimal from 'decimal.js';
 import { TokenPricesResponseDto } from '../../common/tracker-client';
 

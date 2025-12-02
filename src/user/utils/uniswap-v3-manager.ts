@@ -16,7 +16,7 @@ import {
   UniswapV3PositionResponseDto,
   UniswapV3ProtocolBlockResponseDto,
 } from '../dto/uniswap-v3.response.dto';
-import { UNISWAP_V3_NONFUNGIBLE_POSITION_MANAGER_ABI } from '../abis/uniswap-v3-nonfungible-position-manager.abi';
+import { UNISWAP_V3_NONFUNGIBLE_POSITION_MANAGER_ABI } from '../../abis/uniswap-v3-nonfungible-position-manager.abi';
 import { Logger } from '@nestjs/common';
 import { UnknownException } from '../../common/exceptions/base.exception';
 import {
@@ -26,7 +26,7 @@ import {
   TrackerClient,
 } from '../../common/tracker-client';
 import Decimal from 'decimal.js';
-import { UNISWAP_V3_POOL_ABI } from '../abis/uniswap-v3-pool.abi';
+import { UNISWAP_V3_POOL_ABI } from '../../abis/uniswap-v3-pool.abi';
 
 const FACTORY_ADDRESS: Record<NetworkDto, string> = {
   [NetworkDto.Bsc]: '0xdb1d10011ad0ff90774d0c6bb92e5c5c8b4461f7',

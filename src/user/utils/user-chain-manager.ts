@@ -17,7 +17,7 @@ import {
   toBytes,
 } from 'viem';
 import { fallback } from '../../common/fallback-transport';
-import { ERC20_ABI } from '../abis/erc-20.abi';
+import { ERC20_ABI } from '../../abis/erc-20.abi';
 import { UnknownException } from '../../common/exceptions/base.exception';
 import Decimal from 'decimal.js';
 import {

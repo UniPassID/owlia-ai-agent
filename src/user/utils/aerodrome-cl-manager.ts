@@ -16,11 +16,11 @@ import {
   AerodromeCLProtocolBlockResponseDto,
 } from '../dto/aerodrome-cl.response.dto';
 import { fallback } from '../../common/fallback-transport';
-import { AERODROME_CL_NONFUNGIBLE_POSITION_MANAGER_ABI } from '../abis/aerodrome-cl-nonfungible-position-manager.abi';
+import { AERODROME_CL_NONFUNGIBLE_POSITION_MANAGER_ABI } from '../../abis/aerodrome-cl-nonfungible-position-manager.abi';
 import Decimal from 'decimal.js';
 import { Logger } from '@nestjs/common';
 import { UnknownException } from '../../common/exceptions/base.exception';
-import { AERODROME_CL_POOL_ABI } from '../abis/aerodrome-cl-pool.abi';
+import { AERODROME_CL_POOL_ABI } from '../../abis/aerodrome-cl-pool.abi';
 import {
   DexKeyDto,
   TokenPriceResponseDto,

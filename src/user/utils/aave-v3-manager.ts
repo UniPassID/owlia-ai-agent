@@ -9,8 +9,8 @@ import {
   AaveV3ProtocolBlockResponseDto,
   AaveV3SupplyResponseDto,
 } from '../dto/aave-v3.response.dto';
-import { AAVE_V3_ABI } from '../abis/aave-v3.abi';
-import { AAVE_V3_DATA_PROVIDER_ABI } from '../abis/aave-v3-data-provider.abi';
+import { AAVE_V3_ABI } from '../../abis/aave-v3.abi';
+import { AAVE_V3_DATA_PROVIDER_ABI } from '../../abis/aave-v3-data-provider.abi';
 import { UnknownException } from '../../common/exceptions/base.exception';
 import { Logger } from '@nestjs/common';
 import Decimal from 'decimal.js';

@@ -7,9 +7,9 @@ import {
   VenusV4RewardsResponseDto,
   VenusV4SupplyResponseDto,
 } from '../dto/venus-v4.response.dto';
-import { VENUS_V4_COMPTROLLER_ABI } from '../abis/venus-v4-comptroller.abi';
+import { VENUS_V4_COMPTROLLER_ABI } from '../../abis/venus-v4-comptroller.abi';
 import { Logger } from '@nestjs/common';
-import { VENUS_V4_LENS_ABI } from '../abis/venus-v4-lens.abi';
+import { VENUS_V4_LENS_ABI } from '../../abis/venus-v4-lens.abi';
 import { UnknownException } from '../../common/exceptions/base.exception';
 import Decimal from 'decimal.js';
 import { TokenPricesResponseDto } from '../../common/tracker-client';

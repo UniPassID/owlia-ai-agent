@@ -30,13 +30,13 @@ import {
   DeploymentConfigResponseDto,
   ValidatorTypeDto,
 } from '../deployment/dto/deployment.response.dto';
-import { AAVE_V3_OWLIA_VALIDATOR_ABI } from './abis/aave-v3-owlia-validator.abi';
-import { EULER_V2_OWLIA_VALIDATOR_ABI } from './abis/euler-v2-owlia-validator.abi';
-import { KYBER_SWAP_OWLIA_VALIDATOR_ABI } from './abis/kyber-swap-owlia-validator.abi';
-import { OWLIA_GUARD_ABI } from './abis/owlia-guard.abi';
-import { SAFE_ABI } from './abis/safe.abi';
-import { UNISWAP_V3_OWLIA_VALIDATOR_ABI } from './abis/uniswap-v3-owlia-validator.abi';
-import { VENUS_V4_OWLIA_VALIDATOR_ABI } from './abis/venus-v4-owlia-validator.abi';
+import { AAVE_V3_OWLIA_VALIDATOR_ABI } from '../abis/aave-v3-owlia-validator.abi';
+import { EULER_V2_OWLIA_VALIDATOR_ABI } from '../abis/euler-v2-owlia-validator.abi';
+import { KYBER_SWAP_OWLIA_VALIDATOR_ABI } from '../abis/kyber-swap-owlia-validator.abi';
+import { OWLIA_GUARD_ABI } from '../abis/owlia-guard.abi';
+import { SAFE_ABI } from '../abis/safe.abi';
+import { UNISWAP_V3_OWLIA_VALIDATOR_ABI } from '../abis/uniswap-v3-owlia-validator.abi';
+import { VENUS_V4_OWLIA_VALIDATOR_ABI } from '../abis/venus-v4-owlia-validator.abi';
 import { VALIDATOR_CONFIGS, ValidatorConfig } from './constants';
 import {
   getChainId,

@@ -17,6 +17,7 @@ import { UniswapV3Module } from './modules/dexes/uniswap-v3/uniswap-v3.module';
 import { VenusV4Module } from './modules/dexes/venus-v4/venus-v4.module';
 import { TrackerModule } from './modules/tracker/tracker.module';
 import privateConfig from './config/private.config';
+import { AgentModule } from './modules/agent/agent.module';
 
 @Module({
   imports: [
@@ -51,6 +52,7 @@ import privateConfig from './config/private.config';
     UniswapV3Module,
     VenusV4Module,
     TrackerModule,
+    AgentModule,
   ],
   controllers: [AppController],
   providers: [AppService],

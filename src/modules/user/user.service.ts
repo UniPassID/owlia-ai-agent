@@ -37,7 +37,7 @@ import { OWLIA_GUARD_ABI } from '../../abis/owlia-guard.abi';
 import { SAFE_ABI } from '../../abis/safe.abi';
 import { UNISWAP_V3_OWLIA_VALIDATOR_ABI } from '../../abis/uniswap-v3-owlia-validator.abi';
 import { VENUS_V4_OWLIA_VALIDATOR_ABI } from '../../abis/venus-v4-owlia-validator.abi';
-import { VALIDATOR_CONFIGS, ValidatorConfig } from './constants';
+import { TokenInfo, VALIDATOR_CONFIGS, ValidatorConfig } from './constants';
 import {
   getChainId,
   getNetworkDto,
@@ -157,6 +157,10 @@ export class UserService {
       userPortfolio.updatedAt = now;
       await this.userPortfolioRepository.save(userPortfolio);
     });
+  }
+
+  getAllAllowedTokens(network: NetworkDto): TokenInfo[] {
+    return this.userChainManager[network].allowedTokens;
   }
 
   async getUserPortfolio(

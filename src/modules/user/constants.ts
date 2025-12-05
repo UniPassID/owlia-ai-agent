@@ -45,14 +45,40 @@ export const OWLIA_ACCOUNT_SUBGRAPH_URL: Record<NetworkDto, string> = {
     'https://gateway.thegraph.com/api/subgraphs/id/FiPXezS3b4DSj88UJgTrQssoek8fuSHqJwo6HoKt8NTM',
 };
 
-export const DEFAULT_TOKENS: Record<NetworkDto, string[]> = {
+export type TokenInfo = {
+  tokenAddress: string;
+  tokenSymbol: string;
+  tokenDecimals: number;
+};
+
+export const DEFAULT_TOKENS: Record<NetworkDto, TokenInfo[]> = {
   [NetworkDto.Bsc]: [
-    '0x55d398326f99059fF775485246999027B3197955',
-    '0x8d0D000Ee44948FC98c9B98A4FA4921476f08B0d',
-    '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+    {
+      tokenAddress: '0x55d398326f99059fF775485246999027B3197955',
+      tokenSymbol: 'USDT',
+      tokenDecimals: 18,
+    },
+    {
+      tokenAddress: '0x8d0D000Ee44948FC98c9B98A4FA4921476f08B0d',
+      tokenSymbol: 'USD1',
+      tokenDecimals: 18,
+    },
+    {
+      tokenAddress: '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+      tokenSymbol: 'USDC',
+      tokenDecimals: 18,
+    },
   ],
   [NetworkDto.Base]: [
-    '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
-    '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
+    {
+      tokenAddress: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+      tokenSymbol: 'USDC',
+      tokenDecimals: 6,
+    },
+    {
+      tokenAddress: '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
+      tokenSymbol: 'USDT',
+      tokenDecimals: 6,
+    },
   ],
 };

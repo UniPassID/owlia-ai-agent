@@ -1,10 +1,10 @@
 export enum ChainId {
-  ETHEREUM = "1",
-  BSC = "56",
-  POLYGON = "137",
-  ARBITRUM = "42161",
-  OPTIMISM = "10",
-  BASE = "8453",
+  ETHEREUM = '1',
+  BSC = '56',
+  POLYGON = '137',
+  ARBITRUM = '42161',
+  OPTIMISM = '10',
+  BASE = '8453',
 }
 
 // Improved Account Manager Requests
@@ -63,7 +63,7 @@ export interface ActiveInvestmentsResponse {
 export interface PerformanceSummary {
   weightedApy: string;
   totalYieldUsd: string;
-  riskLevel: "low" | "medium" | "high";
+  riskLevel: 'low' | 'medium' | 'high';
 }
 
 export interface LiquidityInvestmentsSummary {
@@ -86,13 +86,13 @@ export interface LendingInvestmentsSummary {
 }
 
 export interface RiskMetrics {
-  concentrationRisk: "low" | "medium" | "high";
-  liquidationRisk: "low" | "medium" | "high";
-  protocolDiversification: "low" | "medium" | "high";
+  concentrationRisk: 'low' | 'medium' | 'high';
+  liquidationRisk: 'low' | 'medium' | 'high';
+  protocolDiversification: 'low' | 'medium' | 'high';
 }
 
 export type AccountLendingPosition = {
-  protocol: "aaveV3" | "venusV4" | "eulerV2";
+  protocol: 'aaveV3' | 'venusV4' | 'eulerV2';
   accountId: string | null;
   protocolPositions: AccountLendingProtocolPosition;
 };
@@ -127,7 +127,7 @@ export type AccountLendingBorrow = {
 };
 
 export type AccountLiquidityPosition = {
-  protocol: "uniswapV3" | "aerodromeSlipstream";
+  protocol: 'uniswapV3' | 'aerodromeSlipstream';
   protocolPositions: AccountLiquidityProtocolPosition[];
 };
 
@@ -182,7 +182,7 @@ export interface GetSupplyOpportunitiesResponse {
 }
 
 export interface SupplyOpportunity {
-  protocol: "aave" | "euler" | "venus";
+  protocol: 'aave' | 'euler' | 'venus';
   asset: string;
   vault_address?: string;
 
@@ -210,7 +210,7 @@ export interface GetLpSimulateRequest {
   chain_id: ChainId;
   poolOperation?: {
     poolAddress: string; // Pool address (e.g., Uniswap V3 pool)
-    operation: "add" | "remove"; // Add or remove liquidity
+    operation: 'add' | 'remove'; // Add or remove liquidity
     amountUSD: number; // Amount in USD
     tickLower?: number; // Lower tick for concentrated liquidity (optional)
     tickUpper?: number; // Upper tick for concentrated liquidity (optional)
@@ -316,7 +316,7 @@ export interface TokenBalance {
 
 // Internal processed types (not exported to types files)
 export interface ProcessedLiquidityPosition {
-  protocol: "uniswapV3" | "aerodromeSlipstream";
+  protocol: 'uniswapV3' | 'aerodromeSlipstream';
   tokenId: string; // Processed as string for API
   poolAddress: string;
 }
@@ -329,7 +329,7 @@ export interface LendingPosition {
 }
 
 export interface TargetLiquidityPosition {
-  protocol: "uniswapV3" | "aerodromeSlipstream";
+  protocol: 'uniswapV3' | 'aerodromeSlipstream';
   poolAddress: string; // Target pool address
   token0Address: string; // Target token0 address
   token1Address: string; // Target token1 address
@@ -339,7 +339,7 @@ export interface TargetLiquidityPosition {
   targetAmount1: string; // Target token1 amount (wei string)
 }
 
-export type ProtocolType = "aave" | "euler" | "venus";
+export type ProtocolType = 'aave' | 'euler' | 'venus';
 
 // Calculate Rebalance Cost Batch Response
 // Note: The actual response is a dictionary with numeric keys ("0", "1", "2"), not an array
@@ -353,13 +353,13 @@ export type CalculateRebalanceCostBatchResponse = Record<
 
 export interface RebalanceRoute {
   actionType:
-    | "Swap"
-    | "Supply"
-    | "Withdraw"
-    | "Borrow"
-    | "Repay"
-    | "Deposit"
-    | "Redeem"
+    | 'Swap'
+    | 'Supply'
+    | 'Withdraw'
+    | 'Borrow'
+    | 'Repay'
+    | 'Deposit'
+    | 'Redeem'
     | (string & {});
   tokenA: string;
   tokenB?: string;

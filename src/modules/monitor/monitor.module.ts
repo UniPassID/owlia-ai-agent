@@ -11,13 +11,24 @@ import { UserModule } from '../user/user.module';
 import { RebalanceJob } from './entities/rebalance-job.entity';
 import { RebalanceExecutionSnapshot } from './entities/rebalance-execution-snapshot.entity';
 import { RebalanceLoggerService } from './utils/rebalance-logger.service';
+import { User } from '../user/entities/user.entity';
+import { UserDeployment } from '../user/entities/user-deployment.entity';
+import { TrackerModule } from '../tracker/tracker.module';
+import { OwliaGuardModule } from '../owlia-guard/owlia-guard.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([RebalanceJob, RebalanceExecutionSnapshot]),
+    TypeOrmModule.forFeature([
+      RebalanceJob,
+      RebalanceExecutionSnapshot,
+      User,
+      UserDeployment,
+    ]),
     AgentModule,
     PortfolioOptimizerModule,
     UserModule,
+    TrackerModule,
+    OwliaGuardModule,
   ],
   controllers: [MonitorController],
   providers: [

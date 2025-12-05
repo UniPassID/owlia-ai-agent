@@ -74,7 +74,7 @@ export async function verifyTransactionOnChain(
 
       if (receipt) {
         // Check transaction status (0x1 = success, 0x0 = failed)
-        const txSuccess = receipt.status === 'success';
+        const txSuccess = receipt.status === '0x1';
         const blockNumber = receipt.blockNumber
           ? Number(receipt.blockNumber)
           : undefined;

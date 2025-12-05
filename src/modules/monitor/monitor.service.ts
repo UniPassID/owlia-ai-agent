@@ -37,6 +37,12 @@ import { getNetworkDto, NetworkDto } from '../../common/dto/network.dto';
 import blockchainsConfig from '../../config/blockchains.config';
 import { ConfigType } from '@nestjs/config';
 import { JsonRpcProvider } from 'ethers';
+import { OwliaGuardService } from '../owlia-guard/owlia-guard.service';
+import {
+  LendingProtocolDto,
+  LPProtocolDto,
+  RebalancePositionDto,
+} from '../owlia-guard/dto/rebalance-position.dto';
 
 @Injectable()
 export class MonitorService {
@@ -60,6 +66,7 @@ export class MonitorService {
     private transactionParser: TransactionParserService,
     private userService: UserService,
     private rebalanceLogger: RebalanceLoggerService,
+    private owliaGuardService: OwliaGuardService,
     @Inject(blockchainsConfig.KEY)
     blockchains: ConfigType<typeof blockchainsConfig>,
   ) {
@@ -101,13 +108,15 @@ export class MonitorService {
           id: In(deployments.map((deployment) => deployment.userId)),
         },
       });
-      const userMap = new Map(users.map((user) => [user.id, user]));
+      const userMap = new Map(
+        users.map((user) => [uuidStringify(user.id), user]),
+      );
       this.logger.log(`Found ${deployments.length} users to monitor`);
 
       for (const deployment of deployments) {
         try {
           await this.checkUserPositions(
-            userMap.get(deployment.userId) as User,
+            userMap.get(uuidStringify(deployment.userId)) as User,
             deployment,
           );
         } catch (error) {
@@ -117,7 +126,10 @@ export class MonitorService {
         }
       }
     } catch (error) {
-      this.logger.error(`Monitoring task failed: ${error.message}`);
+      this.logger.error(
+        `Monitoring task failed: ${error.message}`,
+        error.stack,
+      );
     } finally {
       this.monitoringInProgress = false;
     }
@@ -134,7 +146,7 @@ export class MonitorService {
     this.logger.log(`Checking positions for deployment ${deployment.id}`);
 
     // Generate a temporary session ID for logging
-    const sessionId = `check_${deployment.id}_${Date.now()}`;
+    const sessionId = `check_${uuidStringify(deployment.id)}_${Date.now()}`;
 
     // Start log capture
     this.rebalanceLogger.startCapture(sessionId, {
@@ -199,12 +211,12 @@ export class MonitorService {
         deployment,
         'scheduled_monitor',
         precheck,
-        this.rpcUrls[getNetworkDto(deployment.chainId)],
         sessionId,
       );
     } catch (error) {
       this.logger.error(
-        `Failed to check/trigger rebalance for user ${deployment.userId}: ${error.message}`,
+        `Failed to check/trigger rebalance for user ${uuidStringify(deployment.userId)}: ${error.message}`,
+        error.stack,
       );
       // Save log even on error if evaluation was attempted
       await this.rebalanceLogger.saveToFile(sessionId, 'FAILED');
@@ -237,7 +249,6 @@ export class MonitorService {
     deployment: UserDeployment,
     trigger: string,
     precheckResult: RebalancePrecheckResult,
-    rpcUrl: string,
     sessionId?: string,
   ): Promise<RebalanceJob> {
     const latestJob = await this.jobRepo.findOne({
@@ -349,7 +360,7 @@ export class MonitorService {
       job.status = JobStatus.FAILED;
       job.completedAt = new Date();
       job.errorMessage = error.message;
-      this.logger.error(`Job ${job.id} failed: ${error.message}`);
+      this.logger.error(`Job ${job.id} failed: ${error.message}`, error.stack);
     } finally {
       // Save logs to file (only if triggered by shouldTrigger=true)
       const savedPaths = await this.rebalanceLogger.saveToFile(
@@ -425,6 +436,7 @@ export class MonitorService {
       throw new Error('No strategy available for rebalance');
     }
 
+    const network = getNetworkDto(deployment.chainId);
     const chainId = deployment.chainId.toString();
     const safeAddress = getAddress(fromBytes(deployment.address, 'hex'));
     const strategy = precheckResult.bestStrategy.strategy;
@@ -481,14 +493,80 @@ export class MonitorService {
       throw new Error('No valid positions to rebalance');
     }
 
-    const payload = {
+    // Build RebalancePositionDto payload using precheckResult (for current state)
+    const yieldSummary = precheckResult.yieldSummary;
+
+    const currentBalances =
+      yieldSummary?.idleAssets?.assets?.map((asset) => ({
+        token: asset.tokenAddress,
+        amount: asset.balance,
+      })) ?? [];
+
+    const currentLendingSupplyPositions =
+      yieldSummary?.activeInvestments?.lendingInvestments?.positions?.flatMap(
+        (pos) =>
+          pos.protocolPositions?.supplies?.map((supply) => ({
+            protocol:
+              pos.protocol === 'aaveV3'
+                ? LendingProtocolDto.Aave
+                : pos.protocol === 'eulerV2'
+                  ? LendingProtocolDto.Euler
+                  : LendingProtocolDto.Venus,
+            token: supply.tokenAddress,
+            vToken: supply.vTokenAddress ?? null,
+            amount: supply.supplyAmount,
+          })) ?? [],
+      ) ?? [];
+
+    const currentLiquidityPositions: RebalancePositionDto['currentLiquidityPositions'] =
+      [];
+
+    const uniswapPositions =
+      yieldSummary?.activeInvestments?.uniswapV3LiquidityInvestments
+        ?.positions || [];
+    for (const lp of uniswapPositions) {
+      const protocolPositions = lp.protocolPositions || [];
+      for (const pp of protocolPositions) {
+        for (const d of pp.deposits || []) {
+          const tokenId = d.extraData?.tokenId;
+          if (!tokenId) continue;
+          currentLiquidityPositions.push({
+            protocol: LPProtocolDto.UniswapV3,
+            tokenId,
+            poolAddress: pp.poolInfo.poolAddress,
+          });
+        }
+      }
+    }
+
+    const aeroPositions =
+      yieldSummary?.activeInvestments?.aerodromeSlipstreamLiquidityInvestments
+        ?.positions || [];
+    for (const lp of aeroPositions) {
+      const protocolPositions = lp.protocolPositions || [];
+      for (const pp of protocolPositions) {
+        for (const d of pp.deposits || []) {
+          const tokenId = d.extraData?.tokenId;
+          if (!tokenId) continue;
+          currentLiquidityPositions.push({
+            protocol: LPProtocolDto.AerodromeSLipstream,
+            tokenId,
+            poolAddress: pp.poolInfo.poolAddress,
+          });
+        }
+      }
+    }
+
+    const payload: RebalancePositionDto = {
+      network,
       safeAddress,
-      walletAddress: wallet,
-      operatorAddress: getAddress(fromBytes(deployment.operator, 'hex')),
-      chainId,
-      idempotencyKey: `rebalance_${job.id}_${Date.now()}`,
-      targetLendingSupplyPositions,
+      operator: getAddress(fromBytes(deployment.operator, 'hex')),
+      wallet,
+      currentBalances,
+      currentLendingSupplyPositions,
+      currentLiquidityPositions,
       targetLiquidityPositions,
+      targetLendingSupplyPositions,
     };
 
     this.logger.log(
@@ -498,10 +576,8 @@ export class MonitorService {
     // Store payload in metadata for log file
     this.rebalanceLogger.updateMetadata(sessionId, { payload });
 
-    const rebalanceResult = await this.agentService.callMcpTool<any>(
-      'rebalance_position',
-      payload,
-    );
+    const rebalanceResult =
+      await this.owliaGuardService.executeRebalancePosition(payload);
 
     this.logger.log(`Rebalance MCP tool returned successfully`);
 
@@ -513,7 +589,6 @@ export class MonitorService {
     // Extract transaction hash
     const txHash =
       rebalanceResult?.txHash ||
-      rebalanceResult?.transactionHash ||
       extractTxHashFromOutput(JSON.stringify(rebalanceResult));
 
     if (!txHash) {
@@ -732,8 +807,8 @@ export class MonitorService {
     const isAssetAddress = asset.startsWith('0x');
     const assetSymbolUpper = asset.toUpperCase();
     const assetAddress = isAssetAddress
-      ? asset.toLowerCase()
-      : (lookupTokenAddress(asset, chainId)?.toLowerCase() ?? null);
+      ? asset
+      : (lookupTokenAddress(asset, chainId) ?? null);
 
     const lendingPositions =
       lendingSummary.positions as AccountLendingPosition[];
@@ -756,13 +831,12 @@ export class MonitorService {
         );
         for (const supply of supplies) {
           const supplySymbolUpper = supply.tokenSymbol?.toUpperCase?.() ?? '';
-          const supplyAddressLower = supply.tokenAddress?.toLowerCase?.() ?? '';
+          const supplyAddress = supply.tokenAddress ?? '';
           const symbolMatches =
             !isAssetAddress &&
             assetSymbolUpper &&
             supplySymbolUpper === assetSymbolUpper;
-          const addressMatches =
-            assetAddress && supplyAddressLower === assetAddress;
+          const addressMatches = assetAddress && supplyAddress === assetAddress;
 
           if (!symbolMatches && !addressMatches) {
             continue;

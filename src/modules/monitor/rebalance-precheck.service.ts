@@ -1,20 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { AgentService } from '../agent/agent.service';
-import {
-  AccountYieldSummaryResponse,
-  CalculateRebalanceCostBatchRequest,
-  CalculateRebalanceCostBatchResponse,
-  CalculateRebalanceCostResult,
-  ChainId,
-  GetDexPoolsResponse,
-  GetLpSimulateRequest,
-  GetLpSimulateResponse,
-  GetSupplyOpportunitiesResponse,
-  LendingPosition,
-  ProtocolType,
-  RebalanceRoute,
-  TargetLiquidityPosition,
-} from '../agent/types/mcp.types';
+import { AccountYieldSummaryResponse } from '../agent/types/mcp.types';
 import {
   lookupTokenAddress,
   lookupTokenSymbol,
@@ -27,6 +13,38 @@ import { UserDeployment } from '../user/entities/user-deployment.entity';
 import { stringify as uuidStringify } from 'uuid';
 import protocolConfig from '../../config/protocol.config';
 import { ConfigType } from '@nestjs/config';
+import { UserService } from '../user/user.service';
+import { getNetworkDto } from '../../common/dto/network.dto';
+import { PoolSnapshotCachesListResponseDto } from '../tracker/dto/pool-snapshot.response.dto';
+import { PortfolioResponseDto } from '../user/dto/user-portfolio.response.dto';
+import {
+  IdleAssetsResponse,
+  ActiveInvestmentsResponse,
+  AccountLendingPosition,
+  AccountLiquidityPosition,
+  CalculateRebalanceCostResult,
+  CalculateSwapCostBatchRequest,
+  ChainId,
+  DexPoolActiveTick,
+  DexPoolActiveTicksTimeframe,
+  DexPoolData,
+  DexPoolPricePosition,
+  DexPoolSnapshot,
+  GetDexPoolsResponse,
+  GetLpSimulateRequest,
+  GetLpSimulateResponse,
+  GetSupplyOpportunitiesResponse,
+  LendingPosition,
+  ProcessedRebalanceArgs,
+  ProtocolType,
+  RebalanceRoute,
+  TargetLiquidityPosition,
+  TokenBalance,
+  ProcessedLiquidityPosition,
+} from '../agent/types/mcp.types';
+import { TrackerService } from '../tracker/tracker.service';
+import { APYCalculatorService } from './portfolio-optimizer/apy-calculator.service';
+import { OwliaGuardService } from '../owlia-guard/owlia-guard.service';
 
 export interface StrategyPosition {
   type: 'supply' | 'lp';
@@ -139,6 +157,10 @@ export class RebalancePrecheckService {
     private readonly agentService: AgentService,
     private readonly marginalOptimizer: MarginalOptimizerService,
     private readonly opportunityConverter: OpportunityConverterService,
+    private readonly userService: UserService,
+    private readonly trackerService: TrackerService,
+    private readonly apyCalculator: APYCalculatorService,
+    private readonly owliaGuardService: OwliaGuardService,
     @Inject(protocolConfig.KEY)
     private readonly protocols: ConfigType<typeof protocolConfig>,
   ) {}
@@ -148,7 +170,7 @@ export class RebalancePrecheckService {
 
     // Fetch data
     const { yieldSummary, totalAssetsUsd, portfolioApy, currentHoldings } =
-      await this.fetchUserData(deployment, chainId);
+      await this.fetchUserData(deployment);
 
     if (!yieldSummary || totalAssetsUsd < 50) {
       return this.rejectResult(
@@ -208,6 +230,7 @@ export class RebalancePrecheckService {
       totalAssetsUsd,
       portfolioApy,
       positionStatus,
+      yieldSummary,
     );
 
     // // Check if any strategy meets constraints
@@ -240,22 +263,34 @@ export class RebalancePrecheckService {
     );
   }
 
-  private async fetchUserData(deployment: UserDeployment, chainId: ChainId) {
+  private async fetchUserData(deployment: UserDeployment): Promise<{
+    yieldSummary: AccountYieldSummaryResponse | null;
+    totalAssetsUsd: number;
+    portfolioApy: number;
+    currentHoldings: Record<string, number>;
+  }> {
     try {
-      const yieldSummary =
-        await this.agentService.callMcpTool<AccountYieldSummaryResponse>(
-          'get_account_yield_summary',
-          {
-            wallet_address: getAddress(toHex(deployment.address)),
-            chain_id: chainId,
-          },
-        );
+      const userPortfolio = await this.userService.getUserPortfolio(
+        getNetworkDto(deployment.chainId),
+        getAddress(toHex(deployment.address)),
+      );
 
-      const totalAssetsUsd = this.parseNumber(yieldSummary.totalAssetsUsd) || 0;
-      const portfolioApy = this.parseNumber(yieldSummary.portfolioApy) || 0;
+      const totalAssetsUsd =
+        this.parseNumber(userPortfolio.summary.assetUsd) || 0;
+
+      // Convert PortfolioResponseDto to AccountYieldSummaryResponse
+      const yieldSummary = this.convertPortfolioToYieldSummary(
+        userPortfolio,
+        getAddress(toHex(deployment.address)),
+      );
+
+      // Calculate weighted average portfolio APY
+      const portfolioApy = this.calculatePortfolioApy(userPortfolio);
 
       // Extract current token holdings from positions
-      const currentHoldings = this.extractCurrentHoldings(yieldSummary);
+      const currentHoldings = yieldSummary
+        ? this.extractCurrentHoldings(yieldSummary)
+        : {};
 
       this.logger.log(
         `Portfolio for user ${deployment.userId}: totalAssets=$${totalAssetsUsd}, APY=${portfolioApy}%, ` +
@@ -308,7 +343,7 @@ export class RebalancePrecheckService {
               if (!poolAddress) continue;
 
               // Get current tick from dexPools
-              const poolData = dexPools[poolAddress.toLowerCase()];
+              const poolData = dexPools[poolAddress];
               const currentTick =
                 this.parseNumber(poolData?.pricePosition?.currentTick) ??
                 this.parseNumber(poolData?.currentSnapshot?.currentTick);
@@ -353,7 +388,7 @@ export class RebalancePrecheckService {
               if (!poolAddress) continue;
 
               // Get current tick from dexPools
-              const poolData = dexPools[poolAddress.toLowerCase()];
+              const poolData = dexPools[poolAddress];
               const currentTick =
                 this.parseNumber(poolData?.pricePosition?.currentTick) ??
                 this.parseNumber(poolData?.currentSnapshot?.currentTick);
@@ -401,6 +436,93 @@ export class RebalancePrecheckService {
     } else {
       return PositionStatus.NO_POSITION;
     }
+  }
+
+  /**
+   * 从 yieldSummary 构建当前仓位，用于传给 OwliaGuard 做成本评估
+   */
+  private buildCurrentPortfolioStateForRebalance(
+    yieldSummary: AccountYieldSummaryResponse,
+  ): {
+    balances: TokenBalance[];
+    lendingPositions: LendingPosition[];
+    liquidityPositions: ProcessedLiquidityPosition[];
+  } {
+    const balances: TokenBalance[] = [];
+    const lendingPositions: LendingPosition[] = [];
+    const liquidityPositions: ProcessedLiquidityPosition[] = [];
+
+    // 1) Idle 资产 => currentBalances
+    if (yieldSummary.idleAssets?.assets) {
+      for (const asset of yieldSummary.idleAssets.assets) {
+        if (!asset.tokenAddress || !asset.balance) continue;
+        balances.push({
+          token: asset.tokenAddress,
+          amount: asset.balance,
+        });
+      }
+    }
+
+    const active = yieldSummary.activeInvestments;
+    if (active) {
+      // 2) Lending 仓位 => currentLendingSupplyPositions
+      const lending = active.lendingInvestments;
+      if (lending?.positions) {
+        for (const pos of lending.positions) {
+          const supplies = pos.protocolPositions?.supplies || [];
+          for (const s of supplies) {
+            lendingPositions.push({
+              protocol: this.normalizeProtocolType(pos.protocol),
+              token: s.tokenAddress,
+              vToken: s.vTokenAddress ?? null,
+              amount: s.supplyAmount,
+            });
+          }
+        }
+      }
+
+      // 3) Uniswap V3 LP 仓位 => currentLiquidityPositions
+      const uni = active.uniswapV3LiquidityInvestments;
+      if (uni?.positions) {
+        for (const lp of uni.positions) {
+          for (const proto of lp.protocolPositions || []) {
+            const poolAddress = proto.poolInfo?.poolAddress;
+            if (!poolAddress) continue;
+            for (const dep of proto.deposits || []) {
+              const extra = dep.extraData;
+              if (!extra?.tokenId) continue;
+              liquidityPositions.push({
+                protocol: 'uniswapV3',
+                tokenId: extra.tokenId.toString(),
+                poolAddress,
+              });
+            }
+          }
+        }
+      }
+
+      // 4) Aerodrome Slipstream LP 仓位
+      const aero = active.aerodromeSlipstreamLiquidityInvestments;
+      if (aero?.positions) {
+        for (const lp of aero.positions) {
+          for (const proto of lp.protocolPositions || []) {
+            const poolAddress = proto.poolInfo?.poolAddress;
+            if (!poolAddress) continue;
+            for (const dep of proto.deposits || []) {
+              const extra = dep.extraData;
+              if (!extra?.tokenId) continue;
+              liquidityPositions.push({
+                protocol: 'aerodromeSlipstream',
+                tokenId: extra.tokenId.toString(),
+                poolAddress,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    return { balances, lendingPositions, liquidityPositions };
   }
 
   /**
@@ -560,6 +682,926 @@ export class RebalancePrecheckService {
     return holdings;
   }
 
+  /**
+   * Convert PortfolioResponseDto to AccountYieldSummaryResponse
+   */
+  private convertPortfolioToYieldSummary(
+    portfolio: PortfolioResponseDto,
+    accountAddress: string,
+  ): AccountYieldSummaryResponse {
+    // Build idle assets from wallet
+    const idleAssets = this.buildIdleAssets(portfolio, accountAddress);
+
+    // Build active investments from protocols
+    const activeInvestments = this.buildActiveInvestments(portfolio);
+
+    const totalAssetsUsd = portfolio.summary.assetUsd;
+
+    return {
+      idleAssets,
+      activeInvestments,
+      totalAssetsUsd,
+      portfolioApy: '0', // Will be calculated separately
+    };
+  }
+
+  /**
+   * Build IdleAssetsResponse from portfolio wallet
+   */
+  private buildIdleAssets(
+    portfolio: PortfolioResponseDto,
+    accountAddress: string,
+  ): IdleAssetsResponse {
+    const assets = portfolio.wallet.map((wallet) => {
+      const tokenInfo = portfolio.tokens[wallet.tokenAddress];
+      return {
+        tokenAddress: wallet.tokenAddress,
+        tokenSymbol: tokenInfo?.symbol || 'UNKNOWN',
+        balance: wallet.amount,
+        balanceUsd: wallet.amountUsd,
+        tokenPriceUsd: tokenInfo?.priceUsd || '0',
+      };
+    });
+
+    const idleAssetsUsd = portfolio.summary.walletUsd;
+    const totalAssetsUsd = this.parseNumber(portfolio.summary.assetUsd) || 0;
+    const deploymentRate =
+      totalAssetsUsd > 0
+        ? (
+            ((totalAssetsUsd - this.parseNumber(idleAssetsUsd)!) /
+              totalAssetsUsd) *
+            100
+          ).toFixed(2)
+        : '0';
+
+    return {
+      account: accountAddress,
+      idleAssetsUsd,
+      deploymentRate,
+      assets,
+    };
+  }
+
+  /**
+   * Build ActiveInvestmentsResponse from portfolio protocols
+   */
+  private buildActiveInvestments(
+    portfolio: PortfolioResponseDto,
+  ): ActiveInvestmentsResponse {
+    const lendingPositions: AccountLendingPosition[] = [];
+    const uniswapV3Positions: AccountLiquidityPosition[] = [];
+    const aerodromePositions: AccountLiquidityPosition[] = [];
+
+    let totalLendingSuppliedUsd = 0;
+    let totalLendingBorrowedUsd = 0;
+    let totalLendingNetWorthUsd = 0;
+    let minHealthFactor: number | null = null;
+
+    let totalUniswapV3ValueUsd = 0;
+    let totalUniswapV3DeployedUsd = 0;
+    let totalUniswapV3RewardsUsd = 0;
+    let uniswapV3PositionCount = 0;
+    let totalUniswapV3Apy = 0;
+
+    let totalAerodromeValueUsd = 0;
+    let totalAerodromeDeployedUsd = 0;
+    let totalAerodromeRewardsUsd = 0;
+    let aerodromePositionCount = 0;
+    let totalAerodromeApy = 0;
+
+    for (const protocol of portfolio.protocols) {
+      // Handle lending protocols (Aave, Euler, Venus)
+      if (protocol.id === 'aave-v3') {
+        const aave = protocol as any;
+        const supplies = (aave.supplied || []).map((s: any) => ({
+          tokenSymbol: this.getTokenSymbolFromPortfolio(
+            s.tokenAddress,
+            portfolio,
+          ),
+          tokenAddress: s.tokenAddress,
+          vTokenAddress: null,
+          supplyAmount: s.amount,
+          supplyAmountUsd: s.amountUsd,
+          supplyApy: s.supplyApy,
+        }));
+
+        const borrows = (aave.borrowed || []).map((b: any) => ({
+          tokenSymbol: this.getTokenSymbolFromPortfolio(
+            b.tokenAddress,
+            portfolio,
+          ),
+          tokenAddress: b.tokenAddress,
+          borrowAmount: b.amount,
+          borrowAmountUsd: b.amountUsd,
+          borrowApy: b.borrowApy,
+        }));
+
+        const netWorth = this.parseNumber(aave.netUsd) || 0;
+        totalLendingNetWorthUsd += netWorth;
+        totalLendingSuppliedUsd += this.parseNumber(aave.assetUsd) || 0;
+        totalLendingBorrowedUsd += this.parseNumber(aave.debtUsd) || 0;
+
+        const hf = this.parseNumber(aave.healthFactor);
+        if (hf !== null && (minHealthFactor === null || hf < minHealthFactor)) {
+          minHealthFactor = hf;
+        }
+
+        lendingPositions.push({
+          protocol: 'aaveV3',
+          accountId: null,
+          protocolPositions: {
+            supplies,
+            borrows,
+            totalSupplyUsd: aave.assetUsd,
+            totalBorrowUsd: aave.debtUsd,
+            totalNetWorthUsd: aave.netUsd,
+            totalApy: aave.netApy || '0',
+            ltv: aave.ltv || '0',
+            liquidationThreshold: aave.liquidationThreshold || '0',
+            healthFactor: aave.healthFactor || '0',
+          },
+        });
+      } else if (protocol.id === 'venus-v4') {
+        const venus = protocol as any;
+        const supplies = (venus.supplied || []).map((s: any) => ({
+          tokenSymbol: this.getTokenSymbolFromPortfolio(
+            s.tokenAddress,
+            portfolio,
+          ),
+          tokenAddress: s.tokenAddress,
+          vTokenAddress: null,
+          supplyAmount: s.amount,
+          supplyAmountUsd: s.amountUsd,
+          supplyApy: s.supplyApy,
+        }));
+
+        const borrows = (venus.borrowed || []).map((b: any) => ({
+          tokenSymbol: this.getTokenSymbolFromPortfolio(
+            b.tokenAddress,
+            portfolio,
+          ),
+          tokenAddress: b.tokenAddress,
+          borrowAmount: b.amount,
+          borrowAmountUsd: b.amountUsd,
+          borrowApy: b.borrowApy,
+        }));
+
+        const netWorth = this.parseNumber(venus.netUsd) || 0;
+        totalLendingNetWorthUsd += netWorth;
+        totalLendingSuppliedUsd += this.parseNumber(venus.assetUsd) || 0;
+        totalLendingBorrowedUsd += this.parseNumber(venus.debtUsd) || 0;
+
+        const hf = this.parseNumber(venus.healthFactor);
+        if (hf !== null && (minHealthFactor === null || hf < minHealthFactor)) {
+          minHealthFactor = hf;
+        }
+
+        lendingPositions.push({
+          protocol: 'venusV4',
+          accountId: null,
+          protocolPositions: {
+            supplies,
+            borrows,
+            totalSupplyUsd: venus.assetUsd,
+            totalBorrowUsd: venus.debtUsd,
+            totalNetWorthUsd: venus.netUsd,
+            totalApy: venus.netApy || '0',
+            ltv: venus.ltv || '0',
+            liquidationThreshold: venus.liquidationThreshold || '0',
+            healthFactor: venus.healthFactor || '0',
+          },
+        });
+      } else if (protocol.id === 'euler-v2') {
+        const euler = protocol as any;
+        const subAccounts = euler.subAccounts || [];
+
+        for (const subAccount of subAccounts) {
+          const supplies = (subAccount.supplied || []).map((s: any) => ({
+            tokenSymbol: this.getTokenSymbolFromPortfolio(
+              s.underlying,
+              portfolio,
+            ),
+            tokenAddress: s.underlying,
+            vTokenAddress: s.vault,
+            supplyAmount: s.supplyAmount,
+            supplyAmountUsd: s.supplyAmountUsd,
+            supplyApy: s.supplyApy,
+          }));
+
+          const borrows = (subAccount.borrowed || []).map((b: any) => ({
+            tokenSymbol: this.getTokenSymbolFromPortfolio(
+              b.underlying,
+              portfolio,
+            ),
+            tokenAddress: b.underlying,
+            borrowAmount: b.borrowAmount,
+            borrowAmountUsd: b.borrowAmountUsd,
+            borrowApy: b.borrowApy,
+          }));
+
+          const netWorth = this.parseNumber(subAccount.collateralValueUsd) || 0;
+          totalLendingNetWorthUsd += netWorth;
+          totalLendingSuppliedUsd +=
+            this.parseNumber(subAccount.collateralValueUsd) || 0;
+          totalLendingBorrowedUsd +=
+            this.parseNumber(subAccount.liabilityValueUsd) || 0;
+
+          lendingPositions.push({
+            protocol: 'eulerV2',
+            accountId: subAccount.subAccountId?.toString() || null,
+            protocolPositions: {
+              supplies,
+              borrows,
+              totalSupplyUsd: subAccount.collateralValueUsd,
+              totalBorrowUsd: subAccount.liabilityValueUsd,
+              totalNetWorthUsd: subAccount.collateralValueUsd,
+              totalApy: subAccount.netApy || '0',
+              ltv: '0',
+              liquidationThreshold: '0',
+              healthFactor: subAccount.healthScore || '0',
+            },
+          });
+        }
+      }
+      // Handle liquidity protocols
+      else if (protocol.id === 'uniswap-v3') {
+        const uniswap = protocol as any;
+        const positions = uniswap.positions || [];
+
+        for (const position of positions) {
+          const positionUsd = this.parseNumber(position.positionUsd) || 0;
+          const apy = this.parseNumber(position.apy) || 0;
+
+          totalUniswapV3ValueUsd += positionUsd;
+          totalUniswapV3DeployedUsd += positionUsd;
+          totalUniswapV3RewardsUsd +=
+            (this.parseNumber(position.tokensOwed0Usd) || 0) +
+            (this.parseNumber(position.tokensOwed1Usd) || 0);
+          uniswapV3PositionCount++;
+          totalUniswapV3Apy += apy * positionUsd;
+
+          const token0Symbol = this.getTokenSymbolFromPortfolio(
+            position.token0,
+            portfolio,
+          );
+          const token1Symbol = this.getTokenSymbolFromPortfolio(
+            position.token1,
+            portfolio,
+          );
+
+          uniswapV3Positions.push({
+            protocol: 'uniswapV3',
+            protocolPositions: [
+              {
+                poolInfo: {
+                  poolAddress: position.poolAddress,
+                  tokens: [
+                    { address: position.token0, symbol: token0Symbol },
+                    { address: position.token1, symbol: token1Symbol },
+                  ],
+                  fee: position.fee,
+                },
+                totalNetWorthUsd: position.positionUsd,
+                apy: position.apy,
+                deposits: [
+                  {
+                    positionApy: position.apy,
+                    depositedAmountUsd: position.positionUsd,
+                    unclaimedRewardsAmountUsd: (
+                      (this.parseNumber(position.tokensOwed0Usd) || 0) +
+                      (this.parseNumber(position.tokensOwed1Usd) || 0)
+                    ).toString(),
+                    extraData: {
+                      tokenId: position.tokenId,
+                      tick: position.tickLower, // Use tickLower as tick
+                      tickLower: position.tickLower,
+                      tickUpper: position.tickUpper,
+                      token0: token0Symbol,
+                      token1: token1Symbol,
+                      token0Amount: position.amount0,
+                      token1Amount: position.amount1,
+                      token0AmountUsd: position.amount0Usd,
+                      token1AmountUsd: position.amount1Usd,
+                      unclaimedRewardToken0Amount: position.tokensOwed0,
+                      unclaimedRewardToken1Amount: position.tokensOwed1,
+                      unclaimedRewardToken0AmountUsd: position.tokensOwed0Usd,
+                      unclaimedRewardToken1AmountUsd: position.tokensOwed1Usd,
+                    },
+                  },
+                ],
+              },
+            ],
+          });
+        }
+      } else if (protocol.id === 'aerodrome-cl') {
+        const aerodrome = protocol as any;
+        const positions = aerodrome.positions || [];
+
+        for (const position of positions) {
+          const positionUsd = this.parseNumber(position.positionUsd) || 0;
+          const apy = this.parseNumber(position.apy) || 0;
+
+          totalAerodromeValueUsd += positionUsd;
+          totalAerodromeDeployedUsd += positionUsd;
+          totalAerodromeRewardsUsd +=
+            (this.parseNumber(position.tokensOwed0Usd) || 0) +
+            (this.parseNumber(position.tokensOwed1Usd) || 0);
+          aerodromePositionCount++;
+          totalAerodromeApy += apy * positionUsd;
+
+          const token0Symbol = this.getTokenSymbolFromPortfolio(
+            position.token0,
+            portfolio,
+          );
+          const token1Symbol = this.getTokenSymbolFromPortfolio(
+            position.token1,
+            portfolio,
+          );
+
+          aerodromePositions.push({
+            protocol: 'aerodromeSlipstream',
+            protocolPositions: [
+              {
+                poolInfo: {
+                  poolAddress: position.poolAddress,
+                  tokens: [
+                    { address: position.token0, symbol: token0Symbol },
+                    { address: position.token1, symbol: token1Symbol },
+                  ],
+                  fee: position.fee,
+                },
+                totalNetWorthUsd: position.positionUsd,
+                apy: position.apy,
+                deposits: [
+                  {
+                    positionApy: position.apy,
+                    depositedAmountUsd: position.positionUsd,
+                    unclaimedRewardsAmountUsd: (
+                      (this.parseNumber(position.tokensOwed0Usd) || 0) +
+                      (this.parseNumber(position.tokensOwed1Usd) || 0)
+                    ).toString(),
+                    extraData: {
+                      tokenId: position.tokenId,
+                      tick: position.tickLower,
+                      tickLower: position.tickLower,
+                      tickUpper: position.tickUpper,
+                      token0: token0Symbol,
+                      token1: token1Symbol,
+                      token0Amount: position.amount0,
+                      token1Amount: position.amount1,
+                      token0AmountUsd: position.amount0Usd,
+                      token1AmountUsd: position.amount1Usd,
+                      unclaimedRewardToken0Amount: position.tokensOwed0,
+                      unclaimedRewardToken1Amount: position.tokensOwed1,
+                      unclaimedRewardToken0AmountUsd: position.tokensOwed0Usd,
+                      unclaimedRewardToken1AmountUsd: position.tokensOwed1Usd,
+                    },
+                  },
+                ],
+              },
+            ],
+          });
+        }
+      }
+    }
+
+    // Build lending investments summary
+    const lendingInvestments =
+      lendingPositions.length > 0
+        ? {
+            netWorthUsd: totalLendingNetWorthUsd.toString(),
+            totalSuppliedUsd: totalLendingSuppliedUsd.toString(),
+            totalBorrowedUsd: totalLendingBorrowedUsd.toString(),
+            netApy:
+              totalLendingNetWorthUsd > 0
+                ? (
+                    lendingPositions.reduce((sum, pos) => {
+                      const netWorth =
+                        this.parseNumber(
+                          pos.protocolPositions.totalNetWorthUsd,
+                        ) || 0;
+                      const apy =
+                        this.parseNumber(pos.protocolPositions.totalApy) || 0;
+                      return sum + netWorth * apy;
+                    }, 0) / totalLendingNetWorthUsd
+                  ).toFixed(4)
+                : '0',
+            healthFactorMin: (minHealthFactor ?? 0).toString(),
+            leverageRatio:
+              totalLendingSuppliedUsd > 0
+                ? (totalLendingBorrowedUsd / totalLendingSuppliedUsd).toFixed(4)
+                : '0',
+            positions: lendingPositions,
+          }
+        : null;
+
+    // Build Uniswap V3 liquidity investments summary
+    const uniswapV3LiquidityInvestments =
+      uniswapV3Positions.length > 0
+        ? {
+            totalValueUsd: totalUniswapV3ValueUsd.toString(),
+            totalDeployedUsd: totalUniswapV3DeployedUsd.toString(),
+            pendingRewardsUsd: totalUniswapV3RewardsUsd.toString(),
+            avgApy:
+              totalUniswapV3DeployedUsd > 0
+                ? (totalUniswapV3Apy / totalUniswapV3DeployedUsd).toFixed(4)
+                : '0',
+            activePositions: uniswapV3PositionCount,
+            positions: uniswapV3Positions,
+          }
+        : null;
+
+    // Build Aerodrome liquidity investments summary
+    const aerodromeSlipstreamLiquidityInvestments =
+      aerodromePositions.length > 0
+        ? {
+            totalValueUsd: totalAerodromeValueUsd.toString(),
+            totalDeployedUsd: totalAerodromeDeployedUsd.toString(),
+            pendingRewardsUsd: totalAerodromeRewardsUsd.toString(),
+            avgApy:
+              totalAerodromeDeployedUsd > 0
+                ? (totalAerodromeApy / totalAerodromeDeployedUsd).toFixed(4)
+                : '0',
+            activePositions: aerodromePositionCount,
+            positions: aerodromePositions,
+          }
+        : null;
+
+    // Calculate performance summary
+    const totalActiveInvestmentsUsd =
+      totalLendingNetWorthUsd + totalUniswapV3ValueUsd + totalAerodromeValueUsd;
+
+    const weightedApy =
+      totalActiveInvestmentsUsd > 0
+        ? ((lendingInvestments
+            ? (this.parseNumber(lendingInvestments.netApy) || 0) *
+              totalLendingNetWorthUsd
+            : 0) +
+            (uniswapV3LiquidityInvestments
+              ? (this.parseNumber(uniswapV3LiquidityInvestments.avgApy) || 0) *
+                totalUniswapV3ValueUsd
+              : 0) +
+            (aerodromeSlipstreamLiquidityInvestments
+              ? (this.parseNumber(
+                  aerodromeSlipstreamLiquidityInvestments.avgApy,
+                ) || 0) * totalAerodromeValueUsd
+              : 0)) /
+          totalActiveInvestmentsUsd
+        : 0;
+
+    const performanceSummary = {
+      weightedApy: weightedApy.toFixed(4),
+      totalYieldUsd: '0', // Not available from portfolio
+      riskLevel: this.assessRiskLevel(
+        minHealthFactor,
+        totalLendingBorrowedUsd,
+        totalLendingSuppliedUsd,
+      ) as 'low' | 'medium' | 'high',
+    };
+
+    // Build risk metrics
+    const riskMetrics = {
+      concentrationRisk: this.assessConcentrationRisk(
+        totalLendingNetWorthUsd,
+        totalUniswapV3ValueUsd,
+        totalAerodromeValueUsd,
+        totalActiveInvestmentsUsd,
+      ) as 'low' | 'medium' | 'high',
+      liquidationRisk: this.assessLiquidationRisk(minHealthFactor) as
+        | 'low'
+        | 'medium'
+        | 'high',
+      protocolDiversification: this.assessProtocolDiversification(
+        lendingPositions.length,
+        uniswapV3Positions.length,
+        aerodromePositions.length,
+      ) as 'low' | 'medium' | 'high',
+    };
+
+    return {
+      activeInvestmentsUsd: totalActiveInvestmentsUsd.toString(),
+      performanceSummary,
+      uniswapV3LiquidityInvestments,
+      aerodromeSlipstreamLiquidityInvestments,
+      lendingInvestments,
+      riskMetrics,
+    };
+  }
+
+  /**
+   * Calculate weighted average portfolio APY from all protocols
+   */
+  private calculatePortfolioApy(portfolio: PortfolioResponseDto): number {
+    let totalWeightedApy = 0;
+    let totalWeight = 0;
+
+    for (const protocol of portfolio.protocols) {
+      const netUsd = this.parseNumber(protocol.netUsd) || 0;
+      if (netUsd <= 0) continue;
+
+      let apy = 0;
+      if ('netApy' in protocol && protocol.netApy) {
+        apy = this.parseNumber(protocol.netApy) || 0;
+      } else if (
+        protocol.id === 'uniswap-v3' ||
+        protocol.id === 'aerodrome-cl'
+      ) {
+        // For LP protocols, calculate weighted average from positions
+        const positions = (protocol as any).positions || [];
+        let positionWeightedApy = 0;
+        let positionTotalUsd = 0;
+
+        for (const position of positions) {
+          const positionUsd = this.parseNumber(position.positionUsd) || 0;
+          const positionApy = this.parseNumber(position.apy) || 0;
+          if (positionUsd > 0) {
+            positionWeightedApy += positionApy * positionUsd;
+            positionTotalUsd += positionUsd;
+          }
+        }
+
+        if (positionTotalUsd > 0) {
+          apy = positionWeightedApy / positionTotalUsd;
+        }
+      }
+
+      if (apy > 0) {
+        totalWeightedApy += apy * netUsd;
+        totalWeight += netUsd;
+      }
+    }
+
+    // Include wallet (idle assets) with 0% APY
+    const walletUsd = this.parseNumber(portfolio.summary.walletUsd) || 0;
+    totalWeight += walletUsd;
+
+    return totalWeight > 0 ? totalWeightedApy / totalWeight : 0;
+  }
+
+  /**
+   * Helper to get token symbol from portfolio tokens
+   */
+  private getTokenSymbolFromPortfolio(
+    tokenAddress: string,
+    portfolio: PortfolioResponseDto,
+  ): string {
+    const tokenInfo = portfolio.tokens[tokenAddress];
+    return tokenInfo?.symbol || 'UNKNOWN';
+  }
+
+  /**
+   * Assess risk level based on health factor and leverage
+   */
+  private assessRiskLevel(
+    minHealthFactor: number | null,
+    totalBorrowed: number,
+    totalSupplied: number,
+  ): 'low' | 'medium' | 'high' {
+    if (minHealthFactor !== null && minHealthFactor < 1.5) return 'high';
+    if (minHealthFactor !== null && minHealthFactor < 2.0) return 'medium';
+    if (totalBorrowed > 0 && totalSupplied > 0) {
+      const leverage = totalBorrowed / totalSupplied;
+      if (leverage > 0.8) return 'high';
+      if (leverage > 0.5) return 'medium';
+    }
+    return 'low';
+  }
+
+  /**
+   * Assess concentration risk
+   */
+  private assessConcentrationRisk(
+    lendingUsd: number,
+    uniswapUsd: number,
+    aerodromeUsd: number,
+    totalUsd: number,
+  ): 'low' | 'medium' | 'high' {
+    if (totalUsd === 0) return 'low';
+    const maxConcentration = Math.max(
+      lendingUsd / totalUsd,
+      uniswapUsd / totalUsd,
+      aerodromeUsd / totalUsd,
+    );
+    if (maxConcentration > 0.8) return 'high';
+    if (maxConcentration > 0.6) return 'medium';
+    return 'low';
+  }
+
+  /**
+   * Assess liquidation risk
+   */
+  private assessLiquidationRisk(
+    minHealthFactor: number | null,
+  ): 'low' | 'medium' | 'high' {
+    if (minHealthFactor === null) return 'low';
+    if (minHealthFactor < 1.5) return 'high';
+    if (minHealthFactor < 2.0) return 'medium';
+    return 'low';
+  }
+
+  /**
+   * Assess protocol diversification
+   */
+  private assessProtocolDiversification(
+    lendingCount: number,
+    uniswapCount: number,
+    aerodromeCount: number,
+  ): 'low' | 'medium' | 'high' {
+    const totalPositions = lendingCount + uniswapCount + aerodromeCount;
+    if (totalPositions === 0) return 'low';
+    if (totalPositions >= 5) return 'high';
+    if (totalPositions >= 3) return 'medium';
+    return 'low';
+  }
+
+  /**
+   * Convert tracker pool snapshot caches list to GetDexPoolsResponse
+   */
+  private convertPoolSnapshotsToDexPools(
+    cachesList: PoolSnapshotCachesListResponseDto,
+  ): GetDexPoolsResponse {
+    const dexPools: GetDexPoolsResponse = {};
+
+    if (!cachesList?.latestSnapshots) {
+      return dexPools;
+    }
+
+    for (const latest of cachesList.latestSnapshots) {
+      const snap = latest.currentSnapshot;
+      if (!snap?.poolAddress) continue;
+
+      const poolAddress = snap.poolAddress;
+
+      const currentSnapshot: DexPoolSnapshot = {
+        dexKey: snap.dexKey,
+        timestampMs: snap.timestampMs,
+        poolAddress: snap.poolAddress,
+        token0: snap.token0,
+        token1: snap.token1,
+        token0Symbol: snap.token0Symbol,
+        token1Symbol: snap.token1Symbol,
+        fee: snap.fee,
+        currentTick: snap.currentTick,
+        tickSpacing: snap.tickSpacing,
+        currentPrice: snap.currentPrice,
+        startTick: snap.startTick,
+        tvl: snap.tvl,
+      };
+
+      // --- Price/tick geometry (ported from getLatestPoolSnapshots) ---
+      const currentTick = parseInt(snap.currentTick);
+      const tickSpacing = parseInt(snap.tickSpacing || '1') || 1;
+
+      const tickSpacingLowerBound =
+        Math.floor(currentTick / tickSpacing) * tickSpacing;
+      const tickSpacingUpperBound = tickSpacingLowerBound + tickSpacing;
+
+      // Calculate current price from sqrtPriceX96 if available, otherwise from tick
+      let currentPriceString: string;
+      let currentPrice: number;
+      if (snap.currentPrice) {
+        try {
+          const sqrtPriceX96 = BigInt(snap.currentPrice);
+          const Q96 = BigInt(2) ** BigInt(96);
+          const priceX192 = sqrtPriceX96 * Q96;
+          const Q192 = Q96 * Q96;
+
+          const integerPart = priceX192 / Q192;
+          const remainder = priceX192 % Q192;
+
+          const decimalPart = (remainder * BigInt(10) ** BigInt(18)) / Q192;
+
+          currentPriceString =
+            integerPart.toString() +
+            '.' +
+            decimalPart.toString().padStart(18, '0');
+          currentPrice = Number(integerPart) + Number(decimalPart) / 1e18;
+        } catch {
+          // Fallback to tick-based price if bigint math fails
+          currentPrice = Math.pow(1.0001, currentTick);
+          currentPriceString = currentPrice.toFixed(18);
+        }
+      } else {
+        currentPrice = Math.pow(1.0001, currentTick);
+        currentPriceString = currentPrice.toFixed(18);
+      }
+
+      const lowerBoundPrice = Math.pow(1.0001, tickSpacingLowerBound);
+      const upperBoundPrice = Math.pow(1.0001, tickSpacingUpperBound);
+
+      const tickPositionInSpacing =
+        tickSpacing > 0
+          ? ((currentTick - tickSpacingLowerBound) / tickSpacing) * 100
+          : 0;
+
+      const priceRange = upperBoundPrice - lowerBoundPrice;
+      const pricePositionInRange =
+        priceRange > 0
+          ? ((currentPrice - lowerBoundPrice) / priceRange) * 100
+          : 0;
+
+      const tickPositionText = `${tickPositionInSpacing.toFixed(2)}%`;
+      const pricePositionText = `${pricePositionInRange.toFixed(2)}%`;
+
+      let description: string;
+      if (tickPositionInSpacing === 0) {
+        description = 'At lower bound';
+      } else if (tickPositionInSpacing === 100) {
+        description = 'At upper bound';
+      } else if (tickPositionInSpacing < 25) {
+        description = 'Near lower bound';
+      } else if (tickPositionInSpacing < 50) {
+        description = 'Lower half';
+      } else if (tickPositionInSpacing < 75) {
+        description = 'Upper half';
+      } else {
+        description = 'Near upper bound';
+      }
+
+      // Active ticks context across multiple timeframes
+      const nowMs = Date.now();
+      const timePeriodsMinutes: Record<string, number> = {
+        '5min': 5,
+        '15min': 15,
+        '30min': 30,
+        '1hr': 60,
+        '6hr': 360,
+      };
+
+      const activeTicksContext: {
+        [timeframe: string]: DexPoolActiveTicksTimeframe;
+      } = {};
+
+      for (const [periodName, minutes] of Object.entries(timePeriodsMinutes)) {
+        const cutoffTime = nowMs - minutes * 60 * 1000;
+        const relevantSnapshots =
+          latest.snapshots?.filter(
+            (s) => Number(s.timestampMs) >= cutoffTime,
+          ) ?? [];
+
+        const ticksWithVolume = new Map<string, number>();
+
+        for (const snapItem of relevantSnapshots) {
+          for (const tickInfo of snapItem.ticks || []) {
+            const volume = this.parseNumber(tickInfo.tradingVolume) || 0;
+            if (volume > 0) {
+              const currentVolume = ticksWithVolume.get(tickInfo.tick) || 0;
+              ticksWithVolume.set(tickInfo.tick, currentVolume + volume);
+            }
+          }
+        }
+
+        const activeTicks = Array.from(ticksWithVolume.keys())
+          .map((t) => parseInt(t))
+          .sort((a, b) => a - b);
+
+        if (activeTicks.length === 0) {
+          continue;
+        }
+
+        const minActiveTick = activeTicks[0];
+        const maxActiveTick = activeTicks[activeTicks.length - 1];
+
+        let nearestLowerTick = minActiveTick;
+        let nearestUpperTick = maxActiveTick + 1;
+
+        for (let i = 0; i < activeTicks.length - 1; i++) {
+          if (
+            activeTicks[i] <= currentTick &&
+            activeTicks[i + 1] > currentTick
+          ) {
+            nearestLowerTick = activeTicks[i];
+            nearestUpperTick = activeTicks[i + 1] + 1;
+            break;
+          }
+        }
+
+        const totalVolume = Array.from(ticksWithVolume.values()).reduce(
+          (sum, vol) => sum + vol,
+          0,
+        );
+
+        const ticksWithVolumeArr = Array.from(ticksWithVolume.entries())
+          .map(([tick, volume]) => ({
+            tick: parseInt(tick),
+            volume: volume.toFixed(2),
+          }))
+          .sort((a, b) => a.tick - b.tick);
+
+        activeTicksContext[periodName] = {
+          totalActiveTicks: activeTicks.length,
+          totalVolume: totalVolume.toFixed(2),
+          range: {
+            min: minActiveTick,
+            max: maxActiveTick,
+            span: maxActiveTick - minActiveTick,
+          },
+          nearestActiveTicks: {
+            lower: nearestLowerTick,
+            upper: nearestUpperTick,
+          },
+          ticksWithVolume: ticksWithVolumeArr,
+        };
+      }
+
+      const pricePosition: DexPoolPricePosition = {
+        currentTick,
+        tickSpacing,
+        currentTickSpacingRange: {
+          lowerBound: tickSpacingLowerBound,
+          upperBound: tickSpacingUpperBound,
+          tickPositionInSpacing: tickPositionText,
+          description,
+        },
+        priceInfo: {
+          currentPrice: currentPriceString,
+          currentPriceNumber: currentPrice,
+          lowerBoundPrice: lowerBoundPrice.toFixed(18),
+          upperBoundPrice: upperBoundPrice.toFixed(18),
+          priceRange: priceRange.toFixed(18),
+          pricePositionInRange: pricePositionText,
+        },
+        feeContext: {
+          tickSpacingInBps: tickSpacing,
+          approximateFeePercentage: (tickSpacing * 0.01).toFixed(2) + '%',
+        },
+        activeTicksContext,
+      };
+
+      // Aggregate recent active ticks (similar to MCP getDexPools)
+      const recentActiveTicks: DexPoolActiveTick[] = [];
+
+      const snapshotsSorted =
+        latest.snapshots?.slice().sort((a, b) => {
+          const at = new Date(a.timestampMs).getTime();
+          const bt = new Date(b.timestampMs).getTime();
+          return bt - at;
+        }) ?? [];
+
+      const last10MinSnapshots = snapshotsSorted.slice(0, 10);
+
+      const tickVolumeMap = new Map<
+        string,
+        {
+          totalVolume: number;
+          latestApy: string;
+          token0AmountUsd: string;
+          token1AmountUsd: string;
+        }
+      >();
+
+      for (const s of last10MinSnapshots) {
+        for (const t of s.ticks || []) {
+          const volume = this.parseNumber(t.tradingVolume) || 0;
+          if (volume <= 0) continue;
+
+          const existing = tickVolumeMap.get(t.tick);
+          if (existing) {
+            existing.totalVolume += volume;
+          } else {
+            tickVolumeMap.set(t.tick, {
+              totalVolume: volume,
+              latestApy: t.apy,
+              token0AmountUsd: t.token0AmountUsd,
+              token1AmountUsd: t.token1AmountUsd,
+            });
+          }
+        }
+      }
+
+      for (const [tick, data] of tickVolumeMap.entries()) {
+        recentActiveTicks.push({
+          tick,
+          tradingVolume: data.totalVolume.toFixed(2),
+          apy: data.latestApy,
+          token0AmountUsd: data.token0AmountUsd,
+          token1AmountUsd: data.token1AmountUsd,
+        });
+      }
+
+      recentActiveTicks.sort(
+        (a, b) =>
+          (this.parseNumber(b.tradingVolume) || 0) -
+          (this.parseNumber(a.tradingVolume) || 0),
+      );
+
+      const poolData: DexPoolData = {
+        currentSnapshot,
+        pricePosition,
+        recentActiveTicks,
+        totalTVL: snap.tvl,
+        fee: snap.fee,
+        tickSpacing: snap.tickSpacing,
+      };
+
+      dexPools[poolAddress] = poolData;
+    }
+
+    dexPools._dataSource = 'tracker_service';
+
+    return dexPools;
+  }
+
   private async fetchOpportunities(
     deployment: UserDeployment,
     chainId: ChainId,
@@ -570,12 +1612,13 @@ export class RebalancePrecheckService {
     let dexPools: GetDexPoolsResponse = {};
 
     try {
-      dexPools = await this.agentService.callMcpTool<GetDexPoolsResponse>(
-        'get_dex_pools',
-        {
-          chain_id: chainId,
-        },
-      );
+      const poolSnapshotCachesList =
+        await this.trackerService.getPoolSnapshotCachesList(
+          getNetworkDto(Number(chainId)),
+        );
+
+      dexPools = this.convertPoolSnapshotsToDexPools(poolSnapshotCachesList);
+
       this.logger.log(`get_dex_pools response: ${JSON.stringify(dexPools)}`);
 
       const lpRequests = this.buildLpSimulateRequests(
@@ -584,12 +1627,8 @@ export class RebalancePrecheckService {
         totalAssetsUsd,
       );
       if (lpRequests.length > 0) {
-        const simulationsRaw = await this.agentService.callMcpTool<any>(
-          'get_lp_simulate_batch',
-          {
-            reqs: lpRequests,
-          },
-        );
+        const simulationsRaw =
+          await this.apyCalculator.simulateLpWithTrackerBatch(lpRequests);
         this.logger.log(
           `get_lp_simulate_batch response: ${JSON.stringify(simulationsRaw)}`,
         );
@@ -618,7 +1657,10 @@ export class RebalancePrecheckService {
       );
       supplyOpportunities.push(supplyOpps);
     } catch (error) {
-      this.logger.warn(`get_supply_opportunities failed: ${error.message}`);
+      this.logger.warn(
+        `get_supply_opportunities failed: ${error.message}`,
+        error.stack,
+      );
     }
 
     return { lpSimulations, supplyOpportunities, dexPools };
@@ -792,6 +1834,7 @@ export class RebalancePrecheckService {
     totalAssetsUsd: number,
     portfolioApy: number,
     positionStatus: PositionStatus,
+    yieldSummary: AccountYieldSummaryResponse,
   ) {
     const constraints = this.getConstraintsByPositionStatus(positionStatus);
     const maxBreakEvenHours = constraints.maxBreakEvenHours;
@@ -812,6 +1855,12 @@ export class RebalancePrecheckService {
     const evaluationRecords: StrategyEvaluationRecord[] = [];
 
     try {
+      const {
+        balances: currentBalances,
+        lendingPositions: currentLendingSupplyPositions,
+        liquidityPositions: currentLiquidityPositions,
+      } = this.buildCurrentPortfolioStateForRebalance(yieldSummary);
+
       const targetPositionsBatch = allStrategies.map((s) =>
         this.convertStrategyToTargetPositions(
           s.strategy,
@@ -822,16 +1871,25 @@ export class RebalancePrecheckService {
         ),
       );
 
-      const request: CalculateRebalanceCostBatchRequest = {
-        safeAddress: walletAddress,
-        wallet_address: walletAddress,
-        chain_id: chainId,
-        target_positions_batch: targetPositionsBatch,
+      const request: CalculateSwapCostBatchRequest = {
+        processed_args_batch: targetPositionsBatch.map(
+          (positions): ProcessedRebalanceArgs => ({
+            network: getNetworkDto(Number(chainId)),
+            safeAddress: walletAddress,
+            operator: walletAddress,
+            wallet: walletAddress,
+            currentBalances,
+            currentLendingSupplyPositions,
+            currentLiquidityPositions,
+            targetLendingSupplyPositions:
+              positions.targetLendingSupplyPositions || [],
+            targetLiquidityPositions: positions.targetLiquidityPositions || [],
+          }),
+        ),
       };
 
       const costResult =
-        await this.agentService.callMcpTool<CalculateRebalanceCostBatchResponse>(
-          'calculate_rebalance_cost_batch',
+        await this.owliaGuardService.getRebalanceCostFromProcessedArgsBatch(
           request,
         );
 
@@ -1190,14 +2248,14 @@ export class RebalancePrecheckService {
     lpSimulations: GetLpSimulateResponse[],
     dexPools: Record<string, any>,
   ) {
-    const normalizedPoolAddress = poolAddress.toLowerCase();
+    const normalizedPoolAddress = poolAddress;
 
     let token0Amount = 0,
       token1Amount = 0,
       tickLower = 0,
       tickUpper = 0;
     for (const sim of lpSimulations) {
-      if (sim.pool?.poolAddress?.toLowerCase() === normalizedPoolAddress) {
+      if (sim.pool?.poolAddress === normalizedPoolAddress) {
         token0Amount =
           this.parseNumber(sim.summary?.requiredTokens?.token0?.amount) || 0;
         token1Amount =
@@ -1211,7 +2269,7 @@ export class RebalancePrecheckService {
     let token0Address = '',
       token1Address = '';
     for (const [poolAddr, poolData] of Object.entries(dexPools)) {
-      if (poolAddr.toLowerCase() === normalizedPoolAddress) {
+      if (poolAddr === normalizedPoolAddress) {
         const snap = poolData?.currentSnapshot || {};
         token0Address = snap.token0Address || snap.token0 || '';
         token1Address = snap.token1Address || snap.token1 || '';
@@ -1389,10 +2447,10 @@ export class RebalancePrecheckService {
 
     // First try to get from dexPools if poolAddress is provided
     if (poolAddress && tokenKey && dexPools) {
-      const normalizedPoolAddress = poolAddress.toLowerCase();
+      const normalizedPoolAddress = poolAddress;
       for (const [poolAddr, poolData] of Object.entries(dexPools)) {
         if (poolAddr === '_dataSource') continue;
-        if (poolAddr.toLowerCase() === normalizedPoolAddress) {
+        if (poolAddr === normalizedPoolAddress) {
           const currentSnapshot = poolData?.currentSnapshot;
           const symbolKey = `${tokenKey}Symbol`;
           if (currentSnapshot && currentSnapshot[symbolKey]) {

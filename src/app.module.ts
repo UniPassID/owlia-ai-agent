@@ -17,13 +17,21 @@ import { UniswapV3Module } from './modules/dexes/uniswap-v3/uniswap-v3.module';
 import { VenusV4Module } from './modules/dexes/venus-v4/venus-v4.module';
 import { TrackerModule } from './modules/tracker/tracker.module';
 import privateConfig from './config/private.config';
+import { MonitorModule } from './modules/monitor/monitor.module';
 import { AgentModule } from './modules/agent/agent.module';
+import protocolConfig from './config/protocol.config';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [databaseConfig, blockchainsConfig, trackerConfig, privateConfig],
+      load: [
+        databaseConfig,
+        blockchainsConfig,
+        trackerConfig,
+        privateConfig,
+        protocolConfig,
+      ],
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -53,6 +61,7 @@ import { AgentModule } from './modules/agent/agent.module';
     VenusV4Module,
     TrackerModule,
     AgentModule,
+    MonitorModule,
   ],
   controllers: [AppController],
   providers: [AppService],

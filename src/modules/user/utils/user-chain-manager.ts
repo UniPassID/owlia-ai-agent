@@ -19,7 +19,11 @@ import {
   PortfolioResponseDto,
   PortfolioTokenResponseDto,
 } from '../dto/user-portfolio.response.dto';
-import { DEFAULT_TOKENS, OWLIA_ACCOUNT_SUBGRAPH_URL } from '../constants';
+import {
+  DEFAULT_TOKENS,
+  OWLIA_ACCOUNT_SUBGRAPH_URL,
+  TokenInfo,
+} from '../constants';
 import request, { gql } from 'graphql-request';
 import { TokenPricesResponseDto } from '../../tracker/dto/token-price.response';
 import { TrackerService } from '../../tracker/tracker.service';
@@ -30,7 +34,7 @@ import { EulerV2Service } from '../../dexes/euler-v2/euler-v2.service';
 import { VenusV4Service } from '../../dexes/venus-v4/venus-v4.service';
 
 export class UserChainManager {
-  allowedTokens: string[];
+  public readonly allowedTokens: TokenInfo[];
   subgraphUrl: string;
 
   private readonly logger: Logger = new Logger(UserChainManager.name);
@@ -87,7 +91,7 @@ export class UserChainManager {
   ): Promise<Pick<PortfolioResponseDto, 'wallet'>> {
     const balanceRets = await this.client.multicall({
       contracts: this.allowedTokens.map((token) => ({
-        address: token,
+        address: token.tokenAddress,
         abi: ERC20_ABI,
         functionName: 'balanceOf',
         args: [account],
@@ -101,25 +105,26 @@ export class UserChainManager {
           throw new UnknownException();
         }
 
-        const tokenAddress = this.allowedTokens[index];
+        const tokenInfo = this.allowedTokens[index];
         const tokenInfoWithPrice = tokenPrices.tokenPrices.find(
           (token) =>
             token.network === this.network &&
-            token.tokenAddress === tokenAddress,
+            token.tokenAddress === tokenInfo.tokenAddress,
         );
         if (!tokenInfoWithPrice) {
           this.logger.warn(
-            `Token info with price not found for token ${tokenAddress}`,
+            `Token info with price not found for token ${tokenInfo.tokenAddress}`,
           );
           return null;
         }
 
-        const amount = new Decimal(balanceRet.result).div(
+        const rawAmount = balanceRet.result;
+        const amount = new Decimal(rawAmount).div(
           new Decimal(10).pow(tokenInfoWithPrice.tokenDecimals),
         );
 
         return {
-          tokenAddress,
+          tokenAddress: tokenInfo.tokenAddress,
           amount: amount.toString(),
           amountUsd: amount.mul(tokenInfoWithPrice.bid).toString(),
         };
@@ -138,7 +143,7 @@ export class UserChainManager {
     const tokenPrices = await this.trackerService.tokenPrices({
       tokens: this.allowedTokens.map((token) => ({
         network: this.network,
-        tokenAddress: token,
+        tokenAddress: token.tokenAddress,
       })),
     });
 

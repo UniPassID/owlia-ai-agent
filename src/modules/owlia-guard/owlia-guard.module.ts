@@ -8,6 +8,7 @@ import { UniswapV3Module } from '../dexes/uniswap-v3/uniswap-v3.module';
 import { OwliaGuardController } from './owlia-guard.controller';
 import { UserModule } from '../user/user.module';
 import { ConfigModule } from '@nestjs/config';
+import { TrackerModule } from '../tracker/tracker.module';
 
 @Module({
   providers: [OwliaGuardService],
@@ -19,7 +20,9 @@ import { ConfigModule } from '@nestjs/config';
     UniswapV3Module,
     UserModule,
     ConfigModule,
+    TrackerModule,
   ],
   controllers: [OwliaGuardController],
+  exports: [OwliaGuardService],
 })
 export class OwliaGuardModule {}

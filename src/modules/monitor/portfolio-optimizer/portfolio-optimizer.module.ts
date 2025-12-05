@@ -4,9 +4,11 @@ import { APYCalculatorService } from './apy-calculator.service';
 import { CostCalculatorService } from './cost-calculator.service';
 import { MarginalOptimizerService } from './marginal-optimizer.service';
 import { OpportunityConverterService } from './opportunity-converter.service';
+import { TrackerModule } from '../../tracker/tracker.module';
+import { OwliaGuardModule } from '../../owlia-guard/owlia-guard.module';
 
 @Module({
-  imports: [AgentModule],
+  imports: [AgentModule, TrackerModule, OwliaGuardModule],
   providers: [
     APYCalculatorService,
     CostCalculatorService,

@@ -36,3 +36,7 @@ export type PoolLatestSnapshotResponseDto = {
   snapshots: PoolSnapshotResponseDto[];
   currentSnapshot: PoolSnapshotResponseDto;
 };
+
+export type PoolSnapshotCachesListResponseDto = {
+  latestSnapshots: PoolLatestSnapshotResponseDto[];
+};

@@ -4,6 +4,7 @@ import {
   createWalletClient,
   encodeAbiParameters,
   encodeFunctionData,
+  getAddress,
   http,
   maxUint128,
   maxUint256,
@@ -574,6 +575,7 @@ export class OwliaGuardManager {
     dto: RebalancePositionDto,
     needSwapData: boolean,
   ): Promise<RebalancePositionParamsDto> {
+    const tokens = this.userService.getAllAllowedTokens(this.network);
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600);
 
     // 汇总当前总资产（钱包余额 + 借贷供给 + LP 可赎回代币）
@@ -589,8 +591,17 @@ export class OwliaGuardManager {
 
     // 1) 钱包余额（与借贷供给一致，按 normalizeToEffectiveUnit 归一处理）
     for (const bal of dto.currentBalances || []) {
-      const token = bal.token.toLowerCase();
-      const rawAmt = BigInt(bal.amount || '0');
+      const token = getAddress(bal.token);
+      const tokenInfo = tokens.find((t) => t.tokenAddress === token);
+      if (!tokenInfo) {
+        continue;
+      }
+      const rawAmt = BigInt(
+        new Decimal(bal.amount)
+          .mul(10n ** BigInt(tokenInfo.tokenDecimals))
+          .floor()
+          .toFixed(),
+      );
       const amt = normalizeToEffectiveUnit(rawAmt);
       if (amt > 0n) {
         currentTotalByToken.set(
@@ -604,8 +615,17 @@ export class OwliaGuardManager {
     // 2) 借贷供给（按 token 汇总总资产；并记录 protocol+token 维度的现有供给）
     const currentSupplyByKey = new Map<string, bigint>();
     for (const pos of dto.currentLendingSupplyPositions || []) {
-      const token = pos.token.toLowerCase();
-      const rawAmt = BigInt(pos.amount || '0');
+      const token = getAddress(pos.token);
+      const tokenInfo = tokens.find((t) => t.tokenAddress === token);
+      if (!tokenInfo) {
+        continue;
+      }
+      const rawAmt = BigInt(
+        new Decimal(pos.amount)
+          .mul(10n ** BigInt(tokenInfo.tokenDecimals))
+          .floor()
+          .toString(),
+      );
       const amt = normalizeToEffectiveUnit(rawAmt);
       if (amt > 0n) {
         currentTotalByToken.set(
@@ -635,14 +655,12 @@ export class OwliaGuardManager {
         poolInfo.tick,
       );
       currentTotalByToken.set(
-        poolInfo.token0.toLowerCase(),
-        (currentTotalByToken.get(poolInfo.token0.toLowerCase()) || 0n) +
-          amount0,
+        poolInfo.token0,
+        (currentTotalByToken.get(poolInfo.token0) || 0n) + amount0,
       );
       currentTotalByToken.set(
-        poolInfo.token1.toLowerCase(),
-        (currentTotalByToken.get(poolInfo.token1.toLowerCase()) || 0n) +
-          amount1,
+        poolInfo.token1,
+        (currentTotalByToken.get(poolInfo.token1) || 0n) + amount1,
       );
     }
 
@@ -652,8 +670,17 @@ export class OwliaGuardManager {
     // 4) 目标借贷供给（按 token 汇总总需求；并记录 protocol+token 维度的目标供给）
     const targetSupplyByKey = new Map<string, bigint>();
     for (const pos of dto.targetLendingSupplyPositions || []) {
-      const token = pos.token.toLowerCase();
-      const amt = BigInt(pos.amount || '0'); // target 不处理精度
+      const token = pos.token;
+      const tokenInfo = tokens.find((t) => t.tokenAddress === token);
+      if (!tokenInfo) {
+        continue;
+      }
+      const amt = BigInt(
+        new Decimal(pos.amount)
+          .mul(10n ** BigInt(tokenInfo.tokenDecimals))
+          .floor()
+          .toFixed(),
+      );
       targetTotalByToken.set(
         token,
         (targetTotalByToken.get(token) || 0n) + amt,
@@ -694,21 +721,36 @@ export class OwliaGuardManager {
       const poolAddress = t.poolAddress;
       if (!poolAddress) continue;
       const poolInfo = await this.getPoolInfo(t.protocol, poolAddress);
-      const amount0 = BigInt(t.targetAmount0 || '0');
-      const amount1 = BigInt(t.targetAmount1 || '0');
-      targetTotalByToken.set(
-        poolInfo.token0.toLowerCase(),
-        (targetTotalByToken.get(poolInfo.token0.toLowerCase()) || 0n) + amount0,
+      const token0Info = tokens.find((t) => t.tokenAddress === poolInfo.token0);
+      const token1Info = tokens.find((t) => t.tokenAddress === poolInfo.token1);
+      if (!token0Info || !token1Info) {
+        continue;
+      }
+      const amount0 = BigInt(
+        new Decimal(t.targetAmount0)
+          .mul(10n ** BigInt(token0Info.tokenDecimals))
+          .floor()
+          .toFixed(),
+      );
+      const amount1 = BigInt(
+        new Decimal(t.targetAmount1)
+          .mul(10n ** BigInt(token1Info.tokenDecimals))
+          .floor()
+          .toFixed(),
       );
       targetTotalByToken.set(
-        poolInfo.token1.toLowerCase(),
-        (targetTotalByToken.get(poolInfo.token1.toLowerCase()) || 0n) + amount1,
+        poolInfo.token0,
+        (targetTotalByToken.get(poolInfo.token0) || 0n) + amount0,
+      );
+      targetTotalByToken.set(
+        poolInfo.token1,
+        (targetTotalByToken.get(poolInfo.token1) || 0n) + amount1,
       );
       targetLPs.push({
         protocol: t.protocol,
         poolId: poolAddress,
-        token0: poolInfo.token0.toLowerCase() as Address,
-        token1: poolInfo.token1.toLowerCase() as Address,
+        token0: poolInfo.token0,
+        token1: poolInfo.token1,
         fee: poolInfo.fee,
         tickSpacing: poolInfo.tickSpacing,
         amount0,
@@ -742,12 +784,12 @@ export class OwliaGuardManager {
 
       // 提前计入可用余额，供后续 mint/supply 使用
       availableByToken.set(
-        poolInfo.token0.toLowerCase(),
-        (availableByToken.get(poolInfo.token0.toLowerCase()) || 0n) + min0,
+        poolInfo.token0,
+        (availableByToken.get(poolInfo.token0) || 0n) + min0,
       );
       availableByToken.set(
-        poolInfo.token1.toLowerCase(),
-        (availableByToken.get(poolInfo.token1.toLowerCase()) || 0n) + min1,
+        poolInfo.token1,
+        (availableByToken.get(poolInfo.token1) || 0n) + min1,
       );
 
       let actionType;
@@ -774,8 +816,19 @@ export class OwliaGuardManager {
 
     // 顺序二：Withdraw（提取多余借贷供给，按 protocol+token 对比）
     for (const pos of dto.currentLendingSupplyPositions || []) {
-      const token = pos.token.toLowerCase();
-      const currentAmt = normalizeToEffectiveUnit(BigInt(pos.amount || '0'));
+      const token = pos.token;
+      const tokenInfo = tokens.find((t) => t.tokenAddress === token);
+      if (!tokenInfo) {
+        continue;
+      }
+      const currentAmt = normalizeToEffectiveUnit(
+        BigInt(
+          new Decimal(pos.amount || '0')
+            .mul(10n ** BigInt(tokenInfo.tokenDecimals))
+            .floor()
+            .toString(),
+        ),
+      );
       const key = `${pos.protocol}|${token}`;
       const targetAmt = targetSupplyByKey.get(key) || 0n; // target 不处理
       if (currentAmt > targetAmt) {
@@ -831,12 +884,21 @@ export class OwliaGuardManager {
 
     // 1) 计算 Supply 目标需求
     for (const pos of dto.targetLendingSupplyPositions || []) {
-      const token = pos.token.toLowerCase();
+      const token = pos.token;
       const key = `${pos.protocol}|${token}`;
+      const tokenInfo = tokens.find((t) => t.tokenAddress === token);
+      if (!tokenInfo) {
+        continue;
+      }
       const currentAmt = normalizeToEffectiveUnit(
         currentSupplyByKey.get(key) || 0n,
       );
-      const targetAmt = BigInt(pos.amount || '0');
+      const targetAmt = BigInt(
+        new Decimal(pos.amount || '0')
+          .mul(10n ** BigInt(tokenInfo.tokenDecimals))
+          .floor()
+          .toString(),
+      );
       if (targetAmt > currentAmt) {
         const supplyNeed = targetAmt - currentAmt;
         targetTokenAmounts.set(
@@ -849,12 +911,12 @@ export class OwliaGuardManager {
     // 2) 计算 Mint 目标需求
     for (const t of targetLPs) {
       targetTokenAmounts.set(
-        t.token0.toLowerCase(),
-        (targetTokenAmounts.get(t.token0.toLowerCase()) || 0n) + t.amount0,
+        t.token0,
+        (targetTokenAmounts.get(t.token0) || 0n) + t.amount0,
       );
       targetTokenAmounts.set(
-        t.token1.toLowerCase(),
-        (targetTokenAmounts.get(t.token1.toLowerCase()) || 0n) + t.amount1,
+        t.token1,
+        (targetTokenAmounts.get(t.token1) || 0n) + t.amount1,
       );
     }
 
@@ -862,7 +924,7 @@ export class OwliaGuardManager {
       if (need <= 0n) return;
 
       // 检查目标代币是否已有足够余额
-      const toKey = (toToken as string).toLowerCase();
+      const toKey = toToken;
       const currentToBalance = availableByToken.get(toKey) || 0n;
       const targetAmount = targetTokenAmounts.get(toKey) || 0n;
 
@@ -916,7 +978,7 @@ export class OwliaGuardManager {
           tokenB: toToken,
           amount: swapIn.toString(),
           estimatedOutput: swapResult.routeSummary.amountOut,
-          data: swapResultData,
+          data: swapResultData?.data || '0x',
           routerAddress: swapResult.routerAddress,
           protocol: LendingProtocolDto.Aave,
         });
@@ -948,12 +1010,21 @@ export class OwliaGuardManager {
 
     // 1) 计算 Supply 需求缺口
     for (const pos of dto.targetLendingSupplyPositions || []) {
-      const token = pos.token.toLowerCase();
+      const token = pos.token;
       const key = `${pos.protocol}|${token}`;
       const currentAmt = normalizeToEffectiveUnit(
         currentSupplyByKey.get(key) || 0n,
       );
-      const targetAmt = BigInt(pos.amount || '0');
+      const tokenInfo = tokens.find((t) => t.tokenAddress === token);
+      if (!tokenInfo) {
+        continue;
+      }
+      const targetAmt = BigInt(
+        new Decimal(pos.amount || '0')
+          .mul(10n ** BigInt(tokenInfo.tokenDecimals))
+          .floor()
+          .toString(),
+      );
       if (targetAmt > currentAmt) {
         const supplyNeed = targetAmt - currentAmt;
         tokenNeeds.set(token, (tokenNeeds.get(token) || 0n) + supplyNeed);
@@ -962,22 +1033,14 @@ export class OwliaGuardManager {
 
     // 2) 计算 Mint 需求缺口
     for (const t of targetLPs) {
-      const need0 =
-        t.amount0 - (availableByToken.get(t.token0.toLowerCase()) || 0n);
-      const need1 =
-        t.amount1 - (availableByToken.get(t.token1.toLowerCase()) || 0n);
+      const need0 = t.amount0 - (availableByToken.get(t.token0) || 0n);
+      const need1 = t.amount1 - (availableByToken.get(t.token1) || 0n);
 
       if (need0 > 0n) {
-        tokenNeeds.set(
-          t.token0.toLowerCase(),
-          (tokenNeeds.get(t.token0.toLowerCase()) || 0n) + need0,
-        );
+        tokenNeeds.set(t.token0, (tokenNeeds.get(t.token0) || 0n) + need0);
       }
       if (need1 > 0n) {
-        tokenNeeds.set(
-          t.token1.toLowerCase(),
-          (tokenNeeds.get(t.token1.toLowerCase()) || 0n) + need1,
-        );
+        tokenNeeds.set(t.token1, (tokenNeeds.get(t.token1) || 0n) + need1);
       }
     }
 
@@ -990,8 +1053,8 @@ export class OwliaGuardManager {
 
     // 顺序五：按目标 LP 追加 Mint（若凑不齐则按可用余额截断）
     for (const t of targetLPs) {
-      const token0 = t.token0.toLowerCase();
-      const token1 = t.token1.toLowerCase();
+      const token0 = t.token0;
+      const token1 = t.token1;
       const available0 = availableByToken.get(token0) || 0n;
       const available1 = availableByToken.get(token1) || 0n;
       const amount0Use = t.amount0 > available0 ? available0 : t.amount0;
@@ -1039,12 +1102,21 @@ export class OwliaGuardManager {
 
     // 顺序六：Supply（补足目标借贷供给，按 protocol+token 对比）
     for (const pos of dto.targetLendingSupplyPositions || []) {
-      const token = pos.token.toLowerCase();
+      const token = pos.token;
+      const tokenInfo = tokens.find((t) => t.tokenAddress === token);
+      if (!tokenInfo) {
+        continue;
+      }
       const key = `${pos.protocol}|${token}`;
       const currentAmt = normalizeToEffectiveUnit(
         currentSupplyByKey.get(key) || 0n,
       );
-      const targetAmt = BigInt(pos.amount || '0'); // target 不处理
+      const targetAmt = BigInt(
+        new Decimal(pos.amount || '0')
+          .mul(10n ** BigInt(tokenInfo.tokenDecimals))
+          .floor()
+          .toString(),
+      );
       if (targetAmt > currentAmt) {
         const required = targetAmt - currentAmt;
         const token = pos.token.toLowerCase();
@@ -1207,6 +1279,16 @@ export class OwliaGuardManager {
         dto.network,
         dto.safeAddress,
       );
+
+    const transactions: MetaTransactionData[] = [];
+
+    let nonce: number | undefined;
+
+    if (wrappedTransaction) {
+      nonce = 1;
+      transactions.push(wrappedTransaction);
+    }
+
     const rebalanceTxsData = await this.buildTransactions(
       dto.safeAddress,
       execParams,
@@ -1214,6 +1296,10 @@ export class OwliaGuardManager {
 
     const rebalanceSafeTx = await safe.createTransaction({
       transactions: rebalanceTxsData,
+      onlyCalls: false,
+      options: {
+        nonce,
+      },
     });
 
     const signature = await this.#walletClient.signTypedData({
@@ -1236,27 +1322,27 @@ export class OwliaGuardManager {
       value: '0',
     };
 
-    const transactions: MetaTransactionData[] = [];
-
-    let nonce: number | undefined;
-
-    if (wrappedTransaction) {
-      nonce = 1;
-      transactions.push(wrappedTransaction);
-    }
-
     transactions.push(rebalanceTx);
 
-    const batchTx = await safe.createTransactionBatch(transactions, {
-      nonce,
-    });
-    const txHash = await this.#walletClient.sendTransaction({
-      to: dto.safeAddress,
-      data: batchTx.data as `0x${string}`,
-      value: BigInt(batchTx.value),
-      chain: this.#chain,
-      account: this.#account,
-    });
+    let txHash: string;
+    if (wrappedTransaction) {
+      const batchTx = await safe.createTransactionBatch(transactions);
+      txHash = await this.#walletClient.sendTransaction({
+        to: batchTx.to,
+        data: batchTx.data as `0x${string}`,
+        value: BigInt(batchTx.value),
+        chain: this.#chain,
+        account: this.#account,
+      });
+    } else {
+      txHash = await this.#walletClient.sendTransaction({
+        to: rebalanceTx.to,
+        data: rebalanceTx.data as `0x${string}`,
+        value: BigInt(rebalanceTx.value),
+        chain: this.#chain,
+        account: this.#account,
+      });
+    }
 
     return {
       txHash,

@@ -3,7 +3,6 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { AgentService } from '../../agent/agent.service';
 import {
   CalculateSwapCostBatchRequest,
-  CalculateRebalanceCostBatchResponse,
   CalculateRebalanceCostResult,
   GetLpSimulateResponse,
   GetSupplyOpportunitiesResponse,
@@ -15,15 +14,8 @@ import {
   TOKEN_ADDRESS_BY_CHAIN,
   TOKEN_DECIMALS_BY_CHAIN,
 } from '../../agent/token-utils';
-
-const CHAIN_ID_TO_NETWORK: Record<string, string> = {
-  '1': 'ethereum',
-  '10': 'optimism',
-  '56': 'bsc',
-  '137': 'polygon',
-  '42161': 'arbitrum',
-  '8453': 'base',
-};
+import { OwliaGuardService } from '../../owlia-guard/owlia-guard.service';
+import { getNetworkDto, NetworkDto } from '../../../common/dto/network.dto';
 
 interface StableTokenInfo {
   symbol: string;
@@ -66,7 +58,10 @@ export class CostCalculatorService {
   private readonly swapCostSafeAddress =
     '0x0000000000000000000000000000000000000001';
 
-  constructor(private readonly agentService: AgentService) {}
+  constructor(
+    private readonly agentService: AgentService,
+    private readonly owliaGuardService: OwliaGuardService,
+  ) {}
 
   private warnOnce(set: Set<string>, key: string, message: string): void {
     if (set.has(key)) return;
@@ -151,8 +146,7 @@ export class CostCalculatorService {
       );
 
       const response =
-        await this.agentService.callMcpTool<CalculateRebalanceCostBatchResponse>(
-          'calculate_swap_cost_batch',
+        await this.owliaGuardService.getRebalanceCostFromProcessedArgsBatch(
           payload,
         );
 
@@ -276,8 +270,8 @@ export class CostCalculatorService {
     return requests;
   }
 
-  private getNetworkName(chainId: string): string | null {
-    return CHAIN_ID_TO_NETWORK[chainId] || null;
+  private getNetworkName(chainId: string): NetworkDto {
+    return getNetworkDto(Number(chainId));
   }
 
   private getDefaultLendingProtocol(

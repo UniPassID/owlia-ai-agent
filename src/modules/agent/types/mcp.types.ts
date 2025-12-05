@@ -391,7 +391,7 @@ export interface CalculateRebalanceCostResult {
 // Get DEX Pools Response
 // Dictionary response where keys are pool addresses
 export interface GetDexPoolsResponse {
-  [poolAddress: string]: DexPoolData | string; // string for "_dataSource"
+  [poolAddress: string]: DexPoolData | string | undefined; // string for "_dataSource"
   _dataSource?: string;
 }
 

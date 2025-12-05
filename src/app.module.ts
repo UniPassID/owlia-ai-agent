@@ -4,6 +4,7 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { ScheduleModule } from "@nestjs/schedule";
 import { getDatabaseConfig } from "./config/database.config";
 import { AgentModule } from "./agent/agent.module";
+import { AgentModule as NewAgentModule } from "./modules/agent/agent.module"
 import { GuardModule } from "./guard/guard.module";
 import { MonitorModule } from "./monitor/monitor.module";
 import { ApiModule } from "./api/api.module";
@@ -29,6 +30,7 @@ import { UserModule } from "./user/user.module";
 
     // Application modules
     AgentModule,
+    NewAgentModule,
     GuardModule,
     UserModule,
     MonitorModule,

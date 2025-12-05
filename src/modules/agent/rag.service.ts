@@ -1,5 +1,6 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Cron } from '@nestjs/schedule';
 
 interface DocumentChunk {
   content: string;
@@ -17,6 +18,7 @@ export class RagService implements OnModuleInit {
   private cacheExpiryMs: number = 3600000; // 1 hour
   private isInitialized = false;
   private readonly docsUrl = 'https://owlia-docs.vercel.app/llms-full.txt?lang=en';
+  private autoRefreshEnabled: boolean = true; // Enable/disable auto-refresh
 
   constructor(private configService: ConfigService) {}
 
@@ -222,6 +224,37 @@ export class RagService implements OnModuleInit {
     this.logger.log('Forcing documentation refresh...');
     await this.fetchAndChunkDocumentation();
     this.isInitialized = true;
+  }
+
+  /**
+   * Scheduled task: Auto-refresh documentation every 5 minutes
+   * This ensures the documentation is always up-to-date
+   */
+  @Cron('*/5 * * * *', {
+    name: 'refresh-documentation',
+  })
+  async handleDocumentationRefresh() {
+    if (!this.autoRefreshEnabled) {
+      return;
+    }
+
+    try {
+      this.logger.log('⏰ Scheduled documentation refresh triggered');
+      await this.fetchAndChunkDocumentation();
+      this.isInitialized = true;
+      this.logger.log('✅ Scheduled refresh completed successfully');
+    } catch (error) {
+      this.logger.error('❌ Scheduled refresh failed:', error);
+      // Don't throw - keep the service running even if refresh fails
+    }
+  }
+
+  /**
+   * Enable or disable auto-refresh
+   */
+  setAutoRefresh(enabled: boolean): void {
+    this.autoRefreshEnabled = enabled;
+    this.logger.log(`Auto-refresh ${enabled ? 'enabled' : 'disabled'}`);
   }
 
   /**

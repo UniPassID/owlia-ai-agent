@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import Anthropic from '@anthropic-ai/sdk';
+import { RagService } from './rag.service';
 
 
 @Injectable()
@@ -13,8 +14,12 @@ export class DocService implements OnModuleInit {
   private allTools: any[] = [];
   private lastRequestTime: number = 0;
   private minRequestInterval: number = 5000; // Minimum 5 seconds between requests
+  private useRag: boolean = true; // Enable/disable RAG
 
-  constructor(private configService: ConfigService) {}
+  constructor(
+    private configService: ConfigService,
+    private ragService: RagService,
+  ) {}
 
   onModuleInit() {
     // Initialize Anthropic client
@@ -70,13 +75,21 @@ export class DocService implements OnModuleInit {
 
   /**
    * Answer user questions based on Owlia documentation
-   * Automatically fetches and includes Owlia documentation as context
+   * Uses RAG (Retrieval-Augmented Generation) for efficient context retrieval
+   * Falls back to full document if RAG is not available
    */
   async answerWithDocs(userMessage: string, systemPrompt?: string): Promise<string> {
     await this.throttleRequest();
 
-    // Fetch documentation content
-    const docsContent = await this.fetchDocsContent();
+    // Use RAG to retrieve relevant documentation chunks, or fall back to full document
+    let docsContent: string;
+    if (this.useRag && this.ragService.isReady()) {
+      this.logger.log('Using RAG for context retrieval');
+      docsContent = await this.ragService.retrieveRelevantDocs(userMessage, 4);
+    } else {
+      this.logger.log('RAG not available, using full document');
+      docsContent = await this.fetchDocsContent();
+    }
 
     // Construct system prompt with documentation context
     const fullSystemPrompt = systemPrompt
@@ -90,7 +103,7 @@ export class DocService implements OnModuleInit {
       messages: [{ role: 'user', content: userMessage }],
     };
 
-    this.logger.log('Running simple completion with documentation context');
+    this.logger.log('Running completion with documentation context');
 
     const response = await this.anthropicClient.messages.create(requestParams);
 

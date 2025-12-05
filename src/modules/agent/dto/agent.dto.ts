@@ -37,4 +37,10 @@ export class QuestionResponseDto {
     example: '2025-12-05T10:45:00.000Z',
   })
   timestamp: string;
+
+  @ApiProperty({
+    description: 'Response time in milliseconds',
+    example: 1523,
+  })
+  responseTimeMs: number;
 }

@@ -18,12 +18,17 @@ export class AgentController {
   @ApiResponse({ status: 400, description: 'Bad request' })
   @ApiResponse({ status: 500, description: 'Internal server error' })
   async askQuestion(@Body() dto: AskQuestionDto): Promise<QuestionResponseDto> {
+    const startTime = Date.now();
+
     const answer = await this.docService.answerWithDocs(dto.question, dto.systemPrompt);
+
+    const responseTimeMs = Date.now() - startTime;
 
     return {
       question: dto.question,
       answer,
       timestamp: new Date().toISOString(),
+      responseTimeMs,
     };
   }
 }

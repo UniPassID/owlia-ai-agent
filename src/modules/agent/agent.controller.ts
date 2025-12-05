@@ -4,7 +4,10 @@ import { DocService } from './docs.service';
 import { AskQuestionDto, QuestionResponseDto } from './dto/agent.dto';
 
 @ApiTags('Agent')
-@Controller('agent')
+@Controller({
+  path: 'agent',
+  version: '1'
+})
 export class AgentController {
   constructor(private readonly docService: DocService) {}
 

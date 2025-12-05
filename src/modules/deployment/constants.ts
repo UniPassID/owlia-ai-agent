@@ -66,11 +66,20 @@ export const DEFAULT_DEPLOYMENT_CONFIGS: Record<
       },
       {
         type: ValidatorTypeDto.VenusV4,
-        validator: '0xdccEBb8BC784EdbBf38b0f4da3EC89d262CDC5F4',
+        validator: '0x2A7B807AAF14aC7bc129835Abc1F6EF9d6cfdBfA',
         vaults: [
           '0xecA88125a5ADbe82614ffC12D0DB554E2e2867C8',
           '0xfD5840Cd36d94D7229439859C0112a4185BC0255',
           '0x0C1DA220D301155b87318B90692Da8dc43B67340',
+        ],
+      },
+      {
+        type: ValidatorTypeDto.KyberSwap,
+        validator: '0x8641ae46522C12D0695e1dD04E514f7286f199bD',
+        tokens: [
+          '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+          '0x8d0D000Ee44948FC98c9B98A4FA4921476f08B0d',
+          '0x55d398326f99059fF775485246999027B3197955',
         ],
       },
     ],
@@ -108,6 +117,14 @@ export const DEFAULT_DEPLOYMENT_CONFIGS: Record<
         vaults: [
           '0x9bD52F2805c6aF014132874124686e7b248c2Cbb',
           '0x313603FA690301b0CaeEf8069c065862f9162162',
+        ],
+      },
+      {
+        type: ValidatorTypeDto.KyberSwap,
+        validator: '0x8641ae46522C12D0695e1dD04E514f7286f199bD',
+        tokens: [
+          '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
+          '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',
         ],
       },
     ],

@@ -5,13 +5,13 @@ export class UserPortfolios1764582140812 implements MigrationInterface {
     await queryRunner.query(
       `CREATE TABLE IF NOT EXISTS user_portfolios (
             id binary(16) NOT NULL,
-            deployment_id binary(16) NOT NULL,
+            deploymentId binary(16) NOT NULL,
             data json NOT NULL,
-            snap_time DATETIME NOT NULL,
-            created_at DATETIME NOT NULL,
-            updated_at DATETIME NOT NULL,
+            snapTime DATETIME NOT NULL,
+            createdAt DATETIME NOT NULL,
+            updatedAt DATETIME NOT NULL,
             PRIMARY KEY (id),
-            UNIQUE INDEX snapshot_uk (deployment_id ASC, snap_time ASC) VISIBLE
+            UNIQUE INDEX snapshot_uk (deploymentId ASC, snapTime ASC) VISIBLE
         )`,
     );
   }

@@ -1,83 +1,43 @@
-import { INestApplication } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
-import { initApp } from '../src/app.init';
 import { NetworkDto } from '../src/common/dto/network.dto';
-import { UserModule } from '../src/user/user.module';
-import { AgentClient } from './agent-client';
 import { generatePrivateKey, privateKeyToAddress } from 'viem/accounts';
-import { DeploymentModule } from '../src/deployment/deployment.module';
-import { MySqlContainer, StartedMySqlContainer } from '@testcontainers/mysql';
-import { AppModule } from '../src/app.module';
 import * as assert from 'assert';
-import { UserDeploymentStatusDto } from '../src/user/dto/user.response.dto';
-import { DataSource } from 'typeorm';
+import { UserDeploymentStatusDto } from '../src/modules/user/dto/user.response.dto';
+import {
+  createTestContext,
+  dealERC20,
+  destroyTestContext,
+  getRpcUrl,
+  TestContext,
+} from './utils/context';
 
 describe('UserController (e2e)', () => {
-  let app: INestApplication;
-  let databaseContainer: StartedMySqlContainer;
-  let agentClient: AgentClient;
-  const bscRpcUrl: string = 'http://127.0.0.1:8545';
-  const baseRpcUrl: string = 'http://127.0.0.1:8546';
-  const trackerUrl: string = 'http://65.21.45.43:3511';
-
-  before(() => {
-    process.env.BSC_RPC_URLS = bscRpcUrl;
-    process.env.BASE_RPC_URLS = baseRpcUrl;
-    process.env.TRACKER_URL = trackerUrl;
-  });
+  let context: TestContext;
 
   beforeEach(async () => {
-    databaseContainer = await new MySqlContainer('mysql:8').start();
-    const host = databaseContainer.getHost();
-    const port = databaseContainer.getMappedPort(3306);
-    const username = databaseContainer.getUsername();
-    const password = databaseContainer.getUserPassword();
-    const database = databaseContainer.getDatabase();
-
-    process.env.DB_HOST = host;
-    process.env.DB_PORT = port.toString();
-    process.env.DB_USERNAME = username;
-    process.env.DB_PASSWORD = password;
-    process.env.DB_DATABASE = database;
-
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule, UserModule, DeploymentModule],
-    }).compile();
-
-    app = moduleFixture.createNestApplication();
-
-    const dataSource = app.get(DataSource);
-
-    if (!dataSource.isInitialized) await dataSource.initialize();
-
-    await dataSource.runMigrations();
-
-    app = initApp(app);
-
-    await app.init();
-
-    agentClient = new AgentClient(app.getHttpServer());
+    context = await createTestContext();
   });
 
   afterEach(async () => {
-    await databaseContainer.stop();
-    await app.close();
+    await destroyTestContext(context);
   });
 
   it('Register user on Bsc should success', async () => {
     const network = NetworkDto.Bsc;
-    const rpcUrl = bscRpcUrl;
-    const deploymentConfig = await agentClient.deploymentConfig(network);
+    const rpcUrl = context.bscRpcUrl;
+    const deploymentConfig =
+      await context.agentClient.deploymentConfig(network);
     const ownerPrivateKey = generatePrivateKey();
+    console.log('ownerPrivateKey', ownerPrivateKey);
     const owner = privateKeyToAddress(ownerPrivateKey);
 
-    const userResponse = await agentClient.registerUserWithOwner(
+    const userResponse = await context.agentClient.registerUserWithOwner(
       network,
       deploymentConfig,
       owner.toLowerCase(),
       ownerPrivateKey,
       rpcUrl,
     );
+    console.log('userResponse', userResponse);
 
     assert.ok(userResponse.deployments.length > 0);
     userResponse.deployments.forEach((deployment) => {
@@ -91,27 +51,70 @@ describe('UserController (e2e)', () => {
       }
     });
 
-    const userInfo = await agentClient.getUserInfo(owner);
+    const userInfo = await context.agentClient.getUserInfo(owner);
     assert.deepStrictEqual(userInfo, userResponse);
   });
 
   it('Get user portfolio on Bsc should success', async () => {
     const network = NetworkDto.Bsc;
-    const address = '0x9e2a65a9aea1556ba741b6c35cd55f3f7aadbbb0';
+    const ownerPrivateKey = generatePrivateKey();
+    const owner = privateKeyToAddress(ownerPrivateKey);
+    const rpcUrl = getRpcUrl(context, network);
+    const deploymentConfig =
+      await context.agentClient.deploymentConfig(network);
+    const userInfo = await context.agentClient.registerUserWithOwner(
+      network,
+      deploymentConfig,
+      owner.toLowerCase(),
+      ownerPrivateKey,
+      rpcUrl,
+    );
+    const deploymentInfo = userInfo.deployments.find(
+      (deployment) => deployment.network === network,
+    );
+    if (!deploymentInfo) {
+      throw new Error('Deployment not found');
+    }
 
-    const portfolio = await agentClient.getUserPortfolio(network, address);
+    await dealERC20(
+      rpcUrl,
+      deploymentInfo.address,
+      '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
+      1000000000000000000n,
+    );
+
+    const portfolio = await context.agentClient.getUserPortfolio(
+      network,
+      deploymentInfo.address,
+    );
     console.log(JSON.stringify(portfolio, null, 2));
   });
 
   it('Get user portfolios on Bsc should success', async () => {
     const network = NetworkDto.Bsc;
-    const address = '0x9e2a65a9aea1556ba741b6c35cd55f3f7aadbbb0';
-    const inMultiTimestampMs = ['1717331200000'];
-    const limit = 10;
-    const portfolios = await agentClient.getUserPortfolios(
+    const ownerPrivateKey = generatePrivateKey();
+    const owner = privateKeyToAddress(ownerPrivateKey);
+    const rpcUrl = getRpcUrl(context, network);
+    const deploymentConfig =
+      await context.agentClient.deploymentConfig(network);
+    const userInfo = await context.agentClient.registerUserWithOwner(
       network,
-      address,
-      inMultiTimestampMs,
+      deploymentConfig,
+      owner.toLowerCase(),
+      ownerPrivateKey,
+      rpcUrl,
+    );
+    const deploymentInfo = userInfo.deployments.find(
+      (deployment) => deployment.network === network,
+    );
+    if (!deploymentInfo) {
+      throw new Error('Deployment not found');
+    }
+    const limit = 10;
+    const portfolios = await context.agentClient.getUserPortfolios(
+      network,
+      deploymentInfo.address,
+      [],
       limit,
     );
     console.log(JSON.stringify(portfolios, null, 2));

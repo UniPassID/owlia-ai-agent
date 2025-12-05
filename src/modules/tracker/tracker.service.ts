@@ -4,7 +4,10 @@ import { TokenPricesResponseDto } from './dto/token-price.response';
 import { UnknownException } from '../../common/exceptions/base.exception';
 import { NetworkDto } from '../../common/dto/network.dto';
 import { DexKeyDto } from './dto/pool-snapshot.dto';
-import { PoolLatestSnapshotResponseDto } from './dto/pool-snapshot.response.dto';
+import {
+  PoolLatestSnapshotResponseDto,
+  PoolSnapshotCachesListResponseDto,
+} from './dto/pool-snapshot.response.dto';
 import trackerConfig from '../../config/tracker.config';
 import { ConfigType } from '@nestjs/config';
 
@@ -50,6 +53,28 @@ export class TrackerService {
   ): Promise<PoolLatestSnapshotResponseDto> {
     const response = await fetch(
       `${this.url}/api/v1/dex-pool/snapshot-caches/${network}/${dexKey}/${poolAddress}`,
+      {
+        method: 'GET',
+      },
+    );
+
+    if (!response.ok) {
+      this.logger.error(`Failed to get pool snapshots: ${response.statusText}`);
+      throw new UnknownException();
+    }
+
+    const data = await response.json();
+    if (data.code !== 0) {
+      this.logger.error(`Failed to get pool snapshots: ${data.message}`);
+      throw new UnknownException();
+    }
+    return data.data;
+  }
+  async getPoolSnapshotCachesList(
+    network: NetworkDto,
+  ): Promise<PoolSnapshotCachesListResponseDto> {
+    const response = await fetch(
+      `${this.url}/api/v1/dex-pool/snapshot-caches/list/${network}`,
       {
         method: 'GET',
       },

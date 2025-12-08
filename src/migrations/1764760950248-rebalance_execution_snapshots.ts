@@ -10,22 +10,20 @@ export class RebalanceExecutionSnapshots1764760950248
         columns: [
           {
             name: 'id',
-            type: 'varchar',
-            length: '36',
+            type: 'binary',
+            length: '16',
             isPrimary: true,
-            generationStrategy: 'uuid',
-            isGenerated: true,
           },
           {
             name: 'deploymentId',
-            type: 'varchar',
-            length: '255',
+            type: 'binary',
+            length: '16',
             isNullable: false,
           },
           {
             name: 'jobId',
-            type: 'varchar',
-            length: '36',
+            type: 'binary',
+            length: '16',
             isNullable: false,
           },
           {

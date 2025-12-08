@@ -99,3 +99,9 @@ export class InvalidParameterException extends BaseException {
     super(ResponseCodeDto.InvalidParameter, message);
   }
 }
+
+export class JobNotFoundException extends BaseException {
+  constructor(jobId: string) {
+    super(ResponseCodeDto.JobNotFound, `Job not found for ID: ${jobId}`);
+  }
+}

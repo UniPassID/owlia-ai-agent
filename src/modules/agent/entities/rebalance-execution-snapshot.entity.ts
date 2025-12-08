@@ -1,15 +1,15 @@
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
+import { Entity, Column } from 'typeorm';
 
 @Entity('rebalance_execution_snapshots')
 export class RebalanceExecutionSnapshot {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @Column('binary', { primary: true, name: 'id', length: 16 })
+  id: Buffer;
 
-  @Column()
-  deploymentId: string;
+  @Column('binary', { name: 'deploymentId', length: 16 })
+  deploymentId: Buffer;
 
-  @Column()
-  jobId: string;
+  @Column('binary', { name: 'jobId', length: 16 })
+  jobId: Buffer;
 
   @Column()
   txHash: string;

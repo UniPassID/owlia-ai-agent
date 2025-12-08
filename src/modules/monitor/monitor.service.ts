@@ -24,8 +24,6 @@ import type {
   AccountLendingSupply,
 } from '../agent/types/mcp.types';
 import { UserService } from '../user/user.service';
-import { JobStatus, RebalanceJob } from './entities/rebalance-job.entity';
-import { RebalanceExecutionSnapshot } from './entities/rebalance-execution-snapshot.entity';
 import {
   UserDeployment,
   UserDeploymentStatus,
@@ -43,6 +41,12 @@ import {
   LPProtocolDto,
   RebalancePositionDto,
 } from '../owlia-guard/dto/rebalance-position.dto';
+import { v7 as uuidV7, parse as uuidParse } from 'uuid';
+import {
+  JobStatus,
+  RebalanceJob,
+} from '../agent/entities/rebalance-job.entity';
+import { RebalanceExecutionSnapshot } from '../agent/entities/rebalance-execution-snapshot.entity';
 
 @Injectable()
 export class MonitorService {
@@ -252,7 +256,7 @@ export class MonitorService {
     sessionId?: string,
   ): Promise<RebalanceJob> {
     const latestJob = await this.jobRepo.findOne({
-      where: { deploymentId: uuidStringify(deployment.id) },
+      where: { deploymentId: deployment.id },
       order: { createdAt: 'DESC' },
     });
 
@@ -303,7 +307,8 @@ export class MonitorService {
 
     // Create job record
     const job = this.jobRepo.create({
-      deploymentId: uuidStringify(deployment.id),
+      id: Buffer.from(uuidParse(uuidV7())),
+      deploymentId: deployment.id,
       trigger,
       status: JobStatus.PENDING,
       inputContext: {
@@ -684,7 +689,8 @@ export class MonitorService {
         : new Date();
 
     const snapshot = this.snapshotRepo.create({
-      deploymentId: uuidStringify(deployment.id),
+      id: Buffer.from(uuidParse(uuidV7())),
+      deploymentId: deployment.id,
       jobId: job.id,
       txHash,
       txTime,

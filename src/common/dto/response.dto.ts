@@ -18,6 +18,7 @@ export enum ResponseCodeDto {
   VaultNotSupported = 4007,
   UserNotFound = 4008,
   InvalidParameter = 4009,
+  JobNotFound = 4010,
 
   UnknownError = 10000,
 }

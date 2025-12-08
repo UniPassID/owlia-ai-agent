@@ -8,15 +8,14 @@ export class RebalanceJobs1764760803779 implements MigrationInterface {
         columns: [
           {
             name: 'id',
-            type: 'varchar',
-            length: '36',
+            type: 'binary',
+            length: '16',
             isPrimary: true,
-            generationStrategy: 'uuid',
           },
           {
             name: 'deploymentId',
-            type: 'varchar',
-            length: '255',
+            type: 'binary',
+            length: '16',
           },
           {
             name: 'trigger',

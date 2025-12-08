@@ -1,4 +1,4 @@
-import { Entity, Column, PrimaryGeneratedColumn } from 'typeorm';
+import { Entity, Column } from 'typeorm';
 
 export enum JobStatus {
   PENDING = 'pending',
@@ -12,11 +12,11 @@ export enum JobStatus {
 
 @Entity('rebalance_jobs')
 export class RebalanceJob {
-  @PrimaryGeneratedColumn('uuid')
-  id: string;
+  @Column('binary', { primary: true, name: 'id', length: 16 })
+  id: Buffer;
 
   @Column()
-  deploymentId: string;
+  deploymentId: Buffer;
 
   @Column()
   trigger: string;

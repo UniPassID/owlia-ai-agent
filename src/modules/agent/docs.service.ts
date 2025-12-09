@@ -2,7 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import Anthropic from '@anthropic-ai/sdk';
-import { RagService } from './rag.service';
+import { EnhancedRagService } from './enhanced-rag.service';
 
 
 @Injectable()
@@ -18,7 +18,7 @@ export class DocService implements OnModuleInit {
 
   constructor(
     private configService: ConfigService,
-    private ragService: RagService,
+    private ragService: EnhancedRagService,
   ) {}
 
   onModuleInit() {

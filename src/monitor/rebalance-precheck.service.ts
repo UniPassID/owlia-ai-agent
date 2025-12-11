@@ -358,7 +358,7 @@ export class RebalancePrecheckService {
                 tickLower !== null &&
                 tickUpper !== null
               ) {
-                if (currentTick >= tickLower && currentTick <= tickUpper) {
+                if (currentTick >= tickLower && currentTick < tickUpper) {
                   hasInRangeLp = true;
                   break;
                 }

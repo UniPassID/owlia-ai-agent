@@ -569,7 +569,7 @@ export class UserService {
 
     const validatorTxs = deploymentConfig.validators.flatMap((validator) => {
       switch (validator.type) {
-        case ValidatorTypeDto.UniswapV3:
+        case ValidatorTypeDto.UniswapV3: {
           const uniswapV3NonFungiblePositionManager =
             validatorConfig.uniswapV3NonFungiblePositionManager;
           if (!uniswapV3NonFungiblePositionManager) {
@@ -607,7 +607,8 @@ export class UserService {
               value: '0',
             })),
           ];
-        case ValidatorTypeDto.AerodromeCL:
+        }
+        case ValidatorTypeDto.AerodromeCL: {
           const aerodromeCLNonFungiblePositionManager =
             validatorConfig.aerodromeCLNonFungiblePositionManager;
           if (!aerodromeCLNonFungiblePositionManager) {
@@ -646,7 +647,8 @@ export class UserService {
               value: '0',
             })),
           ];
-        case ValidatorTypeDto.AaveV3:
+        }
+        case ValidatorTypeDto.AaveV3: {
           const aaveV3Pool = validatorConfig.aaveV3Pool;
           if (!aaveV3Pool) {
             throw new ValidatorNotSupportedException(
@@ -675,7 +677,8 @@ export class UserService {
               value: '0',
             })),
           ];
-        case ValidatorTypeDto.EulerV2:
+        }
+        case ValidatorTypeDto.EulerV2: {
           const eulerV2EVC = validatorConfig.eulerV2EVC;
           if (!eulerV2EVC) {
             throw new ValidatorNotSupportedException(
@@ -704,7 +707,8 @@ export class UserService {
               value: '0',
             })),
           ];
-        case ValidatorTypeDto.VenusV4:
+        }
+        case ValidatorTypeDto.VenusV4: {
           const venusV4Comptroller = validatorConfig.venusV4Comptroller;
           if (!venusV4Comptroller) {
             throw new ValidatorNotSupportedException(
@@ -744,7 +748,8 @@ export class UserService {
               },
             ]),
           ];
-        case ValidatorTypeDto.KyberSwap:
+        }
+        case ValidatorTypeDto.KyberSwap: {
           const kyberSwapRouter = validatorConfig.kyberSwapRouter;
           if (!kyberSwapRouter) {
             throw new ValidatorNotSupportedException(
@@ -784,6 +789,48 @@ export class UserService {
               },
             ]),
           ];
+        }
+        case ValidatorTypeDto.OkxSwap: {
+          const okxSwapRouter = validatorConfig.okxSwapRouter;
+          if (!okxSwapRouter) {
+            throw new ValidatorNotSupportedException(
+              network,
+              ValidatorTypeDto.OkxSwap,
+            );
+          }
+
+          return [
+            {
+              to: deploymentConfig.guard,
+              data: encodeFunctionData({
+                abi: OWLIA_GUARD_ABI,
+                functionName: 'setValidator',
+                args: [okxSwapRouter, validator.validator],
+              }),
+              value: '0',
+            },
+            ...validator.tokens.flatMap((token) => [
+              {
+                to: deploymentConfig.guard,
+                data: encodeFunctionData({
+                  abi: OWLIA_GUARD_ABI,
+                  functionName: 'setValidator',
+                  args: [okxSwapRouter, validator.validator],
+                }),
+                value: '0',
+              },
+              {
+                to: validator.validator,
+                data: encodeFunctionData({
+                  abi: KYBER_SWAP_OWLIA_VALIDATOR_ABI,
+                  functionName: 'setAllowedToken',
+                  args: [token, true],
+                }),
+                value: '0',
+              },
+            ]),
+          ];
+        }
       }
     });
 

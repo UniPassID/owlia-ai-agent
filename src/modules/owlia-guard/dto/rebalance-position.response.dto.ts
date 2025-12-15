@@ -60,6 +60,13 @@ export class RebalanceActionDto {
   })
   @AddressOptional()
   routerAddress?: string;
+
+  @ApiProperty({
+    description: 'The token approval address',
+    example: '0x1234567890123456789012345678901234567890',
+  })
+  @AddressOptional()
+  tokenApprovalAddress?: string;
 }
 
 export enum BurnActionTypeDto {

@@ -14,6 +14,8 @@ export type ValidatorConfig = {
   kyberSwapRouter: string;
   eulerV2EVC: string;
   venusV4Comptroller?: string;
+  okxSwapRouter: string;
+  okxTokenApproval: string;
 };
 
 export const VALIDATOR_CONFIGS: Record<NetworkDto, ValidatorConfig> = {
@@ -26,6 +28,8 @@ export const VALIDATOR_CONFIGS: Record<NetworkDto, ValidatorConfig> = {
     kyberSwapRouter: '0x6131B5fae19EA4f9D964eAc0408E4408b66337b5',
     eulerV2EVC: EULER_V2_EVC_ADDRESS[NetworkDto.Bsc],
     venusV4Comptroller: VENUS_V4_COMPTROLLER_ADDRESS[NetworkDto.Bsc],
+    okxSwapRouter: '0x3156020dfF8D99af1dDC523ebDfb1ad2018554a0',
+    okxTokenApproval: '0xd99cAE3FAC551f6b6Ba7B9f19bDD316951eeEE98',
   },
   [NetworkDto.Base]: {
     uniswapV3NonFungiblePositionManager:
@@ -35,6 +39,8 @@ export const VALIDATOR_CONFIGS: Record<NetworkDto, ValidatorConfig> = {
     aaveV3Pool: AAVE_V3_POOL_ADDRESS[NetworkDto.Base],
     kyberSwapRouter: '0x6131B5fae19EA4f9D964eAc0408E4408b66337b5',
     eulerV2EVC: EULER_V2_EVC_ADDRESS[NetworkDto.Base],
+    okxSwapRouter: '0x4409921Ae43a39a11D90F7B7F96cfd0B8093d9fC',
+    okxTokenApproval: '0x1b5d39419C268b76Db06DE49e38B010fbFB5e226',
   },
 };
 

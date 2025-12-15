@@ -159,7 +159,7 @@ export class OwliaGuardManager {
               const approveTxData = encodeFunctionData({
                 abi: ERC20_ABI,
                 functionName: 'approve',
-                args: [route.routerAddress as Address, amount],
+                args: [route.tokenApprovalAddress as Address, amount],
               });
               const approveTx = {
                 data: approveTxData,
@@ -877,7 +877,7 @@ export class OwliaGuardManager {
     }
 
     // 顺序三：根据目标 LP 进行必要的 Swap 以满足 Mint 需求
-    const slippage = 0.05; // 0.05%
+    const slippage = 0.0005; // 0.05%
 
     // 计算目标代币需求总量
     const targetTokenAmounts = new Map<string, bigint>();
@@ -980,6 +980,8 @@ export class OwliaGuardManager {
           estimatedOutput: swapResult.routeSummary.amountOut,
           data: swapResultData?.data || '0x',
           routerAddress: swapResult.routerAddress,
+          tokenApprovalAddress:
+            swapResult.approveTarget || swapResult.routerAddress,
           protocol: LendingProtocolDto.Aave,
         });
 

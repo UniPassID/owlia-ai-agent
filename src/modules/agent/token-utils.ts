@@ -4,7 +4,7 @@
 export const TOKEN_ADDRESS_BY_CHAIN: Record<string, Record<string, string>> = {
   '8453': {
     USDC: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
-    USDT: '0xfde4c96c8593536e31f229ea8f37b2ada2699bb2',
+    // USDT: '0xfde4c96c8593536e31f229ea8f37b2ada2699bb2',
     // OUSDT: '0x1217bfe6c773eec6cc4a38b5dc45b92292b6e189',
   },
   '56': {

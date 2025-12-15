@@ -7,6 +7,7 @@ export enum ValidatorTypeDto {
   EulerV2 = 'euler-v2',
   VenusV4 = 'venus-v4',
   KyberSwap = 'kyber-swap',
+  OkxSwap = 'okx-swap',
 }
 
 export class ValidatorUniswapV3PoolResponseDto {
@@ -202,13 +203,34 @@ export class ValidatorKyberSwapResponseDto {
   tokens: string[];
 }
 
+export class ValidatorOkxSwapResponseDto {
+  @ApiProperty({
+    description: 'The type of the protocol',
+    example: 'okx-swap',
+  })
+  type: ValidatorTypeDto.OkxSwap;
+
+  @ApiProperty({
+    description: 'The validator of the protocol',
+    example: '0x1234567890abcdef',
+  })
+  validator: string;
+
+  @ApiProperty({
+    description: 'The tokens',
+    type: [String],
+  })
+  tokens: string[];
+}
+
 export type ValidatorResponseDto =
   | ValidatorUniswapV3ResponseDto
   | ValidatorAerodromeCLResponseDto
   | ValidatorAaveV3ResponseDto
   | ValidatorEulerV2ResponseDto
   | ValidatorVenusV4ResponseDto
-  | ValidatorKyberSwapResponseDto;
+  | ValidatorKyberSwapResponseDto
+  | ValidatorOkxSwapResponseDto;
 
 @ApiExtraModels(
   ValidatorUniswapV3ResponseDto,
@@ -217,6 +239,7 @@ export type ValidatorResponseDto =
   ValidatorEulerV2ResponseDto,
   ValidatorVenusV4ResponseDto,
   ValidatorKyberSwapResponseDto,
+  ValidatorOkxSwapResponseDto,
 )
 export class DeploymentConfigResponseDto {
   @ApiProperty({
@@ -248,6 +271,7 @@ export class DeploymentConfigResponseDto {
       { $ref: getSchemaPath(ValidatorEulerV2ResponseDto) },
       { $ref: getSchemaPath(ValidatorVenusV4ResponseDto) },
       { $ref: getSchemaPath(ValidatorKyberSwapResponseDto) },
+      { $ref: getSchemaPath(ValidatorOkxSwapResponseDto) },
     ],
   })
   validators: ValidatorResponseDto[];

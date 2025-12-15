@@ -74,8 +74,8 @@ export const DEFAULT_DEPLOYMENT_CONFIGS: Record<
         ],
       },
       {
-        type: ValidatorTypeDto.KyberSwap,
-        validator: '0x8641ae46522C12D0695e1dD04E514f7286f199bD',
+        type: ValidatorTypeDto.OkxSwap,
+        validator: '0x19B819A33911Dd50C47b397a84E69120647AaC84',
         tokens: [
           '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',
           '0x8d0D000Ee44948FC98c9B98A4FA4921476f08B0d',
@@ -120,8 +120,8 @@ export const DEFAULT_DEPLOYMENT_CONFIGS: Record<
         ],
       },
       {
-        type: ValidatorTypeDto.KyberSwap,
-        validator: '0x8641ae46522C12D0695e1dD04E514f7286f199bD',
+        type: ValidatorTypeDto.OkxSwap,
+        validator: '0x1D19A5C657B69921e5856824549Fd83a3c77Cdec',
         tokens: [
           '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913',
           '0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2',

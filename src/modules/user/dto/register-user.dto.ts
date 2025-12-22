@@ -166,6 +166,7 @@ export function toValidatorResponseDto(
         const response = {
           type: ValidatorTypeDto.Lending,
           protocol: ValidatorProtocolDto.AaveV3,
+          name: validatorResponse.name,
           validator: validatorResponse.validator,
           targets: validatorResponse.targets,
           markets: validator.markets.map((m) => {
@@ -194,6 +195,7 @@ export function toValidatorResponseDto(
         const response = {
           type: ValidatorTypeDto.Lending,
           protocol: ValidatorProtocolDto.EulerV2,
+          name: validatorResponse.name,
           validator: validatorResponse.validator,
           targets: validatorResponse.targets,
           markets: validator.markets.map((m) => {
@@ -222,6 +224,7 @@ export function toValidatorResponseDto(
         const response = {
           type: ValidatorTypeDto.Swap,
           protocol: ValidatorProtocolDto.OkxSwap,
+          name: validatorResponse.name,
           validator: validatorResponse.validator,
           targets: validatorResponse.targets,
           assets: validator.assets.map((a) => {

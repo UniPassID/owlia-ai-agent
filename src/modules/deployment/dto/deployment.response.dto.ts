@@ -55,6 +55,12 @@ export class ValidatorAaveV3ResponseDto {
   protocol: ValidatorProtocolDto.AaveV3;
 
   @ApiProperty({
+    description: 'The name of the validator',
+    example: 'Aave',
+  })
+  name: 'Aave';
+
+  @ApiProperty({
     description: 'The validator of the protocol',
     example: '0x1234567890abcdef',
   })
@@ -87,6 +93,12 @@ export class ValidatorEulerV2ResponseDto {
   protocol: ValidatorProtocolDto.EulerV2;
 
   @ApiProperty({
+    description: 'The name of the validator',
+    example: 'Euler',
+  })
+  name: 'Euler';
+
+  @ApiProperty({
     description: 'The validator of the protocol',
     example: '0x1234567890abcdef',
   })
@@ -117,6 +129,12 @@ export class ValidatorOkxSwapResponseDto {
     example: ValidatorProtocolDto.OkxSwap,
   })
   protocol: ValidatorProtocolDto.OkxSwap;
+
+  @ApiProperty({
+    description: 'The name of the validator',
+    example: 'OKX Swap',
+  })
+  name: 'OKX Swap';
 
   @ApiProperty({
     description: 'The validator of the protocol',

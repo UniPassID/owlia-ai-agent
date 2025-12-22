@@ -42,7 +42,7 @@ describe('UserController (e2e)', () => {
       ownerPrivateKey,
       rpcUrl,
     );
-    console.log('userResponse', userResponse);
+    console.log('userResponse', JSON.stringify(userResponse, null, 2));
 
     assert.ok(userResponse.deployments.length > 0);
     userResponse.deployments.forEach((deployment) => {

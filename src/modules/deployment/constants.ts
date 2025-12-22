@@ -46,6 +46,7 @@ export const DEFAULT_DEPLOYMENT_CONFIGS: Record<
       {
         type: ValidatorTypeDto.Lending,
         protocol: ValidatorProtocolDto.AaveV3,
+        name: 'Aave',
         validator: OWLIA_VALIDATOR_AAVE_V3_ADDRESS[NetworkDto.Base],
         targets: [AAVE_V3_POOL_ADDRESS[NetworkDto.Base]],
         markets: [{ contract: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913' }],
@@ -53,6 +54,7 @@ export const DEFAULT_DEPLOYMENT_CONFIGS: Record<
       {
         type: ValidatorTypeDto.Lending,
         protocol: ValidatorProtocolDto.EulerV2,
+        name: 'Euler',
         validator: OWLIA_VALIDATOR_EULER_V2_ADDRESS[NetworkDto.Base],
         targets: [EULER_V2_EVC_ADDRESS[NetworkDto.Base]],
         markets: [
@@ -67,6 +69,7 @@ export const DEFAULT_DEPLOYMENT_CONFIGS: Record<
       {
         type: ValidatorTypeDto.Swap,
         protocol: ValidatorProtocolDto.OkxSwap,
+        name: 'OKX Swap',
         validator: OWLIA_VALIDATOR_OKX_SWAP_ADDRESS[NetworkDto.Base],
         targets: [OKX_SWAP_ROUTER_ADDRESS[NetworkDto.Base]],
         assets: [

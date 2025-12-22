@@ -1,134 +1,58 @@
 import { ApiExtraModels, ApiProperty, getSchemaPath } from '@nestjs/swagger';
+import { IsArray, IsEnum, ValidateNested } from 'class-validator';
+import { NetworkDto } from '../../../common/dto/network.dto';
 
-export enum ValidatorTypeDto {
-  UniswapV3 = 'uniswap-v3',
-  AerodromeCL = 'aerodrome-cl',
+export enum ValidatorProtocolDto {
   AaveV3 = 'aave-v3',
   EulerV2 = 'euler-v2',
-  VenusV4 = 'venus-v4',
-  KyberSwap = 'kyber-swap',
   OkxSwap = 'okx-swap',
 }
 
-export class ValidatorUniswapV3PoolResponseDto {
-  @ApiProperty({
-    description: 'The address of the pool',
-    example: '0x1234567890abcdef',
-  })
-  address: string;
-
-  @ApiProperty({
-    description: 'The token0 of the pool',
-    example: '0x1234567890abcdef',
-  })
-  token0: string;
-  @ApiProperty({
-    description: 'The token1 of the pool',
-    example: '0x1234567890abcdef',
-  })
-  token1: string;
-
-  @ApiProperty({
-    description: 'The fee of the pool',
-    example: 100,
-  })
-  fee: number;
-
-  @ApiProperty({
-    description: 'The tick lower of the pool',
-    example: -10,
-  })
-  tickLower: number;
-
-  @ApiProperty({
-    description: 'The tick upper of the pool',
-    example: 10,
-  })
-  tickUpper: number;
+export enum ValidatorTypeDto {
+  Lending = 'lending',
+  Swap = 'swap',
 }
 
-export class ValidatorUniswapV3ResponseDto {
+export class ValidatorLendingMarketDto {
   @ApiProperty({
-    description: 'The type of the protocol',
-    example: 'uniswap-v3',
-  })
-  type: ValidatorTypeDto.UniswapV3;
-
-  @ApiProperty({
-    description: 'The validator of the protocol',
+    description: 'The contract address of the market',
     example: '0x1234567890abcdef',
   })
-  validator: string;
-
-  @ApiProperty({
-    description: 'The pools of the protocol',
-    type: [ValidatorUniswapV3PoolResponseDto],
-  })
-  pools: ValidatorUniswapV3PoolResponseDto[];
+  contract: string;
 }
 
-export class ValidatorAerodromeCLPoolResponseDto {
+export class ValidatorSwapAssetDto {
   @ApiProperty({
-    description: 'The address of the pool',
+    description: 'The contract address of the token',
     example: '0x1234567890abcdef',
   })
-  address: string;
-  @ApiProperty({
-    description: 'The token0 of the pool',
-    example: '0x1234567890abcdef',
-  })
-  token0: string;
-  @ApiProperty({
-    description: 'The token1 of the pool',
-    example: '0x1234567890abcdef',
-  })
-  token1: string;
+  contract: string;
 
   @ApiProperty({
-    description: 'The tick spacing of the pool',
-    example: 1,
+    description: 'The name of the token',
+    example: 'USDC',
   })
-  tickSpacing: number;
+  name: string;
 
   @ApiProperty({
-    description: 'The tick lower of the pool',
-    example: -10,
+    description: 'The symbol of the token',
+    example: 'USDC',
   })
-  tickLower: number;
-
-  @ApiProperty({
-    description: 'The tick upper of the pool',
-    example: 10,
-  })
-  tickUpper: number;
-}
-
-export class ValidatorAerodromeCLResponseDto {
-  @ApiProperty({
-    description: 'The type of the protocol',
-    example: 'aerodrome-cl',
-  })
-  type: ValidatorTypeDto.AerodromeCL;
-
-  @ApiProperty({
-    description: 'The validator of the protocol',
-    example: '0x1234567890abcdef',
-  })
-  validator: string;
-
-  @ApiProperty({
-    description: 'The pools of the protocol',
-    type: [ValidatorAerodromeCLPoolResponseDto],
-  })
-  pools: ValidatorAerodromeCLPoolResponseDto[];
+  symbol: string;
 }
 
 export class ValidatorAaveV3ResponseDto {
   @ApiProperty({
-    description: 'The type of the protocol',
-    example: 'aave-v3',
+    description: 'The type of the validator',
+    example: ValidatorTypeDto.Lending,
   })
-  type: ValidatorTypeDto.AaveV3;
+  type: ValidatorTypeDto.Lending;
+
+  @ApiProperty({
+    description: 'The protocol of the validator',
+    example: ValidatorProtocolDto.AaveV3,
+  })
+  protocol: ValidatorProtocolDto.AaveV3;
 
   @ApiProperty({
     description: 'The validator of the protocol',
@@ -137,18 +61,30 @@ export class ValidatorAaveV3ResponseDto {
   validator: string;
 
   @ApiProperty({
-    description: 'The assets of the protocol',
+    description: 'The targets of the validator',
     type: [String],
   })
-  assets: string[];
+  targets: string[];
+
+  @ApiProperty({
+    description: 'The markets of the protocol',
+    type: [ValidatorLendingMarketDto],
+  })
+  markets: ValidatorLendingMarketDto[];
 }
 
 export class ValidatorEulerV2ResponseDto {
   @ApiProperty({
     description: 'The type of the protocol',
-    example: 'euler-v2',
+    example: ValidatorTypeDto.Lending,
   })
-  type: ValidatorTypeDto.EulerV2;
+  type: ValidatorTypeDto.Lending;
+
+  @ApiProperty({
+    description: 'The protocol of the validator',
+    example: ValidatorProtocolDto.EulerV2,
+  })
+  protocol: ValidatorProtocolDto.EulerV2;
 
   @ApiProperty({
     description: 'The validator of the protocol',
@@ -157,58 +93,30 @@ export class ValidatorEulerV2ResponseDto {
   validator: string;
 
   @ApiProperty({
-    description: 'The vaults of the protocol',
+    description: 'The targets of the validator',
     type: [String],
   })
-  vaults: string[];
-}
-
-export class ValidatorVenusV4ResponseDto {
-  @ApiProperty({
-    description: 'The type of the protocol',
-    example: 'venus-v4',
-  })
-  type: ValidatorTypeDto.VenusV4;
+  targets: string[];
 
   @ApiProperty({
-    description: 'The validator of the protocol',
-    example: '0x1234567890abcdef',
+    description: 'The markets of the protocol',
+    type: [ValidatorLendingMarketDto],
   })
-  validator: string;
-
-  @ApiProperty({
-    description: 'The vaults of the protocol',
-    type: [String],
-  })
-  vaults: string[];
-}
-
-export class ValidatorKyberSwapResponseDto {
-  @ApiProperty({
-    description: 'The type of the protocol',
-    example: 'kyber-swap',
-  })
-  type: ValidatorTypeDto.KyberSwap;
-
-  @ApiProperty({
-    description: 'The validator of the protocol',
-    example: '0x1234567890abcdef',
-  })
-  validator: string;
-
-  @ApiProperty({
-    description: 'The tokens',
-    type: [String],
-  })
-  tokens: string[];
+  markets: ValidatorLendingMarketDto[];
 }
 
 export class ValidatorOkxSwapResponseDto {
   @ApiProperty({
     description: 'The type of the protocol',
-    example: 'okx-swap',
+    example: ValidatorTypeDto.Swap,
   })
-  type: ValidatorTypeDto.OkxSwap;
+  type: ValidatorTypeDto.Swap;
+
+  @ApiProperty({
+    description: 'The protocol of the validator',
+    example: ValidatorProtocolDto.OkxSwap,
+  })
+  protocol: ValidatorProtocolDto.OkxSwap;
 
   @ApiProperty({
     description: 'The validator of the protocol',
@@ -217,31 +125,37 @@ export class ValidatorOkxSwapResponseDto {
   validator: string;
 
   @ApiProperty({
-    description: 'The tokens',
+    description: 'The targets of the validator',
     type: [String],
+    example: ['0x4409921Ae43a39a11D90F7B7F96cfd0B8093d9fC'],
   })
-  tokens: string[];
+  targets: string[];
+
+  @ApiProperty({
+    description: 'The assets of the protocol',
+    type: [ValidatorSwapAssetDto],
+  })
+  assets: ValidatorSwapAssetDto[];
 }
 
 export type ValidatorResponseDto =
-  | ValidatorUniswapV3ResponseDto
-  | ValidatorAerodromeCLResponseDto
   | ValidatorAaveV3ResponseDto
   | ValidatorEulerV2ResponseDto
-  | ValidatorVenusV4ResponseDto
-  | ValidatorKyberSwapResponseDto
   | ValidatorOkxSwapResponseDto;
 
 @ApiExtraModels(
-  ValidatorUniswapV3ResponseDto,
-  ValidatorAerodromeCLResponseDto,
   ValidatorAaveV3ResponseDto,
   ValidatorEulerV2ResponseDto,
-  ValidatorVenusV4ResponseDto,
-  ValidatorKyberSwapResponseDto,
   ValidatorOkxSwapResponseDto,
 )
 export class DeploymentConfigResponseDto {
+  @ApiProperty({
+    description: 'The network of the deployment config',
+    example: NetworkDto.Base,
+  })
+  @IsEnum(NetworkDto)
+  network: NetworkDto;
+
   @ApiProperty({
     description: 'The salt nonce of the deployment config',
     example:
@@ -265,14 +179,20 @@ export class DeploymentConfigResponseDto {
     description: 'The validators',
     type: 'array',
     oneOf: [
-      { $ref: getSchemaPath(ValidatorUniswapV3ResponseDto) },
-      { $ref: getSchemaPath(ValidatorAerodromeCLResponseDto) },
       { $ref: getSchemaPath(ValidatorAaveV3ResponseDto) },
       { $ref: getSchemaPath(ValidatorEulerV2ResponseDto) },
-      { $ref: getSchemaPath(ValidatorVenusV4ResponseDto) },
-      { $ref: getSchemaPath(ValidatorKyberSwapResponseDto) },
       { $ref: getSchemaPath(ValidatorOkxSwapResponseDto) },
     ],
   })
   validators: ValidatorResponseDto[];
+}
+
+export class DeploymentConfigsResponseDto {
+  @ApiProperty({
+    description: 'The deployment configs',
+    type: [DeploymentConfigResponseDto],
+  })
+  @IsArray()
+  @ValidateNested({ each: true })
+  configs: DeploymentConfigResponseDto[];
 }

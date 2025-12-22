@@ -54,18 +54,6 @@ export class OwliaGuardService {
     blockchains: ConfigType<typeof blockchainsConfig>,
   ) {
     this.owliaGuardManagers = {
-      [NetworkDto.Bsc]: new OwliaGuardManager(
-        NetworkDto.Bsc,
-        this.aaveV3Service,
-        this.aerodromeCLService,
-        this.eulerV2Service,
-        this.venusV4Service,
-        this.uniswapV3Service,
-        this.kyberSwapClient,
-        this.userService,
-        _privateConfig.privateKey,
-        blockchains.bsc.rpcUrls,
-      ),
       [NetworkDto.Base]: new OwliaGuardManager(
         NetworkDto.Base,
         this.aaveV3Service,

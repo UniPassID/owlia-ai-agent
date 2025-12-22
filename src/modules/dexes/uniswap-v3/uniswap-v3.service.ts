@@ -23,10 +23,6 @@ export class UniswapV3Service {
     private readonly trackerService: TrackerService,
   ) {
     this.uniswapV3Managers = {
-      [NetworkDto.Bsc]: this.createUniswapV3Manager(
-        NetworkDto.Bsc,
-        blockchains,
-      ),
       [NetworkDto.Base]: this.createUniswapV3Manager(
         NetworkDto.Base,
         blockchains,

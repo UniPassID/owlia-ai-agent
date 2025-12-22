@@ -2,182 +2,115 @@ import { ApiExtraModels, ApiProperty, getSchemaPath } from '@nestjs/swagger';
 import { NetworkDto } from '../../../common/dto/network.dto';
 import {
   ValidatorAaveV3ResponseDto,
-  ValidatorAerodromeCLResponseDto,
   ValidatorEulerV2ResponseDto,
-  ValidatorKyberSwapResponseDto,
   ValidatorResponseDto,
+  ValidatorProtocolDto,
   ValidatorTypeDto,
-  ValidatorUniswapV3ResponseDto,
-  ValidatorVenusV4ResponseDto,
+  ValidatorOkxSwapResponseDto,
 } from '../../deployment/dto/deployment.response.dto';
 import {
   AssetNotSupportedException,
-  PoolNotSupportedException,
+  MarketNotSupportedException,
   ValidatorNotSupportedException,
-  VaultNotSupportedException,
 } from '../../../common/exceptions/base.exception';
-import {
-  Address,
-  AddressArray,
-} from '../../../common/decorators/address.decorator';
+import { Address } from '../../../common/decorators/address.decorator';
 import { Type } from 'class-transformer';
+import { IsEnum, IsString, IsArray, ValidateNested } from 'class-validator';
 
-export class ValidatorUniswapV3PoolDto {
+export class ValidatorLendingMarketDto {
   @ApiProperty({
-    description: 'The address of the pool',
+    description: 'The contract address of the market',
     example: '0x1234567890abcdef',
   })
+  @IsString()
   @Address()
-  address: string;
-  @ApiProperty({
-    description: 'The tick lower of the pool',
-    example: -10,
-  })
-  tickLower: number;
-  @ApiProperty({
-    description: 'The tick upper of the pool',
-    example: 10,
-  })
-  tickUpper: number;
-}
-
-export class ValidatorUniswapV3Dto {
-  @ApiProperty({
-    description: 'The type of the validator',
-    example: ValidatorTypeDto.UniswapV3,
-  })
-  type: ValidatorTypeDto.UniswapV3;
-
-  @ApiProperty({
-    description: 'The pools of the validator',
-    type: [ValidatorUniswapV3PoolDto],
-  })
-  @Type(() => ValidatorUniswapV3PoolDto)
-  pools: ValidatorUniswapV3PoolDto[];
-}
-
-export class ValidatorAerodromeCLPoolDto {
-  @ApiProperty({
-    description: 'The address of the pool',
-    example: '0x1234567890abcdef',
-  })
-  @Address()
-  address: string;
-  @ApiProperty({
-    description: 'The tick lower of the pool',
-    example: -10,
-  })
-  tickLower: number;
-  @ApiProperty({
-    description: 'The tick upper of the pool',
-    example: 10,
-  })
-  tickUpper: number;
-}
-
-export class ValidatorAerodromeCLDto {
-  @ApiProperty({
-    description: 'The type of the validator',
-    example: ValidatorTypeDto.AerodromeCL,
-  })
-  type: ValidatorTypeDto.AerodromeCL;
-
-  @ApiProperty({
-    description: 'The pools of the validator',
-    type: [ValidatorAerodromeCLPoolDto],
-  })
-  @Type(() => ValidatorAerodromeCLPoolDto)
-  pools: ValidatorAerodromeCLPoolDto[];
+  contract: string;
 }
 
 export class ValidatorAaveV3Dto {
   @ApiProperty({
     description: 'The type of the validator',
-    example: ValidatorTypeDto.AaveV3,
+    example: ValidatorProtocolDto.AaveV3,
   })
-  type: ValidatorTypeDto.AaveV3;
+  @IsEnum(ValidatorProtocolDto)
+  protocol: ValidatorProtocolDto.AaveV3;
 
   @ApiProperty({
     description: 'The assets of the validator',
-    type: [String],
+    type: [ValidatorLendingMarketDto],
   })
-  @AddressArray()
-  assets: string[];
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ValidatorLendingMarketDto)
+  markets: ValidatorLendingMarketDto[];
 }
 
 export class ValidatorEulerV2Dto {
   @ApiProperty({
     description: 'The type of the validator',
-    example: ValidatorTypeDto.EulerV2,
+    example: ValidatorProtocolDto.EulerV2,
   })
-  type: ValidatorTypeDto.EulerV2;
-
-  @AddressArray()
-  @ApiProperty({
-    description: 'The vaults of the validator',
-    type: [String],
-  })
-  vaults: string[];
-}
-
-export class ValidatorVenusV4Dto {
-  @ApiProperty({
-    description: 'The type of the validator',
-    example: ValidatorTypeDto.VenusV4,
-  })
-  type: ValidatorTypeDto.VenusV4;
+  @IsEnum(ValidatorProtocolDto)
+  protocol: ValidatorProtocolDto.EulerV2;
 
   @ApiProperty({
     description: 'The vaults of the validator',
-    type: [String],
+    type: [ValidatorLendingMarketDto],
   })
-  @AddressArray()
-  vaults: string[];
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ValidatorLendingMarketDto)
+  markets: ValidatorLendingMarketDto[];
 }
 
-export class ValidatorKyberSwapDto {
+export class ValidatorSwapAssetDto {
+  @ApiProperty({
+    description: 'The contract address of the asset',
+    example: '0x1234567890abcdef',
+  })
+  @IsString()
+  @Address()
+  contract: string;
+}
+
+export class ValidatorOkxSwapDto {
   @ApiProperty({
     description: 'The type of the validator',
-    example: ValidatorTypeDto.KyberSwap,
+    example: ValidatorProtocolDto.OkxSwap,
   })
-  type: ValidatorTypeDto.KyberSwap;
+  @IsEnum(ValidatorProtocolDto)
+  protocol: ValidatorProtocolDto.OkxSwap;
 
   @ApiProperty({
-    description: 'The tokens of the validator',
-    type: [String],
+    description: 'The assets of the validator',
+    type: [ValidatorSwapAssetDto],
   })
-  @AddressArray()
-  tokens: string[];
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ValidatorSwapAssetDto)
+  assets: ValidatorSwapAssetDto[];
 }
 
 export type ValidatorDto =
-  | ValidatorUniswapV3Dto
-  | ValidatorAerodromeCLDto
   | ValidatorAaveV3Dto
   | ValidatorEulerV2Dto
-  | ValidatorVenusV4Dto
-  | ValidatorKyberSwapDto;
+  | ValidatorOkxSwapDto;
 
-@ApiExtraModels(
-  ValidatorUniswapV3Dto,
-  ValidatorAerodromeCLDto,
-  ValidatorAaveV3Dto,
-  ValidatorEulerV2Dto,
-  ValidatorVenusV4Dto,
-  ValidatorKyberSwapDto,
-)
+@ApiExtraModels(ValidatorAaveV3Dto, ValidatorEulerV2Dto, ValidatorOkxSwapDto)
 export class RegisterUserDto {
   @ApiProperty({
     description: 'The network of the user',
     enum: NetworkDto,
-    default: NetworkDto.Bsc,
+    default: NetworkDto.Base,
   })
+  @IsEnum(NetworkDto)
   network: NetworkDto;
 
   @ApiProperty({
     description: 'The owner of the user',
     example: '0x1234567890abcdef',
   })
+  @IsString()
   @Address()
   owner: string;
 
@@ -185,25 +118,24 @@ export class RegisterUserDto {
     description: 'The validators of the user',
     type: 'array',
     oneOf: [
-      { $ref: getSchemaPath(ValidatorUniswapV3Dto) },
-      { $ref: getSchemaPath(ValidatorAerodromeCLDto) },
       { $ref: getSchemaPath(ValidatorAaveV3Dto) },
       { $ref: getSchemaPath(ValidatorEulerV2Dto) },
-      { $ref: getSchemaPath(ValidatorVenusV4Dto) },
-      { $ref: getSchemaPath(ValidatorKyberSwapDto) },
+      { $ref: getSchemaPath(ValidatorOkxSwapDto) },
     ],
   })
+  @IsArray()
+  @ValidateNested({ each: true })
   @Type(() => Object, {
     keepDiscriminatorProperty: true,
     discriminator: {
-      property: 'type',
+      property: 'protocol',
       subTypes: [
-        { value: ValidatorUniswapV3Dto, name: ValidatorTypeDto.UniswapV3 },
-        { value: ValidatorAerodromeCLDto, name: ValidatorTypeDto.AerodromeCL },
-        { value: ValidatorAaveV3Dto, name: ValidatorTypeDto.AaveV3 },
-        { value: ValidatorEulerV2Dto, name: ValidatorTypeDto.EulerV2 },
-        { value: ValidatorVenusV4Dto, name: ValidatorTypeDto.VenusV4 },
-        { value: ValidatorKyberSwapDto, name: ValidatorTypeDto.KyberSwap },
+        { value: ValidatorAaveV3Dto, name: ValidatorProtocolDto.AaveV3 },
+        {
+          value: ValidatorEulerV2Dto,
+          name: ValidatorProtocolDto.EulerV2,
+        },
+        { value: ValidatorOkxSwapDto, name: ValidatorProtocolDto.OkxSwap },
       ],
     },
   })
@@ -213,6 +145,7 @@ export class RegisterUserDto {
     description: 'The registered signature of the user',
     example: '0x1234567890abcdef',
   })
+  @IsString()
   signature: string;
 }
 
@@ -222,145 +155,89 @@ export function toValidatorResponseDto(
   validatorResponses: ValidatorResponseDto[],
 ): ValidatorResponseDto[] {
   return validators.map((validator) => {
-    switch (validator.type) {
-      case ValidatorTypeDto.UniswapV3: {
+    switch (validator.protocol) {
+      case ValidatorProtocolDto.AaveV3: {
         const validatorResponse = validatorResponses.find(
-          (v) => v.type === ValidatorTypeDto.UniswapV3,
+          (v) => v.protocol === ValidatorProtocolDto.AaveV3,
         );
         if (!validatorResponse) {
-          throw new ValidatorNotSupportedException(network, validator.type);
+          throw new ValidatorNotSupportedException(network, validator.protocol);
         }
-
         const response = {
-          type: ValidatorTypeDto.UniswapV3,
+          type: ValidatorTypeDto.Lending,
+          protocol: ValidatorProtocolDto.AaveV3,
           validator: validatorResponse.validator,
-          pools: validator.pools.map((p) => {
-            const pool = validatorResponse.pools.find(
-              (vp) => vp.address === p.address,
+          targets: validatorResponse.targets,
+          markets: validator.markets.map((m) => {
+            const market = validatorResponse.markets.find(
+              (vm) => vm.contract === m.contract,
             );
-            if (!pool) {
-              throw new PoolNotSupportedException(network, p.address);
+            if (!market) {
+              throw new MarketNotSupportedException(
+                network,
+                validator.protocol,
+                m.contract,
+              );
             }
-            return {
-              address: p.address,
-              token0: pool.token0,
-              token1: pool.token1,
-              fee: pool.fee,
-              tickLower: p.tickLower,
-              tickUpper: p.tickUpper,
-            };
+            return market;
           }),
-        } as ValidatorUniswapV3ResponseDto;
+        } satisfies ValidatorAaveV3ResponseDto;
         return response;
       }
-      case ValidatorTypeDto.AerodromeCL: {
+      case ValidatorProtocolDto.EulerV2: {
         const validatorResponse = validatorResponses.find(
-          (v) => v.type === ValidatorTypeDto.AerodromeCL,
+          (v) => v.protocol === ValidatorProtocolDto.EulerV2,
         );
         if (!validatorResponse) {
-          throw new ValidatorNotSupportedException(network, validator.type);
+          throw new ValidatorNotSupportedException(network, validator.protocol);
         }
-
         const response = {
-          type: ValidatorTypeDto.AerodromeCL,
+          type: ValidatorTypeDto.Lending,
+          protocol: ValidatorProtocolDto.EulerV2,
           validator: validatorResponse.validator,
-          pools: validator.pools.map((p) => {
-            const pool = validatorResponse.pools.find(
-              (vp) => vp.address === p.address,
+          targets: validatorResponse.targets,
+          markets: validator.markets.map((m) => {
+            const market = validatorResponse.markets.find(
+              (vm) => vm.contract === m.contract,
             );
-            if (!pool) {
-              throw new PoolNotSupportedException(network, p.address);
+            if (!market) {
+              throw new MarketNotSupportedException(
+                network,
+                validator.protocol,
+                m.contract,
+              );
             }
-            return {
-              address: p.address,
-              token0: pool.token0,
-              token1: pool.token1,
-              tickSpacing: pool.tickSpacing,
-              tickLower: p.tickLower,
-              tickUpper: p.tickUpper,
-            };
+            return market;
           }),
-        } as ValidatorAerodromeCLResponseDto;
+        } satisfies ValidatorEulerV2ResponseDto;
         return response;
       }
-      case ValidatorTypeDto.AaveV3: {
+      case ValidatorProtocolDto.OkxSwap: {
         const validatorResponse = validatorResponses.find(
-          (v) => v.type === ValidatorTypeDto.AaveV3,
+          (v) => v.protocol === ValidatorProtocolDto.OkxSwap,
         );
         if (!validatorResponse) {
-          throw new ValidatorNotSupportedException(network, validator.type);
+          throw new ValidatorNotSupportedException(network, validator.protocol);
         }
         const response = {
-          type: ValidatorTypeDto.AaveV3,
+          type: ValidatorTypeDto.Swap,
+          protocol: ValidatorProtocolDto.OkxSwap,
           validator: validatorResponse.validator,
+          targets: validatorResponse.targets,
           assets: validator.assets.map((a) => {
-            const asset = validatorResponse.assets.find((va) => va === a);
+            const asset = validatorResponse.assets.find(
+              (va) => va.contract === a.contract,
+            );
             if (!asset) {
-              throw new AssetNotSupportedException(network, a);
+              throw new AssetNotSupportedException(
+                network,
+                validator.protocol,
+                a.contract,
+              );
             }
             return asset;
           }),
-        } as ValidatorAaveV3ResponseDto;
-        return response;
-      }
-      case ValidatorTypeDto.EulerV2: {
-        const validatorResponse = validatorResponses.find(
-          (v) => v.type === ValidatorTypeDto.EulerV2,
-        );
-        if (!validatorResponse) {
-          throw new ValidatorNotSupportedException(network, validator.type);
-        }
-        const response = {
-          type: ValidatorTypeDto.EulerV2,
-          validator: validatorResponse.validator,
-          vaults: validator.vaults.map((v) => {
-            const vault = validatorResponse.vaults.find((vv) => vv === v);
-            if (!vault) {
-              throw new VaultNotSupportedException(network, v);
-            }
-            return vault;
-          }),
-        } as ValidatorEulerV2ResponseDto;
-        return response;
-      }
-      case ValidatorTypeDto.VenusV4: {
-        const validatorResponse = validatorResponses.find(
-          (v) => v.type === ValidatorTypeDto.VenusV4,
-        );
-        if (!validatorResponse) {
-          throw new ValidatorNotSupportedException(network, validator.type);
-        }
-        const response = {
-          type: ValidatorTypeDto.VenusV4,
-          validator: validatorResponse.validator,
-          vaults: validator.vaults.map((v) => {
-            const vault = validatorResponse.vaults.find((vv) => vv === v);
-            if (!vault) {
-              throw new VaultNotSupportedException(network, v);
-            }
-            return vault;
-          }),
-        } as ValidatorVenusV4ResponseDto;
-        return response;
-      }
-      case ValidatorTypeDto.KyberSwap: {
-        const validatorResponse = validatorResponses.find(
-          (v) => v.type === ValidatorTypeDto.KyberSwap,
-        );
-        if (!validatorResponse) {
-          throw new ValidatorNotSupportedException(network, validator.type);
-        }
-        const response = {
-          type: ValidatorTypeDto.KyberSwap,
-          validator: validatorResponse.validator,
-          tokens: validator.tokens.map((t) => {
-            const token = validatorResponse.tokens.find((vt) => vt === t);
-            if (!token) {
-              throw new AssetNotSupportedException(network, t);
-            }
-            return token;
-          }),
-        } as ValidatorKyberSwapResponseDto;
+        } satisfies ValidatorOkxSwapResponseDto;
         return response;
       }
     }

@@ -1,4 +1,4 @@
-import { ValidatorTypeDto } from '../../modules/deployment/dto/deployment.response.dto';
+import { ValidatorProtocolDto } from '../../modules/deployment/dto/deployment.response.dto';
 import { ResponseCodeDto, ResponseDto } from '../dto/response.dto';
 import { NetworkDto } from '../dto/network.dto';
 
@@ -50,10 +50,10 @@ export class UserAlreadyRegisteredException extends BaseException {
 }
 
 export class ValidatorNotSupportedException extends BaseException {
-  constructor(network: NetworkDto, validatorType: ValidatorTypeDto) {
+  constructor(network: NetworkDto, validatorProtocol: ValidatorProtocolDto) {
     super(
       ResponseCodeDto.ValidatorNotSupported,
-      `Validator ${validatorType} is not supported on network ${network}`,
+      `Validator ${validatorProtocol} is not supported on network ${network}`,
     );
   }
 }
@@ -68,19 +68,27 @@ export class PoolNotSupportedException extends BaseException {
 }
 
 export class AssetNotSupportedException extends BaseException {
-  constructor(network: NetworkDto, asset: string) {
+  constructor(
+    network: NetworkDto,
+    protocol: ValidatorProtocolDto,
+    asset: string,
+  ) {
     super(
       ResponseCodeDto.AssetNotSupported,
-      `Asset ${asset} is not supported on network ${network}`,
+      `Asset ${asset} is not supported for protocol ${protocol} on network ${network}`,
     );
   }
 }
 
-export class VaultNotSupportedException extends BaseException {
-  constructor(network: NetworkDto, vault: string) {
+export class MarketNotSupportedException extends BaseException {
+  constructor(
+    network: NetworkDto,
+    protocol: ValidatorProtocolDto,
+    marketContract: string,
+  ) {
     super(
-      ResponseCodeDto.VaultNotSupported,
-      `Vault ${vault} is not supported on network ${network}`,
+      ResponseCodeDto.MarketNotSupported,
+      `Market ${marketContract} is not supported for protocol ${protocol} on network ${network}`,
     );
   }
 }

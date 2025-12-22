@@ -11,12 +11,9 @@ import Safe from '@safe-global/protocol-kit';
 import {
   DeploymentConfigResponseDto,
   ValidatorAaveV3ResponseDto,
-  ValidatorAerodromeCLResponseDto,
   ValidatorEulerV2ResponseDto,
-  ValidatorKyberSwapResponseDto,
   ValidatorResponseDto,
-  ValidatorUniswapV3ResponseDto,
-  ValidatorVenusV4ResponseDto,
+  ValidatorOkxSwapResponseDto,
 } from '../../deployment/dto/deployment.response.dto';
 import { toValidatorResponseDto } from './register-user.dto';
 import { getNetworkDto, NetworkDto } from '../../../common/dto/network.dto';
@@ -41,12 +38,9 @@ export function getUserDeploymentStatusDto(
 }
 
 @ApiExtraModels(
-  ValidatorUniswapV3ResponseDto,
-  ValidatorAerodromeCLResponseDto,
   ValidatorAaveV3ResponseDto,
   ValidatorEulerV2ResponseDto,
-  ValidatorVenusV4ResponseDto,
-  ValidatorKyberSwapResponseDto,
+  ValidatorOkxSwapResponseDto,
 )
 export class UserDeploymentResponseDto {
   @ApiProperty({
@@ -58,7 +52,7 @@ export class UserDeploymentResponseDto {
   @ApiProperty({
     description: 'The network of the user deployment',
     enum: NetworkDto,
-    default: NetworkDto.Bsc,
+    default: NetworkDto.Base,
   })
   network: NetworkDto;
 
@@ -79,12 +73,9 @@ export class UserDeploymentResponseDto {
     description: 'The validators of the user deployment',
     nullable: true,
     oneOf: [
-      { $ref: getSchemaPath(ValidatorUniswapV3ResponseDto) },
-      { $ref: getSchemaPath(ValidatorAerodromeCLResponseDto) },
       { $ref: getSchemaPath(ValidatorAaveV3ResponseDto) },
       { $ref: getSchemaPath(ValidatorEulerV2ResponseDto) },
-      { $ref: getSchemaPath(ValidatorVenusV4ResponseDto) },
-      { $ref: getSchemaPath(ValidatorKyberSwapResponseDto) },
+      { $ref: getSchemaPath(ValidatorOkxSwapResponseDto) },
     ],
   })
   validators: ValidatorResponseDto[] | null;

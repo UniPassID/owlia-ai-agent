@@ -22,10 +22,6 @@ export class AerodromeClService {
     blockchains: ConfigType<typeof blockchainsConfig>,
   ) {
     this.aerodromeClManagers = {
-      [NetworkDto.Bsc]: this.createAerodromeCLManager(
-        NetworkDto.Bsc,
-        blockchains,
-      ),
       [NetworkDto.Base]: this.createAerodromeCLManager(
         NetworkDto.Base,
         blockchains,

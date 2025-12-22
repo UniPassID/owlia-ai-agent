@@ -17,7 +17,6 @@ export class AaveV3Service {
     blockchains: ConfigType<typeof blockchainsConfig>,
   ) {
     this.aaveV3Managers = {
-      [NetworkDto.Bsc]: this.createAaveV3Manager(NetworkDto.Bsc, blockchains),
       [NetworkDto.Base]: this.createAaveV3Manager(NetworkDto.Base, blockchains),
     };
   }

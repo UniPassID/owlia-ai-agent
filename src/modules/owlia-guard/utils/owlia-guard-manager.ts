@@ -15,13 +15,9 @@ import { Logger } from '@nestjs/common';
 import { MetaTransactionData } from '@safe-global/types-kit';
 import { ERC20_ABI } from '../../../abis/erc-20.abi';
 import { AAVE_V3_ABI } from '../../../abis/aave-v3.abi';
-import { VENUS_V4_VTOKEN_ABI } from '../../../abis/venus-v4-vtoken.abi';
-import { VENUS_V4_COMPTROLLER_ABI } from '../../../abis/venus-v4-comptroller.abi';
 import { EULER_V2_VAULT_ABI } from '../../../abis/euler-v2-vault.abi';
 import { EULER_V2_EVC_ABI } from '../../../abis/euler-v2-evc.abi';
 import { getChain, NetworkDto } from '../../../common/dto/network.dto';
-import { UNISWAP_V3_NONFUNGIBLE_POSITION_MANAGER_ABI } from '../../../abis/uniswap-v3-nonfungible-position-manager.abi';
-import { AERODROME_CL_NONFUNGIBLE_POSITION_MANAGER_ABI } from '../../../abis/aerodrome-cl-nonfungible-position-manager.abi';
 import {
   ActionDto,
   ActionTypeDto,
@@ -57,6 +53,10 @@ import {
   buildContractSignature,
   EthSafeSignature,
 } from '@safe-global/protocol-kit';
+import { VENUS_V4_VTOKEN_ABI } from '../../../abis/venus-v4-vtoken.abi';
+import { VENUS_V4_COMPTROLLER_ABI } from '../../../abis/venus-v4-comptroller.abi';
+import { UNISWAP_V3_NONFUNGIBLE_POSITION_MANAGER_ABI } from '../../../abis/uniswap-v3-nonfungible-position-manager.abi';
+import { AERODROME_CL_NONFUNGIBLE_POSITION_MANAGER_ABI } from '../../../abis/aerodrome-cl-nonfungible-position-manager.abi';
 
 export class OwliaGuardManager {
   logger = new Logger(OwliaGuardManager.name);

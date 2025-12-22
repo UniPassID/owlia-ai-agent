@@ -7,21 +7,16 @@ import {
 } from '../../src/common/dto/response.dto';
 import {
   DeploymentConfigResponseDto,
-  ValidatorTypeDto,
+  DeploymentConfigsResponseDto,
+  ValidatorProtocolDto,
 } from '../../src/modules/deployment/dto/deployment.response.dto';
 import { UserResponseDto } from '../../src/modules/user/dto/user.response.dto';
 import { ValidatorDto } from '../../src/modules/user/dto/register-user.dto';
-import {
-  VALIDATOR_CONFIGS,
-  ValidatorConfig,
-} from '../../src/modules/user/constants';
 import { encodeFunctionData } from 'viem';
 import { OWLIA_GUARD_ABI } from '../../src/abis/owlia-guard.abi';
-import { UNISWAP_V3_OWLIA_VALIDATOR_ABI } from '../../src/abis/uniswap-v3-owlia-validator.abi';
 import { AAVE_V3_OWLIA_VALIDATOR_ABI } from '../../src/abis/aave-v3-owlia-validator.abi';
 import { EULER_V2_OWLIA_VALIDATOR_ABI } from '../../src/abis/euler-v2-owlia-validator.abi';
-import { VENUS_V4_OWLIA_VALIDATOR_ABI } from '../../src/abis/venus-v4-owlia-validator.abi';
-import { KYBER_SWAP_OWLIA_VALIDATOR_ABI } from '../../src/abis/kyber-swap-owlia-validator.abi';
+import { OKX_SWAP_OWLIA_VALIDATOR_ABI } from '../../src/abis/okx-swap-owlia-validator.abi';
 import { MetaTransactionData } from '@safe-global/types-kit';
 import Safe from '@safe-global/protocol-kit';
 import { SAFE_ABI } from '../../src/abis/safe.abi';
@@ -32,17 +27,13 @@ import {
 import { NetworkDto } from '../../src/common/dto/network.dto';
 
 export class AgentClient {
-  #validatorConfigs: Record<NetworkDto, ValidatorConfig> = VALIDATOR_CONFIGS;
-
   constructor(private readonly app: App) {}
 
-  async deploymentConfig(
-    network: NetworkDto,
-  ): Promise<DeploymentConfigResponseDto> {
+  async deploymentConfigs(): Promise<DeploymentConfigsResponseDto> {
     const response = await request(this.app).get(
-      `/api/v1/deployment/config?network=${network}`,
+      `/api/v1/deployment/config/list`,
     );
-    const data = response.body as ResponseDto<DeploymentConfigResponseDto>;
+    const data = response.body as ResponseDto<DeploymentConfigsResponseDto>;
     if (data.code !== ResponseCodeDto.Success) {
       throw new Error(`Failed to get deployment config: ${data.message}`);
     }
@@ -86,40 +77,14 @@ export class AgentClient {
 
     const setGuardTx = await this.setGuardTx(safe, deploymentConfig);
 
-    const validatorTxs = this.getValidatorTxs(network, deploymentConfig);
+    const validatorTxs = this.getValidatorTxs(deploymentConfig);
 
     const transaction = await safe.createTransaction({
       transactions: [setGuardTx, ...validatorTxs],
     });
     const signedTransaction = await safe.signTransaction(transaction);
     const sig = signedTransaction.encodedSignatures();
-    return this.registerUser(
-      network,
-      owner,
-      deploymentConfig.validators.map((validator) => {
-        switch (validator.type) {
-          case ValidatorTypeDto.UniswapV3:
-            validator.validator = validator.validator.toLowerCase();
-            return validator;
-          case ValidatorTypeDto.AerodromeCL:
-            validator.validator = validator.validator.toLowerCase();
-            return validator;
-          case ValidatorTypeDto.AaveV3:
-            validator.validator = validator.validator.toLowerCase();
-            return validator;
-          case ValidatorTypeDto.EulerV2:
-            validator.validator = validator.validator.toLowerCase();
-            return validator;
-          case ValidatorTypeDto.VenusV4:
-            validator.validator = validator.validator.toLowerCase();
-            return validator;
-          case ValidatorTypeDto.KyberSwap:
-            validator.validator = validator.validator.toLowerCase();
-            return validator;
-        }
-      }),
-      sig,
-    );
+    return this.registerUser(network, owner, deploymentConfig.validators, sig);
   }
 
   async getUserPortfolio(
@@ -174,212 +139,73 @@ export class AgentClient {
   }
 
   getValidatorTxs(
-    network: NetworkDto,
     deploymentConfig: DeploymentConfigResponseDto,
   ): MetaTransactionData[] {
-    const validatorConfig = this.#validatorConfigs[network];
-    if (!validatorConfig) {
-      throw new Error(`Validator config not found for network: ${network}`);
-    }
     const validatorTxs = deploymentConfig.validators.flatMap((validator) => {
-      switch (validator.type) {
-        case ValidatorTypeDto.UniswapV3:
-          const uniswapV3NonFungiblePositionManager =
-            validatorConfig.uniswapV3NonFungiblePositionManager;
-          if (!uniswapV3NonFungiblePositionManager) {
-            throw new Error('UniswapV3NonFungiblePositionManager not found');
-          }
-          return [
-            {
-              to: deploymentConfig.guard,
-              data: encodeFunctionData({
-                abi: OWLIA_GUARD_ABI,
-                functionName: 'setValidator',
-                args: [
-                  uniswapV3NonFungiblePositionManager,
-                  validator.validator,
-                ],
-              }),
-              value: '0',
-            },
-            ...validator.pools.map((pool) => ({
-              to: validator.validator,
-              data: encodeFunctionData({
-                abi: UNISWAP_V3_OWLIA_VALIDATOR_ABI,
-                functionName: 'setPoolConfig',
-                args: [
-                  pool.token0,
-                  pool.token1,
-                  pool.fee,
-                  pool.tickLower,
-                  pool.tickUpper,
-                ],
-              }),
-              value: '0',
-            })),
-          ];
-        case ValidatorTypeDto.AerodromeCL:
-          const aerodromeCLNonFungiblePositionManager =
-            validatorConfig.aerodromeCLNonFungiblePositionManager;
-          if (!aerodromeCLNonFungiblePositionManager) {
-            throw new Error('AerodromeCLNonFungiblePositionManager not found');
-          }
-
-          return [
-            {
-              to: deploymentConfig.guard,
-              data: encodeFunctionData({
-                abi: OWLIA_GUARD_ABI,
-                functionName: 'setValidator',
-                args: [
-                  aerodromeCLNonFungiblePositionManager,
-                  validator.validator,
-                ],
-              }),
-              value: '0',
-            },
-            ...validator.pools.map((pool) => ({
-              to: validator.validator,
-              data: encodeFunctionData({
-                abi: UNISWAP_V3_OWLIA_VALIDATOR_ABI,
-                functionName: 'setPoolConfig',
-                args: [
-                  pool.token0,
-                  pool.token1,
-                  pool.tickSpacing,
-                  pool.tickLower,
-                  pool.tickUpper,
-                ],
-              }),
-              value: '0',
-            })),
-          ];
-        case ValidatorTypeDto.AaveV3:
-          const aaveV3Pool = validatorConfig.aaveV3Pool;
-          if (!aaveV3Pool) {
-            throw new Error('AaveV3Pool not found');
-          }
-
-          return [
-            {
-              to: deploymentConfig.guard,
-              data: encodeFunctionData({
-                abi: OWLIA_GUARD_ABI,
-                functionName: 'setValidator',
-                args: [aaveV3Pool, validator.validator],
-              }),
-              value: '0',
-            },
-            ...validator.assets.map((asset) => ({
-              to: validator.validator,
-              data: encodeFunctionData({
-                abi: AAVE_V3_OWLIA_VALIDATOR_ABI,
-                functionName: 'setAllowedAsset',
-                args: [asset, true],
-              }),
-              value: '0',
-            })),
-          ];
-        case ValidatorTypeDto.EulerV2:
-          const eulerV2EVC = validatorConfig.eulerV2EVC;
-          if (!eulerV2EVC) {
-            throw new Error('EulerV2EVC not found');
-          }
-
-          return [
-            {
-              to: deploymentConfig.guard,
-              data: encodeFunctionData({
-                abi: OWLIA_GUARD_ABI,
-                functionName: 'setValidator',
-                args: [eulerV2EVC, validator.validator],
-              }),
-              value: '0',
-            },
-            ...validator.vaults.map((vault) => ({
-              to: validator.validator,
-              data: encodeFunctionData({
-                abi: EULER_V2_OWLIA_VALIDATOR_ABI,
-                functionName: 'setAllowedVault',
-                args: [vault, true],
-              }),
-              value: '0',
-            })),
-          ];
-        case ValidatorTypeDto.VenusV4:
-          const venusV4Comptroller = validatorConfig.venusV4Comptroller;
-          if (!venusV4Comptroller) {
-            throw new Error('VenusV4Comptroller not found');
-          }
-
-          return [
-            {
-              to: deploymentConfig.guard,
-              data: encodeFunctionData({
-                abi: OWLIA_GUARD_ABI,
-                functionName: 'setValidator',
-                args: [venusV4Comptroller, validator.validator],
-              }),
-              value: '0',
-            },
-            ...validator.vaults.flatMap((vault) => [
-              {
-                to: deploymentConfig.guard,
-                data: encodeFunctionData({
-                  abi: OWLIA_GUARD_ABI,
-                  functionName: 'setValidator',
-                  args: [vault, validator.validator],
-                }),
-                value: '0',
-              },
-              {
-                to: validator.validator,
-                data: encodeFunctionData({
-                  abi: VENUS_V4_OWLIA_VALIDATOR_ABI,
-                  functionName: 'setAllowedVault',
-                  args: [vault, true],
-                }),
-                value: '0',
-              },
-            ]),
-          ];
-        case ValidatorTypeDto.KyberSwap:
-          const kyberSwapRouter = validatorConfig.kyberSwapRouter;
-          if (!kyberSwapRouter) {
-            throw new Error('KyberSwapRouter not found');
-          }
-
-          return [
-            {
-              to: deploymentConfig.guard,
-              data: encodeFunctionData({
-                abi: OWLIA_GUARD_ABI,
-                functionName: 'setValidator',
-                args: [kyberSwapRouter, validator.validator],
-              }),
-              value: '0',
-            },
-            ...validator.tokens.flatMap((token) => [
-              {
-                to: deploymentConfig.guard,
-                data: encodeFunctionData({
-                  abi: OWLIA_GUARD_ABI,
-                  functionName: 'setValidator',
-                  args: [kyberSwapRouter, validator.validator],
-                }),
-                value: '0',
-              },
-              {
-                to: validator.validator,
-                data: encodeFunctionData({
-                  abi: KYBER_SWAP_OWLIA_VALIDATOR_ABI,
-                  functionName: 'setAllowedToken',
-                  args: [token, true],
-                }),
-                value: '0',
-              },
-            ]),
-          ];
+      switch (validator.protocol) {
+        case ValidatorProtocolDto.AaveV3: {
+          const setValidatorTxs = validator.targets.map((target) => ({
+            to: deploymentConfig.guard,
+            data: encodeFunctionData({
+              abi: OWLIA_GUARD_ABI,
+              functionName: 'setValidator',
+              args: [target, validator.validator],
+            }),
+            value: '0',
+          }));
+          const setAllowedAssetTxs = validator.markets.map((market) => ({
+            to: validator.validator,
+            data: encodeFunctionData({
+              abi: AAVE_V3_OWLIA_VALIDATOR_ABI,
+              functionName: 'setAllowedAsset',
+              args: [market.contract, true],
+            }),
+            value: '0',
+          }));
+          return [...setValidatorTxs, ...setAllowedAssetTxs];
+        }
+        case ValidatorProtocolDto.EulerV2: {
+          const setValidatorTxs = validator.targets.map((target) => ({
+            to: deploymentConfig.guard,
+            data: encodeFunctionData({
+              abi: OWLIA_GUARD_ABI,
+              functionName: 'setValidator',
+              args: [target, validator.validator],
+            }),
+            value: '0',
+          }));
+          const setAllowedVaultTxs = validator.markets.map((market) => ({
+            to: validator.validator,
+            data: encodeFunctionData({
+              abi: EULER_V2_OWLIA_VALIDATOR_ABI,
+              functionName: 'setAllowedVault',
+              args: [market.contract, true],
+            }),
+            value: '0',
+          }));
+          return [...setValidatorTxs, ...setAllowedVaultTxs];
+        }
+        case ValidatorProtocolDto.OkxSwap: {
+          const setValidatorTxs = validator.targets.map((target) => ({
+            to: deploymentConfig.guard,
+            data: encodeFunctionData({
+              abi: OWLIA_GUARD_ABI,
+              functionName: 'setValidator',
+              args: [target, validator.validator],
+            }),
+            value: '0',
+          }));
+          const setAllowedAssetTxs = validator.assets.map((asset) => ({
+            to: validator.validator,
+            data: encodeFunctionData({
+              abi: OKX_SWAP_OWLIA_VALIDATOR_ABI,
+              functionName: 'setAllowedToken',
+              args: [asset.contract, true],
+            }),
+            value: '0',
+          }));
+          return [...setValidatorTxs, ...setAllowedAssetTxs];
+        }
       }
     });
     return validatorTxs;

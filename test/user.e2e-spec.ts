@@ -21,11 +21,16 @@ describe('UserController (e2e)', () => {
     await destroyTestContext(context);
   });
 
-  it('Register user on Bsc should success', async () => {
-    const network = NetworkDto.Bsc;
-    const rpcUrl = context.bscRpcUrl;
-    const deploymentConfig =
-      await context.agentClient.deploymentConfig(network);
+  it('Register user on Base should success', async () => {
+    const network = NetworkDto.Base;
+    const rpcUrl = context.baseRpcUrl;
+    const deploymentConfigs = await context.agentClient.deploymentConfigs();
+    const deploymentConfig = deploymentConfigs.configs.find(
+      (config) => config.network === network,
+    );
+    if (!deploymentConfig) {
+      throw new Error('Deployment config not found');
+    }
     const ownerPrivateKey = generatePrivateKey();
     console.log('ownerPrivateKey', ownerPrivateKey);
     const owner = privateKeyToAddress(ownerPrivateKey);
@@ -55,13 +60,18 @@ describe('UserController (e2e)', () => {
     assert.deepStrictEqual(userInfo, userResponse);
   });
 
-  it('Get user portfolio on Bsc should success', async () => {
-    const network = NetworkDto.Bsc;
+  it('Get user portfolio on Base should success', async () => {
+    const network = NetworkDto.Base;
     const ownerPrivateKey = generatePrivateKey();
     const owner = privateKeyToAddress(ownerPrivateKey);
     const rpcUrl = getRpcUrl(context, network);
-    const deploymentConfig =
-      await context.agentClient.deploymentConfig(network);
+    const deploymentConfigs = await context.agentClient.deploymentConfigs();
+    const deploymentConfig = deploymentConfigs.configs.find(
+      (config) => config.network === network,
+    );
+    if (!deploymentConfig) {
+      throw new Error('Deployment config not found');
+    }
     const userInfo = await context.agentClient.registerUserWithOwner(
       network,
       deploymentConfig,
@@ -90,13 +100,18 @@ describe('UserController (e2e)', () => {
     console.log(JSON.stringify(portfolio, null, 2));
   });
 
-  it('Get user portfolios on Bsc should success', async () => {
-    const network = NetworkDto.Bsc;
+  it('Get user portfolios on Base should success', async () => {
+    const network = NetworkDto.Base;
     const ownerPrivateKey = generatePrivateKey();
     const owner = privateKeyToAddress(ownerPrivateKey);
     const rpcUrl = getRpcUrl(context, network);
-    const deploymentConfig =
-      await context.agentClient.deploymentConfig(network);
+    const deploymentConfigs = await context.agentClient.deploymentConfigs();
+    const deploymentConfig = deploymentConfigs.configs.find(
+      (config) => config.network === network,
+    );
+    if (!deploymentConfig) {
+      throw new Error('Deployment config not found');
+    }
     const userInfo = await context.agentClient.registerUserWithOwner(
       network,
       deploymentConfig,

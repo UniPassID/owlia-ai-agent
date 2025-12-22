@@ -26,8 +26,6 @@ export class KyberSwapClient {
 
   getChainName(network: NetworkDto): ChainName {
     switch (network) {
-      case NetworkDto.Bsc:
-        return ChainName.BSC;
       case NetworkDto.Base:
         return ChainName.BASE;
     }

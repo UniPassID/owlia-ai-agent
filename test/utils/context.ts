@@ -13,7 +13,6 @@ export type TestContext = {
   app: INestApplication;
   databaseContainer: StartedMySqlContainer;
   agentClient: AgentClient;
-  bscRpcUrl: string;
   baseRpcUrl: string;
 };
 
@@ -25,11 +24,9 @@ export async function createTestContext(): Promise<TestContext> {
   const password = databaseContainer.getUserPassword();
   const database = databaseContainer.getDatabase();
 
-  const bscRpcUrl: string = 'http://127.0.0.1:8545';
   const baseRpcUrl: string = 'http://127.0.0.1:8546';
   // const trackerRpcUrl: string = 'http://127.0.0.1:3000';
 
-  process.env.BSC_RPC_URLS = bscRpcUrl;
   process.env.BASE_RPC_URLS = baseRpcUrl;
   // process.env.TRACKER_URL = trackerRpcUrl;
 
@@ -61,7 +58,6 @@ export async function createTestContext(): Promise<TestContext> {
     app,
     databaseContainer,
     agentClient,
-    bscRpcUrl,
     baseRpcUrl,
   };
 }
@@ -75,8 +71,6 @@ export async function destroyTestContext(context: TestContext): Promise<void> {
 
 export function getRpcUrl(context: TestContext, network: NetworkDto): string {
   switch (network) {
-    case NetworkDto.Bsc:
-      return context.bscRpcUrl;
     case NetworkDto.Base:
       return context.baseRpcUrl;
   }

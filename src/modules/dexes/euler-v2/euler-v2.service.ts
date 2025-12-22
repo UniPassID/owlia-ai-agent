@@ -17,7 +17,6 @@ export class EulerV2Service {
     blockchains: ConfigType<typeof blockchainsConfig>,
   ) {
     this.eulerV2Managers = {
-      [NetworkDto.Bsc]: this.createEulerV2Manager(NetworkDto.Bsc, blockchains),
       [NetworkDto.Base]: this.createEulerV2Manager(
         NetworkDto.Base,
         blockchains,

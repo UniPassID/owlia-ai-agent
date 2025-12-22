@@ -18,6 +18,12 @@ export function initApp(app: INestApplication<any>): INestApplication<any> {
   app.useGlobalPipes(
     new ValidationPipe({
       transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: false,
+      transformOptions: {
+        enableImplicitConversion: true,
+        exposeDefaultValues: true,
+      },
     }),
   );
 

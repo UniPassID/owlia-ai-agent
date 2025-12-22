@@ -10,7 +10,7 @@ export class PortfolioMetaResponseDto {
   @ApiProperty({
     description: 'The network of the portfolio',
     enum: NetworkDto,
-    default: NetworkDto.Bsc,
+    default: NetworkDto.Base,
   })
   network: NetworkDto;
 

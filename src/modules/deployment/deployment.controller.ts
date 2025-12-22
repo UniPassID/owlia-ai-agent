@@ -1,8 +1,7 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get } from '@nestjs/common';
 import { DeploymentService } from './deployment.service';
 import { ApiOk } from '../../common/dto/response.dto';
-import { DeploymentConfigResponseDto } from './dto/deployment.response.dto';
-import { NetworkDto } from '../../common/dto/network.dto';
+import { DeploymentConfigsResponseDto } from './dto/deployment.response.dto';
 import { ApiTags } from '@nestjs/swagger';
 
 @Controller({
@@ -13,11 +12,9 @@ import { ApiTags } from '@nestjs/swagger';
 export class DeploymentController {
   constructor(private readonly deploymentService: DeploymentService) {}
 
-  @Get('config')
-  @ApiOk(DeploymentConfigResponseDto)
-  async getDeploymentConfig(
-    @Query('network') network: NetworkDto,
-  ): Promise<DeploymentConfigResponseDto> {
-    return this.deploymentService.getDeploymentConfig(network);
+  @Get('config/list')
+  @ApiOk(DeploymentConfigsResponseDto)
+  async getDeploymentConfigs(): Promise<DeploymentConfigsResponseDto> {
+    return this.deploymentService.getDeploymentConfigs();
   }
 }

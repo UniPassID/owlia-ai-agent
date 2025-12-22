@@ -15,10 +15,10 @@ export enum ResponseCodeDto {
   ValidatorNotSupported = 4004,
   PoolNotSupported = 4005,
   AssetNotSupported = 4006,
-  VaultNotSupported = 4007,
   UserNotFound = 4008,
   InvalidParameter = 4009,
   JobNotFound = 4010,
+  MarketNotSupported = 4011,
 
   UnknownError = 10000,
 }

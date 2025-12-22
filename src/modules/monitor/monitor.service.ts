@@ -75,7 +75,6 @@ export class MonitorService {
     blockchains: ConfigType<typeof blockchainsConfig>,
   ) {
     this.rpcUrls = {
-      [NetworkDto.Bsc]: blockchains.bsc.rpcUrls[0],
       [NetworkDto.Base]: blockchains.base.rpcUrls[0],
     };
     setTimeout(() => {

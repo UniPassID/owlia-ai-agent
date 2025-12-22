@@ -17,7 +17,6 @@ export class VenusV4Service {
     blockchains: ConfigType<typeof blockchainsConfig>,
   ) {
     this.venusV4Managers = {
-      [NetworkDto.Bsc]: this.createVenusV4Manager(NetworkDto.Bsc, blockchains),
       [NetworkDto.Base]: this.createVenusV4Manager(
         NetworkDto.Base,
         blockchains,

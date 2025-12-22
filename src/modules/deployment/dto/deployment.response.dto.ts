@@ -21,7 +21,7 @@ export class ValidatorLendingMarketDto {
   contract: string;
 }
 
-export class ValidatorSwapAssetDto {
+export class ValidatorSwapAssetResponseDto {
   @ApiProperty({
     description: 'The contract address of the token',
     example: '0x1234567890abcdef',
@@ -151,9 +151,9 @@ export class ValidatorOkxSwapResponseDto {
 
   @ApiProperty({
     description: 'The assets of the protocol',
-    type: [ValidatorSwapAssetDto],
+    type: [ValidatorSwapAssetResponseDto],
   })
-  assets: ValidatorSwapAssetDto[];
+  assets: ValidatorSwapAssetResponseDto[];
 }
 
 export type ValidatorResponseDto =

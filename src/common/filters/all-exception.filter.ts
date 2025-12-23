@@ -10,10 +10,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const req = ctx.getRequest();
-    const { method, originalUrl } = req;
+    const { method, originalUrl, body } = req;
 
     this.logger.error(
-      `[HTTP] ${method} ${originalUrl} ${response.statusCode} failed: ${exception}`,
+      `[HTTP] ${method} ${originalUrl} ${response.statusCode} [${JSON.stringify(body)}] failed: ${exception}`,
       exception instanceof Error ? exception.stack : String,
     );
 

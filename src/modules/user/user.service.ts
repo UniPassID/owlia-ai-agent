@@ -39,7 +39,10 @@ import {
   getNetworkDto,
   NetworkDto,
 } from '../../common/dto/network.dto';
-import { toValidatorResponseDto, ValidatorDto } from './dto/register-user.dto';
+import {
+  RegisterDeploymentDto,
+  toValidatorResponseDto,
+} from './dto/register-user.dto';
 import {
   getUninitializedUserDeploymentResponseDto,
   getUninitializedUserResponseDto,
@@ -275,86 +278,18 @@ export class UserService {
   }
 
   async registerUser(
-    network: NetworkDto,
     owner: string,
-    validators: ValidatorDto[],
-    signature: string,
+    registerDeployments: RegisterDeploymentDto[],
   ): Promise<UserResponseDto> {
-    const chainId = getChainId(network);
     const ownerBuffer = Buffer.from(toBytes(owner as `0x${string}`));
     const user = await this.userRepository.findOne({
       where: {
         owner: ownerBuffer,
       },
     });
+
     if (user) {
-      const deployments = await this.userDeploymentRepository.find({
-        where: {
-          userId: user.id,
-        },
-      });
-      const chainDeploymentIndex = deployments.findIndex(
-        (deployment) => deployment.chainId === chainId,
-      );
-      if (chainDeploymentIndex !== -1) {
-        switch (deployments[chainDeploymentIndex].status) {
-          case UserDeploymentStatus.Uninitialized: {
-            const deploymentConfig =
-              this.deploymentService.getDeploymentConfig(network);
-            if (!deploymentConfig) {
-              throw new NetworkNotSupportedException(network);
-            }
-
-            deploymentConfig.validators = toValidatorResponseDto(
-              network,
-              validators,
-              deploymentConfig.validators,
-            );
-
-            const safe = await this.getUndeployedSafe(
-              owner,
-              deploymentConfig,
-              network,
-            );
-            const transaction = await this.getSetGuardUnsignedTransaction(
-              network,
-              deploymentConfig,
-              safe,
-            );
-            const isValid = await this.verifySignature(
-              owner,
-              safe,
-              transaction,
-              signature,
-            );
-            if (!isValid) {
-              throw new InvalidSignatureException();
-            }
-
-            deployments[chainDeploymentIndex].status =
-              UserDeploymentStatus.PendingDeployment;
-            deployments[chainDeploymentIndex].setGuardSignature = Buffer.from(
-              toBytes(signature),
-            );
-            // 将类实例转换为纯对象，避免 TypeORM JSON 序列化问题
-            deployments[chainDeploymentIndex].validators = JSON.parse(
-              JSON.stringify(validators),
-            );
-            deployments[chainDeploymentIndex].updatedAt = new Date();
-            await this.userDeploymentRepository.save(
-              deployments[chainDeploymentIndex],
-            );
-            return getUserResponseDto(user, deployments, {
-              [network]: deploymentConfig,
-            } as Record<NetworkDto, DeploymentConfigResponseDto>);
-          }
-          case UserDeploymentStatus.PendingDeployment:
-          case UserDeploymentStatus.Deployed:
-            throw new UserAlreadyRegisteredException(owner);
-        }
-      } else {
-        throw new NetworkNotSupportedException(network);
-      }
+      throw new UserAlreadyRegisteredException(owner);
     }
 
     const now = new Date();
@@ -368,94 +303,86 @@ export class UserService {
       this.deploymentService.getDeploymentConfigsRecord();
 
     const deployments = await Promise.all(
-      Object.entries(deploymentConfigs).map(
-        async ([network, deploymentConfig]) => {
-          const networkDto = network as NetworkDto;
-          const currentChainId = getChainId(networkDto);
-          if (currentChainId === chainId) {
-            deploymentConfig.validators = toValidatorResponseDto(
-              networkDto,
-              validators,
-              deploymentConfig.validators,
-            );
-            const safe = await this.getUndeployedSafe(
-              owner,
-              deploymentConfig,
-              networkDto,
-            );
-            const address = await safe.getAddress();
-            const transaction = await this.getSetGuardUnsignedTransaction(
-              networkDto,
-              deploymentConfig,
-              safe,
-            );
-            const isValid = await this.verifySignature(
-              owner,
-              safe,
-              transaction,
-              signature,
-            );
-            if (!isValid) {
-              throw new InvalidSignatureException();
-            }
-
-            const deployment = new UserDeployment();
-            deployment.id = Buffer.from(uuidParse(uuidV7()));
-            deployment.userId = newUser.id;
-            deployment.chainId = currentChainId;
-            deployment.address = Buffer.from(toBytes(address as `0x${string}`));
-            deployment.operator = Buffer.from(
-              toBytes(deploymentConfig.operator as `0x${string}`),
-            );
-            deployment.guard = Buffer.from(
-              toBytes(deploymentConfig.guard as `0x${string}`),
-            );
-            deployment.setGuardSignature = Buffer.from(
-              toBytes(signature as `0x${string}`),
-            );
-            deployment.validators = JSON.parse(JSON.stringify(validators));
-            deployment.status = UserDeploymentStatus.PendingDeployment;
-            deployment.createdAt = now;
-            deployment.updatedAt = now;
-            return deployment;
-          } else {
-            const safe = await this.getUndeployedSafe(
-              owner,
-              deploymentConfig,
-              networkDto,
-            );
-            const address = await safe.getAddress();
-            const deployment = new UserDeployment();
-            deployment.id = Buffer.from(uuidParse(uuidV7()));
-            deployment.userId = newUser.id;
-            deployment.chainId = currentChainId;
-            deployment.address = Buffer.from(toBytes(address as `0x${string}`));
-            deployment.operator = Buffer.from(
-              toBytes(deploymentConfig.operator as `0x${string}`),
-            );
-            deployment.guard = Buffer.from(
-              toBytes(deploymentConfig.guard as `0x${string}`),
-            );
-            deployment.setGuardSignature = null;
-            deployment.validators = null;
-            deployment.status = UserDeploymentStatus.Uninitialized;
-            deployment.createdAt = now;
-            deployment.updatedAt = now;
-            return deployment;
+      registerDeployments.map(async (registerDeployment) => {
+        const deploymentConfig = deploymentConfigs[registerDeployment.network];
+        if (!deploymentConfig) {
+          throw new NetworkNotSupportedException(registerDeployment.network);
+        }
+        if (registerDeployment.signature) {
+          deploymentConfig.validators = toValidatorResponseDto(
+            registerDeployment.network,
+            registerDeployment.validators,
+            deploymentConfig.validators,
+          );
+          const safe = await this.getUndeployedSafe(
+            owner,
+            deploymentConfig,
+            registerDeployment.network,
+          );
+          const address = await safe.getAddress();
+          const transaction = await this.getSetGuardUnsignedTransaction(
+            registerDeployment.network,
+            deploymentConfig,
+            safe,
+          );
+          const isValid = await this.verifySignature(
+            owner,
+            safe,
+            transaction,
+            registerDeployment.signature,
+          );
+          if (!isValid) {
+            throw new InvalidSignatureException();
           }
-        },
-      ),
-    );
 
-    if (
-      deployments.findIndex(
-        (deployment) =>
-          deployment.chainId === chainId &&
-          deployment.status === UserDeploymentStatus.PendingDeployment,
-      ) === -1
-    ) {
-      throw new NetworkNotSupportedException(network);
-    }
+          const deployment = new UserDeployment();
+          deployment.id = Buffer.from(uuidParse(uuidV7()));
+          deployment.userId = newUser.id;
+          deployment.chainId = getChainId(registerDeployment.network);
+          deployment.address = Buffer.from(toBytes(address as `0x${string}`));
+          deployment.operator = Buffer.from(
+            toBytes(deploymentConfig.operator as `0x${string}`),
+          );
+          deployment.guard = Buffer.from(
+            toBytes(deploymentConfig.guard as `0x${string}`),
+          );
+          deployment.setGuardSignature = Buffer.from(
+            toBytes(registerDeployment.signature as `0x${string}`),
+          );
+          deployment.validators = JSON.parse(
+            JSON.stringify(registerDeployment.validators),
+          );
+          deployment.status = UserDeploymentStatus.PendingDeployment;
+          deployment.createdAt = now;
+          deployment.updatedAt = now;
+          return deployment;
+        } else {
+          const safe = await this.getUndeployedSafe(
+            owner,
+            deploymentConfig,
+            registerDeployment.network,
+          );
+          const address = await safe.getAddress();
+          const deployment = new UserDeployment();
+          deployment.id = Buffer.from(uuidParse(uuidV7()));
+          deployment.userId = newUser.id;
+          deployment.chainId = getChainId(registerDeployment.network);
+          deployment.address = Buffer.from(toBytes(address as `0x${string}`));
+          deployment.operator = Buffer.from(
+            toBytes(deploymentConfig.operator as `0x${string}`),
+          );
+          deployment.guard = Buffer.from(
+            toBytes(deploymentConfig.guard as `0x${string}`),
+          );
+          deployment.setGuardSignature = null;
+          deployment.validators = null;
+          deployment.status = UserDeploymentStatus.Uninitialized;
+          deployment.createdAt = now;
+          deployment.updatedAt = now;
+          return deployment;
+        }
+      }),
+    );
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();

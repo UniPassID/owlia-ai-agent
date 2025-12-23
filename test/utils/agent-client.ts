@@ -49,10 +49,14 @@ export class AgentClient {
     const response = await request(this.app)
       .post(`/api/v1/user/register`)
       .send({
-        network,
         owner,
-        validators,
-        signature,
+        deployments: [
+          {
+            network,
+            validators,
+            signature,
+          },
+        ],
       });
     const data = response.body as ResponseDto<UserResponseDto>;
     if (data.code !== ResponseCodeDto.Success) {

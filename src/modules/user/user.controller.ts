@@ -30,12 +30,7 @@ export class UserController {
   @Post('register')
   @ApiOk(UserResponseDto)
   async registerUser(@Body() body: RegisterUserDto): Promise<UserResponseDto> {
-    return this.userService.registerUser(
-      body.network,
-      body.owner,
-      body.validators,
-      body.signature,
-    );
+    return this.userService.registerUser(body.owner, body.deployments);
   }
 
   @Get('portfolio')

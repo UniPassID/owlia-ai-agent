@@ -14,7 +14,7 @@ import { GetTransactionsDto } from './dto/transaction.dto';
 import { UserDeploymentStatus } from '../user/entities/user-deployment.entity';
 import {
   JobNotFoundException,
-  UserNotFoundException,
+  DeploymentNotFoundException,
 } from '../../common/exceptions/base.exception';
 import {
   ExecutionStepDto,
@@ -90,7 +90,7 @@ export class AgentController {
       !deployment ||
       deployment.status === UserDeploymentStatus.Uninitialized
     ) {
-      throw new UserNotFoundException(network, address);
+      throw new DeploymentNotFoundException(network, address);
     }
 
     const page = Math.max(pageParam || 1, 1);
@@ -203,7 +203,7 @@ export class AgentController {
       network,
     );
     if (!deployment) {
-      throw new UserNotFoundException(network, address);
+      throw new DeploymentNotFoundException(network, address);
     }
 
     // Parse pagination params

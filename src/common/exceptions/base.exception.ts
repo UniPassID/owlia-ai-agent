@@ -94,10 +94,16 @@ export class MarketNotSupportedException extends BaseException {
 }
 
 export class UserNotFoundException extends BaseException {
+  constructor(owner: string) {
+    super(ResponseCodeDto.UserNotFound, `User not found for owner: ${owner}`);
+  }
+}
+
+export class DeploymentNotFoundException extends BaseException {
   constructor(network: NetworkDto, address: string) {
     super(
-      ResponseCodeDto.UserNotFound,
-      `User not found for address: ${address} on network ${network}`,
+      ResponseCodeDto.DeploymentNotFound,
+      `Deployment not found for address: ${address} on network ${network}`,
     );
   }
 }
@@ -111,5 +117,14 @@ export class InvalidParameterException extends BaseException {
 export class JobNotFoundException extends BaseException {
   constructor(jobId: string) {
     super(ResponseCodeDto.JobNotFound, `Job not found for ID: ${jobId}`);
+  }
+}
+
+export class UserDeploymentDeploying extends BaseException {
+  constructor() {
+    super(
+      ResponseCodeDto.DeploymentDeploying,
+      `User safe contract is deploying`,
+    );
   }
 }

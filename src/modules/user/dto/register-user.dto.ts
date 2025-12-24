@@ -15,13 +15,7 @@ import {
 } from '../../../common/exceptions/base.exception';
 import { Address } from '../../../common/decorators/address.decorator';
 import { Type } from 'class-transformer';
-import {
-  IsEnum,
-  IsString,
-  IsArray,
-  ValidateNested,
-  IsOptional,
-} from 'class-validator';
+import { IsEnum, IsString, IsArray, ValidateNested } from 'class-validator';
 
 export class ValidatorLendingMarketDto {
   @ApiProperty({
@@ -103,7 +97,7 @@ export type ValidatorDto =
   | ValidatorOkxSwapDto;
 
 @ApiExtraModels(ValidatorAaveV3Dto, ValidatorEulerV2Dto, ValidatorOkxSwapDto)
-export class RegisterDeploymentDto {
+export class DeploymentDto {
   @ApiProperty({
     description: 'The network of the deployment',
     enum: NetworkDto,
@@ -143,9 +137,8 @@ export class RegisterDeploymentDto {
     description: 'The registered signature of the user',
     example: '0x1234567890abcdef',
   })
-  @IsOptional()
   @IsString()
-  signature?: string;
+  signature: string;
 }
 
 export class RegisterUserDto {
@@ -159,11 +152,11 @@ export class RegisterUserDto {
 
   @ApiProperty({
     description: 'The deployments of the user',
-    type: [RegisterDeploymentDto],
+    type: [DeploymentDto],
   })
   @IsArray()
   @ValidateNested({ each: true })
-  deployments: RegisterDeploymentDto[];
+  deployments: DeploymentDto[];
 }
 
 export function toValidatorResponseDto(

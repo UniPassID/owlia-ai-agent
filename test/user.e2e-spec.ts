@@ -22,42 +22,71 @@ describe('UserController (e2e)', () => {
   });
 
   it('Register user on Base should success', async () => {
-    const network = NetworkDto.Base;
     const rpcUrl = context.baseRpcUrl;
     const deploymentConfigs = await context.agentClient.deploymentConfigs();
-    const deploymentConfig = deploymentConfigs.configs.find(
-      (config) => config.network === network,
-    );
-    if (!deploymentConfig) {
-      throw new Error('Deployment config not found');
-    }
+
     const ownerPrivateKey = generatePrivateKey();
     console.log('ownerPrivateKey', ownerPrivateKey);
     const owner = privateKeyToAddress(ownerPrivateKey);
 
     const userResponse = await context.agentClient.registerUserWithOwner(
-      network,
-      deploymentConfig,
-      owner.toLowerCase(),
+      owner,
       ownerPrivateKey,
+      deploymentConfigs.configs,
       rpcUrl,
     );
     console.log('userResponse', JSON.stringify(userResponse, null, 2));
 
     assert.ok(userResponse.deployments.length > 0);
     userResponse.deployments.forEach((deployment) => {
-      if (deployment.network !== network) {
-        assert.equal(deployment.status, UserDeploymentStatusDto.Uninitialized);
-      } else {
-        assert.equal(
-          deployment.status,
-          UserDeploymentStatusDto.PendingDeployment,
-        );
-      }
+      assert.equal(
+        deployment.status,
+        UserDeploymentStatusDto.PendingDeployment,
+      );
     });
 
     const userInfo = await context.agentClient.getUserInfo(owner);
     assert.deepStrictEqual(userInfo, userResponse);
+  });
+
+  it('Update user deployment on Base should success', async () => {
+    const rpcUrl = context.baseRpcUrl;
+    const deploymentConfigs = await context.agentClient.deploymentConfigs();
+
+    const ownerPrivateKey = generatePrivateKey();
+    const owner = privateKeyToAddress(ownerPrivateKey);
+
+    const userResponse = await context.agentClient.registerUserWithOwner(
+      owner,
+      ownerPrivateKey,
+      deploymentConfigs.configs,
+      rpcUrl,
+    );
+    console.log('userResponse', JSON.stringify(userResponse));
+
+    assert.ok(userResponse.deployments.length > 0);
+
+    const newDeploymentConfigs = deploymentConfigs.configs.map(
+      (deploymentConfig) => {
+        deploymentConfig.validators = [];
+        return deploymentConfig;
+      },
+    );
+
+    const userInfo = await context.agentClient.updateUserDeploymentWithOwner(
+      owner,
+      ownerPrivateKey,
+      deploymentConfigs.configs,
+      newDeploymentConfigs,
+      rpcUrl,
+    );
+
+    userInfo.deployments.forEach((deployment) => {
+      assert(deployment.validators?.length === 0);
+    });
+
+    const newUserInfo = await context.agentClient.getUserInfo(owner);
+    assert.deepStrictEqual(userInfo, newUserInfo);
   });
 
   it('Get user portfolio on Base should success', async () => {
@@ -66,17 +95,11 @@ describe('UserController (e2e)', () => {
     const owner = privateKeyToAddress(ownerPrivateKey);
     const rpcUrl = getRpcUrl(context, network);
     const deploymentConfigs = await context.agentClient.deploymentConfigs();
-    const deploymentConfig = deploymentConfigs.configs.find(
-      (config) => config.network === network,
-    );
-    if (!deploymentConfig) {
-      throw new Error('Deployment config not found');
-    }
+
     const userInfo = await context.agentClient.registerUserWithOwner(
-      network,
-      deploymentConfig,
-      owner.toLowerCase(),
+      owner,
       ownerPrivateKey,
+      deploymentConfigs.configs,
       rpcUrl,
     );
     const deploymentInfo = userInfo.deployments.find(
@@ -113,10 +136,9 @@ describe('UserController (e2e)', () => {
       throw new Error('Deployment config not found');
     }
     const userInfo = await context.agentClient.registerUserWithOwner(
-      network,
-      deploymentConfig,
-      owner.toLowerCase(),
+      owner,
       ownerPrivateKey,
+      deploymentConfigs.configs,
       rpcUrl,
     );
     const deploymentInfo = userInfo.deployments.find(

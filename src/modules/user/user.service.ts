@@ -15,19 +15,23 @@ import {
   getAddress,
   toBytes,
   verifyTypedData,
+  zeroAddress,
 } from 'viem';
 
 import {
   InvalidSignatureException,
   NetworkNotSupportedException,
   UserAlreadyRegisteredException,
+  DeploymentNotFoundException,
   UserNotFoundException,
+  UserDeploymentDeploying,
 } from '../../common/exceptions/base.exception';
 import blockchainsConfig from '../../config/blockchains.config';
 import { DeploymentService } from '../deployment/deployment.service';
 import {
   DeploymentConfigResponseDto,
   ValidatorProtocolDto,
+  ValidatorResponseDto,
 } from '../deployment/dto/deployment.response.dto';
 import { AAVE_V3_OWLIA_VALIDATOR_ABI } from '../../abis/aave-v3-owlia-validator.abi';
 import { EULER_V2_OWLIA_VALIDATOR_ABI } from '../../abis/euler-v2-owlia-validator.abi';
@@ -39,10 +43,7 @@ import {
   getNetworkDto,
   NetworkDto,
 } from '../../common/dto/network.dto';
-import {
-  RegisterDeploymentDto,
-  toValidatorResponseDto,
-} from './dto/register-user.dto';
+import { DeploymentDto, toValidatorResponseDto } from './dto/register-user.dto';
 import {
   getUninitializedUserDeploymentResponseDto,
   getUninitializedUserResponseDto,
@@ -51,6 +52,8 @@ import {
 } from './dto/user.response.dto';
 import { User } from './entities/user.entity';
 import {
+  isUserDeploymentDeployed,
+  updateUserDeploymentStatus,
   UserDeployment,
   UserDeploymentStatus,
 } from './entities/user-deployment.entity';
@@ -163,7 +166,7 @@ export class UserService {
       },
     });
     if (!deployment) {
-      throw new UserNotFoundException(network, address);
+      throw new DeploymentNotFoundException(network, address);
     }
     return this.userChainManager[network].getUserPortfolio(
       address,
@@ -185,7 +188,7 @@ export class UserService {
       },
     });
     if (!deployment) {
-      throw new UserNotFoundException(network, address);
+      throw new DeploymentNotFoundException(network, address);
     }
 
     const snapTimes =
@@ -279,7 +282,7 @@ export class UserService {
 
   async registerUser(
     owner: string,
-    registerDeployments: RegisterDeploymentDto[],
+    registerDeployments: DeploymentDto[],
   ): Promise<UserResponseDto> {
     const ownerBuffer = Buffer.from(toBytes(owner as `0x${string}`));
     const user = await this.userRepository.findOne({
@@ -303,84 +306,17 @@ export class UserService {
       this.deploymentService.getDeploymentConfigsRecord();
 
     const deployments = await Promise.all(
-      registerDeployments.map(async (registerDeployment) => {
-        const deploymentConfig = deploymentConfigs[registerDeployment.network];
+      registerDeployments.map(async (deployment) => {
+        const deploymentConfig = deploymentConfigs[deployment.network];
         if (!deploymentConfig) {
-          throw new NetworkNotSupportedException(registerDeployment.network);
+          throw new NetworkNotSupportedException(deployment.network);
         }
-        if (registerDeployment.signature) {
-          deploymentConfig.validators = toValidatorResponseDto(
-            registerDeployment.network,
-            registerDeployment.validators,
-            deploymentConfig.validators,
-          );
-          const safe = await this.getUndeployedSafe(
-            owner,
-            deploymentConfig,
-            registerDeployment.network,
-          );
-          const address = await safe.getAddress();
-          const transaction = await this.getSetGuardUnsignedTransaction(
-            registerDeployment.network,
-            deploymentConfig,
-            safe,
-          );
-          const isValid = await this.verifySignature(
-            owner,
-            safe,
-            transaction,
-            registerDeployment.signature,
-          );
-          if (!isValid) {
-            throw new InvalidSignatureException();
-          }
 
-          const deployment = new UserDeployment();
-          deployment.id = Buffer.from(uuidParse(uuidV7()));
-          deployment.userId = newUser.id;
-          deployment.chainId = getChainId(registerDeployment.network);
-          deployment.address = Buffer.from(toBytes(address as `0x${string}`));
-          deployment.operator = Buffer.from(
-            toBytes(deploymentConfig.operator as `0x${string}`),
-          );
-          deployment.guard = Buffer.from(
-            toBytes(deploymentConfig.guard as `0x${string}`),
-          );
-          deployment.setGuardSignature = Buffer.from(
-            toBytes(registerDeployment.signature as `0x${string}`),
-          );
-          deployment.validators = JSON.parse(
-            JSON.stringify(registerDeployment.validators),
-          );
-          deployment.status = UserDeploymentStatus.PendingDeployment;
-          deployment.createdAt = now;
-          deployment.updatedAt = now;
-          return deployment;
-        } else {
-          const safe = await this.getUndeployedSafe(
-            owner,
-            deploymentConfig,
-            registerDeployment.network,
-          );
-          const address = await safe.getAddress();
-          const deployment = new UserDeployment();
-          deployment.id = Buffer.from(uuidParse(uuidV7()));
-          deployment.userId = newUser.id;
-          deployment.chainId = getChainId(registerDeployment.network);
-          deployment.address = Buffer.from(toBytes(address as `0x${string}`));
-          deployment.operator = Buffer.from(
-            toBytes(deploymentConfig.operator as `0x${string}`),
-          );
-          deployment.guard = Buffer.from(
-            toBytes(deploymentConfig.guard as `0x${string}`),
-          );
-          deployment.setGuardSignature = null;
-          deployment.validators = null;
-          deployment.status = UserDeploymentStatus.Uninitialized;
-          deployment.createdAt = now;
-          deployment.updatedAt = now;
-          return deployment;
-        }
+        return await this.getNewDeploymentEntity(
+          newUser,
+          deploymentConfig,
+          deployment,
+        );
       }),
     );
 
@@ -401,6 +337,240 @@ export class UserService {
       await queryRunner.release();
     }
     return getUserResponseDto(newUser, deployments, deploymentConfigs);
+  }
+
+  async updateDeployment(
+    owner: string,
+    deployments: DeploymentDto[],
+  ): Promise<UserResponseDto> {
+    const user = await this.userRepository.findOne({
+      where: {
+        owner: Buffer.from(toBytes(owner as `0x${string}`)),
+      },
+    });
+    if (!user) {
+      throw new UserNotFoundException(owner);
+    }
+    const deploymentEntities = await this.userDeploymentRepository.find({
+      where: {
+        userId: user.id,
+      },
+    });
+
+    const deploymentConfigs =
+      this.deploymentService.getDeploymentConfigsRecord();
+
+    const updatedDeployments = await Promise.all(
+      deployments.map(async (deployment) => {
+        const deploymentEntity = deploymentEntities.find(
+          (deploymentEntity) =>
+            deploymentEntity.chainId === getChainId(deployment.network),
+        );
+
+        const deploymentConfig = deploymentConfigs[deployment.network];
+        if (!deploymentConfig) {
+          throw new NetworkNotSupportedException(deployment.network);
+        }
+
+        if (deploymentEntity) {
+          return await this.getUpdatingDeploymentEntity(
+            user,
+            deploymentConfig,
+            deploymentEntity,
+            deployment,
+          );
+        } else {
+          return await this.getNewDeploymentEntity(
+            user,
+            deploymentConfig,
+            deployment,
+          );
+        }
+      }),
+    );
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      for (const deployment of updatedDeployments) {
+        await queryRunner.manager.save(UserDeployment, deployment);
+      }
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+
+    const newDeploymentEntities = deploymentEntities.map((deploymentEntity) => {
+      const updatedDeployment = updatedDeployments.find((updatedDeployment) => {
+        return updatedDeployment.id == deploymentEntity.id;
+      });
+      if (updatedDeployment) {
+        return updatedDeployment;
+      } else {
+        return deploymentEntity;
+      }
+    });
+    return getUserResponseDto(user, newDeploymentEntities, deploymentConfigs);
+  }
+
+  async getNewDeploymentEntity(
+    user: User,
+    deploymentConfig: DeploymentConfigResponseDto,
+    deployment: DeploymentDto,
+  ): Promise<UserDeployment> {
+    const owner = fromBytes(user.owner, 'hex');
+    const safe = await this.getUndeployedSafe(
+      owner,
+      deploymentConfig,
+      deployment.network,
+    );
+
+    const validators = toValidatorResponseDto(
+      deployment.network,
+      deployment.validators,
+      deploymentConfig.validators,
+    );
+
+    const address = await safe.getAddress();
+    const transactions: MetaTransactionData[] = [];
+    const setGuardTx = await this.getSetGuardTransaction(
+      deploymentConfig,
+      safe,
+    );
+    if (setGuardTx) {
+      transactions.push(setGuardTx);
+    }
+
+    const validatorTxs = this.getValidatorTransactions(
+      deploymentConfig,
+      [],
+      validators,
+    );
+    transactions.push(...validatorTxs);
+
+    const transaction = await safe.createTransaction({
+      transactions,
+    });
+
+    const isValid = await this.verifySignature(
+      fromBytes(user.owner, 'hex'),
+      safe,
+      transaction,
+      deployment.signature,
+    );
+    if (!isValid) {
+      throw new InvalidSignatureException();
+    }
+
+    const now = new Date();
+    const deploymentEntity = new UserDeployment();
+    deploymentEntity.id = Buffer.from(uuidParse(uuidV7()));
+    deploymentEntity.userId = user.id;
+    deploymentEntity.chainId = getChainId(deploymentConfig.network);
+    deploymentEntity.address = Buffer.from(toBytes(address as `0x${string}`));
+    deploymentEntity.operator = Buffer.from(
+      toBytes(deploymentConfig.operator as `0x${string}`),
+    );
+    deploymentEntity.guard = Buffer.from(
+      toBytes(deploymentConfig.guard as `0x${string}`),
+    );
+    deploymentEntity.signature = Buffer.from(
+      toBytes(deployment.signature as `0x${string}`),
+    );
+    deploymentEntity.validators = JSON.parse(
+      JSON.stringify(deployment.validators),
+    );
+    deploymentEntity.status = UserDeploymentStatus.PendingDeployment;
+    deploymentEntity.createdAt = now;
+    deploymentEntity.updatedAt = now;
+    return deploymentEntity;
+  }
+
+  async getUpdatingDeploymentEntity(
+    user: User,
+    deploymentConfig: DeploymentConfigResponseDto,
+    deploymentEntity: UserDeployment,
+    deployment: DeploymentDto,
+  ): Promise<UserDeployment> {
+    const owner = fromBytes(user.owner, 'hex');
+    const safe = await this.getUndeployedSafe(
+      owner,
+      deploymentConfig,
+      deployment.network,
+    );
+
+    const isDeploymentDeployed = isUserDeploymentDeployed(
+      deploymentEntity.status,
+    );
+
+    let oldValidators: ValidatorResponseDto[] = [];
+
+    if (isDeploymentDeployed) {
+      oldValidators = toValidatorResponseDto(
+        deployment.network,
+        deploymentEntity.validators,
+        deploymentConfig.validators,
+      );
+    }
+
+    const validators = toValidatorResponseDto(
+      deployment.network,
+      deployment.validators,
+      deploymentConfig.validators,
+    );
+
+    const transactions: MetaTransactionData[] = [];
+    const setGuardTx = await this.getSetGuardTransaction(
+      deploymentConfig,
+      safe,
+    );
+    if (setGuardTx) {
+      transactions.push(setGuardTx);
+    } else if (!isDeploymentDeployed) {
+      throw new UserDeploymentDeploying();
+    }
+
+    const validatorTxs = this.getValidatorTransactions(
+      deploymentConfig,
+      oldValidators,
+      validators,
+    );
+    transactions.push(...validatorTxs);
+
+    const transaction = await safe.createTransaction({
+      transactions,
+    });
+
+    const isValid = await this.verifySignature(
+      fromBytes(user.owner, 'hex'),
+      safe,
+      transaction,
+      deployment.signature,
+    );
+    if (!isValid) {
+      throw new InvalidSignatureException();
+    }
+
+    const now = new Date();
+
+    if (isDeploymentDeployed) {
+      deploymentEntity.oldValidators = deploymentEntity.validators;
+    }
+    deploymentEntity.validators = JSON.parse(
+      JSON.stringify(deployment.validators),
+    );
+    deploymentEntity.signature = Buffer.from(
+      toBytes(deployment.signature as `0x${string}`),
+    );
+    deploymentEntity.status = updateUserDeploymentStatus(
+      deploymentEntity.status,
+    );
+    deploymentEntity.updatedAt = now;
+    return deploymentEntity;
   }
 
   async verifySignature(
@@ -457,23 +627,103 @@ export class UserService {
     };
   }
 
-  async getSetGuardUnsignedTransaction(
-    network: NetworkDto,
+  async getSetGuardTransaction(
     deploymentConfig: DeploymentConfigResponseDto,
     safe: Safe,
-  ): Promise<EthSafeTransaction> {
-    const address = await safe.getAddress();
-    const setGuardTx = {
-      to: address,
-      data: encodeFunctionData({
-        abi: SAFE_ABI,
-        functionName: 'setGuard',
-        args: [deploymentConfig.guard],
-      }),
-      value: '0',
-    };
+  ): Promise<MetaTransactionData | undefined> {
+    if (await safe.isSafeDeployed()) {
+      return undefined;
+    } else {
+      const address = await safe.getAddress();
+      const setGuardTx = {
+        to: address,
+        data: encodeFunctionData({
+          abi: SAFE_ABI,
+          functionName: 'setGuard',
+          args: [deploymentConfig.guard],
+        }),
+        value: '0',
+      };
+      return setGuardTx;
+    }
+  }
 
-    const validatorTxs = deploymentConfig.validators.flatMap((validator) => {
+  getValidatorTransactions(
+    deploymentConfig: DeploymentConfigResponseDto,
+    oldValidators: ValidatorResponseDto[],
+    validators: ValidatorResponseDto[],
+  ): MetaTransactionData[] {
+    const clearValidatorTxs = oldValidators.flatMap((validator) => {
+      switch (validator.protocol) {
+        case ValidatorProtocolDto.AaveV3: {
+          const setValidatorTxs = validator.targets.map((target) => ({
+            to: deploymentConfig.guard,
+            data: encodeFunctionData({
+              abi: OWLIA_GUARD_ABI,
+              functionName: 'setValidator',
+              args: [target, zeroAddress],
+            }),
+            value: '0',
+          }));
+          const setAllowedAssetTxs = validator.markets.map((market) => ({
+            to: validator.validator,
+            data: encodeFunctionData({
+              abi: AAVE_V3_OWLIA_VALIDATOR_ABI,
+              functionName: 'setAllowedAsset',
+              args: [market.contract, false],
+            }),
+            value: '0',
+          }));
+
+          return [...setValidatorTxs, ...setAllowedAssetTxs];
+        }
+
+        case ValidatorProtocolDto.EulerV2: {
+          const setValidatorTxs = validator.targets.map((target) => ({
+            to: deploymentConfig.guard,
+            data: encodeFunctionData({
+              abi: OWLIA_GUARD_ABI,
+              functionName: 'setValidator',
+              args: [target, zeroAddress],
+            }),
+            value: '0',
+          }));
+          const setAllowedVaultTxs = validator.markets.map((market) => ({
+            to: validator.validator,
+            data: encodeFunctionData({
+              abi: EULER_V2_OWLIA_VALIDATOR_ABI,
+              functionName: 'setAllowedVault',
+              args: [market.contract, false],
+            }),
+            value: '0',
+          }));
+          return [...setValidatorTxs, ...setAllowedVaultTxs];
+        }
+        case ValidatorProtocolDto.OkxSwap: {
+          const setValidatorTxs = validator.targets.map((target) => ({
+            to: deploymentConfig.guard,
+            data: encodeFunctionData({
+              abi: OWLIA_GUARD_ABI,
+              functionName: 'setValidator',
+              args: [target, zeroAddress],
+            }),
+            value: '0',
+          }));
+          const setAllowedTokenTxs = validator.assets.flatMap((asset) => ({
+            to: validator.validator,
+            data: encodeFunctionData({
+              abi: OKX_SWAP_OWLIA_VALIDATOR_ABI,
+              functionName: 'setAllowedToken',
+              args: [asset.contract, false],
+            }),
+            value: '0',
+          }));
+          return [...setValidatorTxs, ...setAllowedTokenTxs];
+        }
+      }
+    });
+
+    const setValidatorTxs = validators.flatMap((validator) => {
       switch (validator.protocol) {
         case ValidatorProtocolDto.AaveV3: {
           const setValidatorTxs = validator.targets.map((target) => ({
@@ -543,10 +793,7 @@ export class UserService {
       }
     });
 
-    const transaction = await safe.createTransaction({
-      transactions: [setGuardTx, ...validatorTxs],
-    });
-    return transaction;
+    return [...clearValidatorTxs, ...setValidatorTxs];
   }
 
   async getDeploymentByAddress(
@@ -574,7 +821,7 @@ export class UserService {
   }> {
     const deployment = await this.getDeploymentByAddress(address, network);
     if (!deployment) {
-      throw new UserNotFoundException(network, address);
+      throw new DeploymentNotFoundException(network, address);
     }
 
     if (deployment.status === UserDeploymentStatus.Uninitialized) {
@@ -592,7 +839,7 @@ export class UserService {
       throw new Error('Deployment validators are not set');
     }
 
-    if (deployment.setGuardSignature === null) {
+    if (deployment.signature === null) {
       throw new Error('Deployment set guard signature is not set');
     }
 
@@ -602,7 +849,7 @@ export class UserService {
       },
     });
     if (!user) {
-      throw new UserNotFoundException(network, address);
+      throw new DeploymentNotFoundException(network, address);
     }
     const deploymentConfig =
       this.deploymentService.getDeploymentConfig(network);
@@ -612,21 +859,42 @@ export class UserService {
       deploymentConfig,
       network,
     );
-    deploymentConfig.validators = toValidatorResponseDto(
+    const oldValidators = toValidatorResponseDto(
+      network,
+      deployment.oldValidators || [],
+      deploymentConfig.validators,
+    );
+    const validators = toValidatorResponseDto(
       network,
       deployment.validators,
       deploymentConfig.validators,
     );
 
-    const transaction = await this.getSetGuardUnsignedTransaction(
-      network,
+    const transactions: MetaTransactionData[] = [];
+    const setGuardTx = await this.getSetGuardTransaction(
       deploymentConfig,
       safe,
     );
+
+    if (setGuardTx) {
+      transactions.push(setGuardTx);
+    }
+
+    const validatorTxs = await this.getValidatorTransactions(
+      deploymentConfig,
+      oldValidators,
+      validators,
+    );
+    transactions.push(...validatorTxs);
+
+    const transaction = await safe.createTransaction({
+      transactions,
+    });
+
     transaction.addSignature(
       new EthSafeSignature(
         getAddress(fromBytes(user.owner, 'hex')),
-        fromBytes(deployment.setGuardSignature, 'hex'),
+        fromBytes(deployment.signature, 'hex'),
       ),
     );
     const wrappedTransaction =

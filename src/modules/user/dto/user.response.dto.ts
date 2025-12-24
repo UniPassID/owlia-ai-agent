@@ -33,6 +33,8 @@ export function getUserDeploymentStatusDto(
     case UserDeploymentStatus.PendingDeployment:
       return UserDeploymentStatusDto.PendingDeployment;
     case UserDeploymentStatus.Deployed:
+    case UserDeploymentStatus.Updated:
+    case UserDeploymentStatus.Updating:
       return UserDeploymentStatusDto.Deployed;
   }
 }

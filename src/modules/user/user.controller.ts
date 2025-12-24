@@ -12,6 +12,7 @@ import {
   UserPortfolioRequestDto,
   UserPortfoliosRequestDto,
 } from './dto/user-portfolio.dto';
+import { UpdateDeploymentDto } from './dto/update-deployment.dto';
 
 @Controller({
   path: 'user',
@@ -31,6 +32,14 @@ export class UserController {
   @ApiOk(UserResponseDto)
   async registerUser(@Body() body: RegisterUserDto): Promise<UserResponseDto> {
     return this.userService.registerUser(body.owner, body.deployments);
+  }
+
+  @Post('deployment/update')
+  @ApiOk(UserResponseDto)
+  async updateUserDeployment(
+    @Body() body: UpdateDeploymentDto,
+  ): Promise<UserResponseDto> {
+    return this.userService.updateDeployment(body.owner, body.deployments);
   }
 
   @Get('portfolio')

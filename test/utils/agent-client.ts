@@ -11,8 +11,8 @@ import {
   ValidatorProtocolDto,
 } from '../../src/modules/deployment/dto/deployment.response.dto';
 import { UserResponseDto } from '../../src/modules/user/dto/user.response.dto';
-import { ValidatorDto } from '../../src/modules/user/dto/register-user.dto';
-import { encodeFunctionData } from 'viem';
+import { DeploymentDto } from '../../src/modules/user/dto/register-user.dto';
+import { encodeFunctionData, zeroAddress } from 'viem';
 import { OWLIA_GUARD_ABI } from '../../src/abis/owlia-guard.abi';
 import { AAVE_V3_OWLIA_VALIDATOR_ABI } from '../../src/abis/aave-v3-owlia-validator.abi';
 import { EULER_V2_OWLIA_VALIDATOR_ABI } from '../../src/abis/euler-v2-owlia-validator.abi';
@@ -25,6 +25,7 @@ import {
   UserPortfoliosResponseDto,
 } from '../../src/modules/user/dto/user-portfolio.response.dto';
 import { NetworkDto } from '../../src/common/dto/network.dto';
+import { UpdateDeploymentDto } from '../../src/modules/user/dto/update-deployment.dto';
 
 export class AgentClient {
   constructor(private readonly app: App) {}
@@ -41,24 +42,16 @@ export class AgentClient {
   }
 
   async registerUser(
-    network: NetworkDto,
     owner: string,
-    validators: ValidatorDto[],
-    signature: string,
+    deployments: DeploymentDto[],
   ): Promise<UserResponseDto> {
     const response = await request(this.app)
       .post(`/api/v1/user/register`)
       .send({
         owner,
-        deployments: [
-          {
-            network,
-            validators,
-            signature,
-          },
-        ],
+        deployments,
       });
-    const data = response.body as ResponseDto<UserResponseDto>;
+    const data = response.body satisfies ResponseDto<UserResponseDto>;
     if (data.code !== ResponseCodeDto.Success) {
       throw new Error(`Failed to register user: ${data.message}`);
     }
@@ -66,29 +59,38 @@ export class AgentClient {
   }
 
   async registerUserWithOwner(
-    network: NetworkDto,
-    deploymentConfig: DeploymentConfigResponseDto,
     owner: string,
     ownerPrivateKey: string,
+    deploymentConfigs: DeploymentConfigResponseDto[],
     rpcUrl: string,
   ): Promise<UserResponseDto> {
-    const safe = await this.getSafe(
-      deploymentConfig,
-      owner,
-      ownerPrivateKey,
-      rpcUrl,
+    const deployments = await Promise.all(
+      deploymentConfigs.map(async (deploymentConfig) => {
+        const safe = await this.getSafe(
+          deploymentConfig,
+          owner,
+          ownerPrivateKey,
+          rpcUrl,
+        );
+
+        const setGuardTx = await this.setGuardTx(safe, deploymentConfig);
+
+        const validatorTxs = this.getValidatorTxs(deploymentConfig);
+
+        const transaction = await safe.createTransaction({
+          transactions: [setGuardTx, ...validatorTxs],
+        });
+        const signedTransaction = await safe.signTransaction(transaction);
+        const sig = signedTransaction.encodedSignatures();
+        return {
+          network: deploymentConfig.network,
+          validators: deploymentConfig.validators,
+          signature: sig,
+        };
+      }),
     );
 
-    const setGuardTx = await this.setGuardTx(safe, deploymentConfig);
-
-    const validatorTxs = this.getValidatorTxs(deploymentConfig);
-
-    const transaction = await safe.createTransaction({
-      transactions: [setGuardTx, ...validatorTxs],
-    });
-    const signedTransaction = await safe.signTransaction(transaction);
-    const sig = signedTransaction.encodedSignatures();
-    return this.registerUser(network, owner, deploymentConfig.validators, sig);
+    return this.registerUser(owner, deployments);
   }
 
   async getUserPortfolio(
@@ -101,6 +103,73 @@ export class AgentClient {
     const data = response.body as ResponseDto<PortfolioResponseDto>;
     if (data.code !== ResponseCodeDto.Success) {
       throw new Error(`Failed to get user portfolio: ${data.message}`);
+    }
+    return data.data;
+  }
+
+  async updateUserDeploymentWithOwner(
+    owner: string,
+    ownerPrivateKey: string,
+    oldDeploymentConfigs: DeploymentConfigResponseDto[],
+    newDeploymentConfigs: DeploymentConfigResponseDto[],
+    rpcUrl: string,
+  ): Promise<UserResponseDto> {
+    const deployments = await Promise.all(
+      newDeploymentConfigs.map(async (deploymentConfig) => {
+        const safe = await this.getSafe(
+          deploymentConfig,
+          owner,
+          ownerPrivateKey,
+          rpcUrl,
+        );
+
+        const transactions: MetaTransactionData[] = [];
+
+        if (!(await safe.isSafeDeployed())) {
+          const setGuardTx = await this.setGuardTx(safe, deploymentConfig);
+          transactions.push(setGuardTx);
+        }
+
+        const validatorTxs = this.getValidatorTxs(
+          deploymentConfig,
+          oldDeploymentConfigs.find(
+            (oldDeploymentConfig) =>
+              oldDeploymentConfig.network === deploymentConfig.network,
+          ),
+        );
+        transactions.push(...validatorTxs);
+
+        const transaction = await safe.createTransaction({
+          transactions,
+        });
+        const signedTransaction = await safe.signTransaction(transaction);
+        const sig = signedTransaction.encodedSignatures();
+        return {
+          network: deploymentConfig.network,
+          validators: deploymentConfig.validators,
+          signature: sig,
+        };
+      }),
+    );
+
+    return await this.updateUserDeployment(owner, deployments);
+  }
+
+  async updateUserDeployment(
+    owner: string,
+    deployments: DeploymentDto[],
+  ): Promise<UserResponseDto> {
+    const req = {
+      owner,
+      deployments,
+    } satisfies UpdateDeploymentDto;
+
+    const response = await request(this.app)
+      .post(`/api/v1/user/deployment/update`)
+      .send(req);
+    const data = response.body as ResponseDto<UserResponseDto>;
+    if (data.code !== ResponseCodeDto.Success) {
+      throw new Error(`Failed to update user deployment: ${data.message}`);
     }
     return data.data;
   }
@@ -143,76 +212,148 @@ export class AgentClient {
   }
 
   getValidatorTxs(
-    deploymentConfig: DeploymentConfigResponseDto,
+    newDeploymentConfig: DeploymentConfigResponseDto,
+    oldDeploymentConfig?: DeploymentConfigResponseDto,
   ): MetaTransactionData[] {
-    const validatorTxs = deploymentConfig.validators.flatMap((validator) => {
-      switch (validator.protocol) {
-        case ValidatorProtocolDto.AaveV3: {
-          const setValidatorTxs = validator.targets.map((target) => ({
-            to: deploymentConfig.guard,
-            data: encodeFunctionData({
-              abi: OWLIA_GUARD_ABI,
-              functionName: 'setValidator',
-              args: [target, validator.validator],
-            }),
-            value: '0',
-          }));
-          const setAllowedAssetTxs = validator.markets.map((market) => ({
-            to: validator.validator,
-            data: encodeFunctionData({
-              abi: AAVE_V3_OWLIA_VALIDATOR_ABI,
-              functionName: 'setAllowedAsset',
-              args: [market.contract, true],
-            }),
-            value: '0',
-          }));
-          return [...setValidatorTxs, ...setAllowedAssetTxs];
+    const clearValidatorTxs =
+      oldDeploymentConfig?.validators?.flatMap((validator) => {
+        switch (validator.protocol) {
+          case ValidatorProtocolDto.AaveV3: {
+            const clearValidatorTxs = validator.targets.map((target) => ({
+              to: oldDeploymentConfig.guard,
+              data: encodeFunctionData({
+                abi: OWLIA_GUARD_ABI,
+                functionName: 'setValidator',
+                args: [target, zeroAddress],
+              }),
+              value: '0',
+            }));
+            const clearAllowedAssetTxs = validator.markets.map((market) => ({
+              to: validator.validator,
+              data: encodeFunctionData({
+                abi: AAVE_V3_OWLIA_VALIDATOR_ABI,
+                functionName: 'setAllowedAsset',
+                args: [market.contract, false],
+              }),
+              value: '0',
+            }));
+            return [...clearValidatorTxs, ...clearAllowedAssetTxs];
+          }
+          case ValidatorProtocolDto.EulerV2: {
+            const clearValidatorTxs = validator.targets.map((target) => ({
+              to: oldDeploymentConfig.guard,
+              data: encodeFunctionData({
+                abi: OWLIA_GUARD_ABI,
+                functionName: 'setValidator',
+                args: [target, zeroAddress],
+              }),
+              value: '0',
+            }));
+            const clearAllowedVaultTxs = validator.markets.map((market) => ({
+              to: validator.validator,
+              data: encodeFunctionData({
+                abi: EULER_V2_OWLIA_VALIDATOR_ABI,
+                functionName: 'setAllowedVault',
+                args: [market.contract, false],
+              }),
+              value: '0',
+            }));
+            return [...clearValidatorTxs, ...clearAllowedVaultTxs];
+          }
+          case ValidatorProtocolDto.OkxSwap: {
+            const clearValidatorTxs = validator.targets.map((target) => ({
+              to: oldDeploymentConfig.guard,
+              data: encodeFunctionData({
+                abi: OWLIA_GUARD_ABI,
+                functionName: 'setValidator',
+                args: [target, zeroAddress],
+              }),
+              value: '0',
+            }));
+            const clearAllowedAssetTxs = validator.assets.map((asset) => ({
+              to: validator.validator,
+              data: encodeFunctionData({
+                abi: OKX_SWAP_OWLIA_VALIDATOR_ABI,
+                functionName: 'setAllowedToken',
+                args: [asset.contract, false],
+              }),
+              value: '0',
+            }));
+            return [...clearValidatorTxs, ...clearAllowedAssetTxs];
+          }
         }
-        case ValidatorProtocolDto.EulerV2: {
-          const setValidatorTxs = validator.targets.map((target) => ({
-            to: deploymentConfig.guard,
-            data: encodeFunctionData({
-              abi: OWLIA_GUARD_ABI,
-              functionName: 'setValidator',
-              args: [target, validator.validator],
-            }),
-            value: '0',
-          }));
-          const setAllowedVaultTxs = validator.markets.map((market) => ({
-            to: validator.validator,
-            data: encodeFunctionData({
-              abi: EULER_V2_OWLIA_VALIDATOR_ABI,
-              functionName: 'setAllowedVault',
-              args: [market.contract, true],
-            }),
-            value: '0',
-          }));
-          return [...setValidatorTxs, ...setAllowedVaultTxs];
+      }) ?? [];
+
+    const setValidatorTxs = newDeploymentConfig.validators.flatMap(
+      (validator) => {
+        switch (validator.protocol) {
+          case ValidatorProtocolDto.AaveV3: {
+            const setValidatorTxs = validator.targets.map((target) => ({
+              to: newDeploymentConfig.guard,
+              data: encodeFunctionData({
+                abi: OWLIA_GUARD_ABI,
+                functionName: 'setValidator',
+                args: [target, validator.validator],
+              }),
+              value: '0',
+            }));
+            const setAllowedAssetTxs = validator.markets.map((market) => ({
+              to: validator.validator,
+              data: encodeFunctionData({
+                abi: AAVE_V3_OWLIA_VALIDATOR_ABI,
+                functionName: 'setAllowedAsset',
+                args: [market.contract, true],
+              }),
+              value: '0',
+            }));
+            return [...setValidatorTxs, ...setAllowedAssetTxs];
+          }
+          case ValidatorProtocolDto.EulerV2: {
+            const setValidatorTxs = validator.targets.map((target) => ({
+              to: newDeploymentConfig.guard,
+              data: encodeFunctionData({
+                abi: OWLIA_GUARD_ABI,
+                functionName: 'setValidator',
+                args: [target, validator.validator],
+              }),
+              value: '0',
+            }));
+            const setAllowedVaultTxs = validator.markets.map((market) => ({
+              to: validator.validator,
+              data: encodeFunctionData({
+                abi: EULER_V2_OWLIA_VALIDATOR_ABI,
+                functionName: 'setAllowedVault',
+                args: [market.contract, true],
+              }),
+              value: '0',
+            }));
+            return [...setValidatorTxs, ...setAllowedVaultTxs];
+          }
+          case ValidatorProtocolDto.OkxSwap: {
+            const setValidatorTxs = validator.targets.map((target) => ({
+              to: newDeploymentConfig.guard,
+              data: encodeFunctionData({
+                abi: OWLIA_GUARD_ABI,
+                functionName: 'setValidator',
+                args: [target, validator.validator],
+              }),
+              value: '0',
+            }));
+            const setAllowedAssetTxs = validator.assets.map((asset) => ({
+              to: validator.validator,
+              data: encodeFunctionData({
+                abi: OKX_SWAP_OWLIA_VALIDATOR_ABI,
+                functionName: 'setAllowedToken',
+                args: [asset.contract, true],
+              }),
+              value: '0',
+            }));
+            return [...setValidatorTxs, ...setAllowedAssetTxs];
+          }
         }
-        case ValidatorProtocolDto.OkxSwap: {
-          const setValidatorTxs = validator.targets.map((target) => ({
-            to: deploymentConfig.guard,
-            data: encodeFunctionData({
-              abi: OWLIA_GUARD_ABI,
-              functionName: 'setValidator',
-              args: [target, validator.validator],
-            }),
-            value: '0',
-          }));
-          const setAllowedAssetTxs = validator.assets.map((asset) => ({
-            to: validator.validator,
-            data: encodeFunctionData({
-              abi: OKX_SWAP_OWLIA_VALIDATOR_ABI,
-              functionName: 'setAllowedToken',
-              args: [asset.contract, true],
-            }),
-            value: '0',
-          }));
-          return [...setValidatorTxs, ...setAllowedAssetTxs];
-        }
-      }
-    });
-    return validatorTxs;
+      },
+    );
+    return [...clearValidatorTxs, ...setValidatorTxs];
   }
 
   async getSafe(

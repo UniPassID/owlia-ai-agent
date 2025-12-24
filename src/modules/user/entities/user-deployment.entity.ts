@@ -22,15 +22,17 @@ export class UserDeployment {
   @Column('varbinary', { name: 'guard', length: 32 })
   guard: Buffer;
 
-  @Column('json', { name: 'validators', nullable: true })
-  validators: ValidatorDto[] | null;
+  @Column('json', { name: 'oldValidators' })
+  oldValidators: ValidatorDto[] | null;
+
+  @Column('json', { name: 'validators' })
+  validators: ValidatorDto[];
 
   @Column('varbinary', {
-    name: 'setGuardSignature',
+    name: 'signature',
     length: 128,
-    nullable: true,
   })
-  setGuardSignature: Buffer | null;
+  signature: Buffer;
 
   @Column('tinyint', { name: 'status' })
   status: UserDeploymentStatus;
@@ -46,4 +48,37 @@ export enum UserDeploymentStatus {
   Uninitialized = 0,
   PendingDeployment = 1,
   Deployed = 2,
+  Updating = 3,
+  Updated = 4,
+}
+
+export function isUserDeploymentDeployed(
+  status: UserDeploymentStatus,
+): boolean {
+  switch (status) {
+    case UserDeploymentStatus.Deployed:
+    case UserDeploymentStatus.Updated:
+    case UserDeploymentStatus.Updating: {
+      return true;
+    }
+    case UserDeploymentStatus.PendingDeployment:
+    case UserDeploymentStatus.Uninitialized: {
+      return false;
+    }
+  }
+}
+
+export function updateUserDeploymentStatus(
+  status: UserDeploymentStatus,
+): UserDeploymentStatus {
+  switch (status) {
+    case UserDeploymentStatus.Uninitialized:
+      return UserDeploymentStatus.PendingDeployment;
+    case UserDeploymentStatus.Deployed:
+    case UserDeploymentStatus.Updated:
+      return UserDeploymentStatus.Updating;
+    case UserDeploymentStatus.Updating:
+    case UserDeploymentStatus.PendingDeployment:
+      return status;
+  }
 }

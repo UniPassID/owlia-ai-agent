@@ -1,4 +1,10 @@
-import { ExceptionFilter, Catch, ArgumentsHost, Logger } from '@nestjs/common';
+import {
+  ExceptionFilter,
+  Catch,
+  ArgumentsHost,
+  Logger,
+  HttpException,
+} from '@nestjs/common';
 import { Response } from 'express';
 import { BaseException, UnknownException } from '../exceptions/base.exception';
 
@@ -12,8 +18,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const req = ctx.getRequest();
     const { method, originalUrl, body } = req;
 
+    const exceptionMessage =
+      exception instanceof HttpException
+        ? JSON.stringify(exception.getResponse())
+        : '';
     this.logger.error(
-      `[HTTP] ${method} ${originalUrl} ${response.statusCode} [${JSON.stringify(body)}] failed: ${exception}`,
+      `[HTTP] ${method} ${originalUrl} ${response.statusCode} [${JSON.stringify(body)}] failed: ${exception} ${exceptionMessage}`,
       exception instanceof Error ? exception.stack : String,
     );
 

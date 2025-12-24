@@ -125,17 +125,22 @@ export class AgentClient {
 
         const transactions: MetaTransactionData[] = [];
 
-        if (!(await safe.isSafeDeployed())) {
+        const isDeployed = await safe.isSafeDeployed();
+        let oldDeploymentConfig: DeploymentConfigResponseDto | undefined =
+          undefined;
+        if (isDeployed) {
+          oldDeploymentConfig = oldDeploymentConfigs.find(
+            (oldDeploymentConfig) =>
+              oldDeploymentConfig.network === deploymentConfig.network,
+          );
+        } else {
           const setGuardTx = await this.setGuardTx(safe, deploymentConfig);
           transactions.push(setGuardTx);
         }
 
         const validatorTxs = this.getValidatorTxs(
           deploymentConfig,
-          oldDeploymentConfigs.find(
-            (oldDeploymentConfig) =>
-              oldDeploymentConfig.network === deploymentConfig.network,
-          ),
+          oldDeploymentConfig,
         );
         transactions.push(...validatorTxs);
 

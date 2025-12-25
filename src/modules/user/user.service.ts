@@ -71,10 +71,7 @@ import {
 import { Cron } from '@nestjs/schedule';
 import { UserPortfolio } from './entities/user-portfolio.entity';
 import { UserPortfoliosRequestDto } from './dto/user-portfolio.dto';
-import { UniswapV3Service } from '../dexes/uniswap-v3/uniswap-v3.service';
-import { VenusV4Service } from '../dexes/venus-v4/venus-v4.service';
 import { EulerV2Service } from '../dexes/euler-v2/euler-v2.service';
-import { AerodromeClService } from '../dexes/aerodrome-cl/aerodrome-cl.service';
 import { AaveV3Service } from '../dexes/aave-v3/aave-v3.service';
 import { TrackerService } from '../tracker/tracker.service';
 import { OKX_SWAP_OWLIA_VALIDATOR_ABI } from '../../abis/okx-swap-owlia-validator.abi';
@@ -95,10 +92,7 @@ export class UserService {
     private userPortfolioRepository: Repository<UserPortfolio>,
     private deploymentService: DeploymentService,
     private aaveV3Service: AaveV3Service,
-    private aerodromeCLService: AerodromeClService,
     private eulerV2Service: EulerV2Service,
-    private venusV4Service: VenusV4Service,
-    private uniswapV3Service: UniswapV3Service,
     private trackerService: TrackerService,
     @Inject(blockchainsConfig.KEY)
     blockchains: ConfigType<typeof blockchainsConfig>,
@@ -113,11 +107,8 @@ export class UserService {
         NetworkDto.Base,
         base_rpc_urls,
         this.trackerService,
-        this.uniswapV3Service,
-        this.aerodromeCLService,
         this.aaveV3Service,
         this.eulerV2Service,
-        this.venusV4Service,
       ),
     };
   }

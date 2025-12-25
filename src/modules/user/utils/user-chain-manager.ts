@@ -27,11 +27,8 @@ import {
 import request, { gql } from 'graphql-request';
 import { TokenPricesResponseDto } from '../../tracker/dto/token-price.response';
 import { TrackerService } from '../../tracker/tracker.service';
-import { UniswapV3Service } from '../../dexes/uniswap-v3/uniswap-v3.service';
-import { AerodromeClService } from '../../dexes/aerodrome-cl/aerodrome-cl.service';
 import { AaveV3Service } from '../../dexes/aave-v3/aave-v3.service';
 import { EulerV2Service } from '../../dexes/euler-v2/euler-v2.service';
-import { VenusV4Service } from '../../dexes/venus-v4/venus-v4.service';
 
 export class UserChainManager {
   public readonly allowedTokens: TokenInfo[];
@@ -44,11 +41,8 @@ export class UserChainManager {
     private readonly network: NetworkDto,
     private readonly rpcUrls: string[],
     private readonly trackerService: TrackerService,
-    private readonly uniswapV3Service: UniswapV3Service,
-    private readonly aerodromeCLService: AerodromeClService,
     private readonly aaveV3Service: AaveV3Service,
     private readonly eulerV2Service: EulerV2Service,
-    private readonly venusV4Service: VenusV4Service,
   ) {
     this.allowedTokens = DEFAULT_TOKENS[network];
 
@@ -148,35 +142,17 @@ export class UserChainManager {
     });
 
     const [
-      uniswapV3Portfolio,
-      aerodromeCLPortfolio,
       aaveV3Portfolio,
       eulerV2Portfolio,
-      venusV4Portfolio,
       walletPortfolio,
       netDepositUsdResponse,
     ] = await Promise.all([
-      this.uniswapV3Service.getUserUniswapV3Portfolio(
-        this.network,
-        account,
-        tokenPrices,
-      ),
-      this.aerodromeCLService.getUserAerodromeCLPortfolio(
-        this.network,
-        account,
-        tokenPrices,
-      ),
       this.aaveV3Service.getUserAaveV3Portfolio(
         this.network,
         account,
         tokenPrices,
       ),
       this.eulerV2Service.getUserEulerV2Portfolio(
-        this.network,
-        account,
-        tokenPrices,
-      ),
-      this.venusV4Service.getUserVenusV4Portfolio(
         this.network,
         account,
         tokenPrices,
@@ -189,11 +165,8 @@ export class UserChainManager {
       .reduce((acc, wallet) => {
         return acc.add(new Decimal(wallet.amountUsd));
       }, new Decimal(0))
-      .add(uniswapV3Portfolio?.netUsd ?? 0)
-      .add(aerodromeCLPortfolio?.netUsd ?? 0)
       .add(aaveV3Portfolio?.netUsd ?? 0)
-      .add(eulerV2Portfolio?.netUsd ?? 0)
-      .add(venusV4Portfolio?.netUsd ?? 0);
+      .add(eulerV2Portfolio?.netUsd ?? 0);
 
     const netDepositUsd =
       netDepositUsdResponse === null
@@ -205,31 +178,19 @@ export class UserChainManager {
     }, new Decimal(0));
 
     const assetUsd = walletUsd
-      .add(uniswapV3Portfolio?.assetUsd ?? 0)
-      .add(aerodromeCLPortfolio?.assetUsd ?? 0)
       .add(aaveV3Portfolio?.assetUsd ?? 0)
-      .add(eulerV2Portfolio?.assetUsd ?? 0)
-      .add(venusV4Portfolio?.assetUsd ?? 0);
+      .add(eulerV2Portfolio?.assetUsd ?? 0);
 
     const defiUsd = new Decimal(0)
-      .add(uniswapV3Portfolio?.assetUsd ?? 0)
-      .add(aerodromeCLPortfolio?.assetUsd ?? 0)
       .add(aaveV3Portfolio?.assetUsd ?? 0)
-      .add(eulerV2Portfolio?.assetUsd ?? 0)
-      .add(venusV4Portfolio?.assetUsd ?? 0);
+      .add(eulerV2Portfolio?.assetUsd ?? 0);
 
     const debtUsd = new Decimal(0)
-      .add(uniswapV3Portfolio?.debtUsd ?? 0)
-      .add(aerodromeCLPortfolio?.debtUsd ?? 0)
       .add(aaveV3Portfolio?.debtUsd ?? 0)
-      .add(eulerV2Portfolio?.debtUsd ?? 0)
-      .add(venusV4Portfolio?.debtUsd ?? 0);
+      .add(eulerV2Portfolio?.debtUsd ?? 0);
     const claimableUsd = new Decimal(0)
-      .add(uniswapV3Portfolio?.claimableUsd ?? 0)
-      .add(aerodromeCLPortfolio?.claimableUsd ?? 0)
       .add(aaveV3Portfolio?.claimableUsd ?? 0)
-      .add(eulerV2Portfolio?.claimableUsd ?? 0)
-      .add(venusV4Portfolio?.claimableUsd ?? 0);
+      .add(eulerV2Portfolio?.claimableUsd ?? 0);
 
     return {
       meta: {
@@ -259,13 +220,9 @@ export class UserChainManager {
         {} as Record<string, PortfolioTokenResponseDto>,
       ),
       wallet: walletPortfolio.wallet,
-      protocols: [
-        uniswapV3Portfolio,
-        aerodromeCLPortfolio,
-        aaveV3Portfolio,
-        eulerV2Portfolio,
-        venusV4Portfolio,
-      ].filter((protocol) => protocol !== undefined),
+      protocols: [aaveV3Portfolio, eulerV2Portfolio].filter(
+        (protocol) => protocol !== undefined,
+      ),
     };
   }
 }

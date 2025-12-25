@@ -1,13 +1,22 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { NetworkDto } from '../../../common/dto/network.dto';
 import { Address } from '../../../common/decorators/address.decorator';
-import { IsArray, IsInt, IsOptional, Max, Min } from 'class-validator';
+import {
+  IsArray,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+} from 'class-validator';
 
 export class UserPortfolioRequestDto {
   @ApiProperty({
     description: 'The network of the user portfolio',
     enum: NetworkDto,
   })
+  @IsEnum(NetworkDto)
   network: NetworkDto;
 
   @ApiProperty({
@@ -15,6 +24,7 @@ export class UserPortfolioRequestDto {
     example: '0x1234567890abcdef',
   })
   @Address()
+  @IsString()
   address: string;
 }
 
@@ -23,6 +33,7 @@ export class UserPortfoliosRequestDto {
     description: 'The network of the user portfolio',
     enum: NetworkDto,
   })
+  @IsEnum(NetworkDto)
   network: NetworkDto;
 
   @ApiProperty({
@@ -30,6 +41,7 @@ export class UserPortfoliosRequestDto {
     example: '0x1234567890abcdef',
   })
   @Address()
+  @IsString()
   address: string;
 
   @ApiPropertyOptional({

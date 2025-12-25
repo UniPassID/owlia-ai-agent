@@ -9,10 +9,7 @@ import { ConfigModule } from '@nestjs/config';
 import { UserPortfolio } from './entities/user-portfolio.entity';
 import { ScheduleModule } from '@nestjs/schedule';
 import { AaveV3Module } from '../dexes/aave-v3/aave-v3.module';
-import { AerodromeClModule } from '../dexes/aerodrome-cl/aerodrome-cl.module';
 import { EulerV2Module } from '../dexes/euler-v2/euler-v2.module';
-import { VenusV4Module } from '../dexes/venus-v4/venus-v4.module';
-import { UniswapV3Module } from '../dexes/uniswap-v3/uniswap-v3.module';
 import { TrackerModule } from '../tracker/tracker.module';
 
 @Module({
@@ -24,10 +21,7 @@ import { TrackerModule } from '../tracker/tracker.module';
     ConfigModule,
     ScheduleModule,
     AaveV3Module,
-    AerodromeClModule,
     EulerV2Module,
-    VenusV4Module,
-    UniswapV3Module,
     TrackerModule,
   ],
   exports: [UserService],

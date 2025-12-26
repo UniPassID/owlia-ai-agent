@@ -46,7 +46,7 @@ export class UserPortfoliosRequestDto {
 
   @ApiPropertyOptional({
     description: 'The snap time of the user portfolio',
-    example: '2021-01-01T00:00:00.000Z',
+    example: ['1716153600000', '1716153600000'],
   })
   @IsOptional()
   @IsArray()

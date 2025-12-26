@@ -195,7 +195,12 @@ export class UserService {
       take: limit,
     });
     return {
-      portfolios: portfolios.map((portfolio) => portfolio.data),
+      portfolios: portfolios.map((portfolio) => {
+        return {
+          ...portfolio.data,
+          timestampMs: portfolio.snapTime.getTime().toString(),
+        };
+      }),
     };
   }
 

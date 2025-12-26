@@ -5,6 +5,7 @@ import { AerodromeCLProtocolBlockResponseDto } from '../../dexes/aerodrome-cl/dt
 import { AaveV3ProtocolBlockResponseDto } from '../../dexes/aave-v3/dto/aave-v3.response.dto';
 import { EulerV2ProtocolBlockResponseDto } from '../../dexes/euler-v2/dto/euler-v2.response.dto';
 import { VenusV4ProtocolBlockResponseDto } from '../../dexes/venus-v4/dto/venus-v4.response.dto';
+import { IsOptional, IsString } from 'class-validator';
 
 export class PortfolioMetaResponseDto {
   @ApiProperty({
@@ -171,6 +172,14 @@ export class PortfolioResponseDto {
     ],
   })
   protocols: ProtocolBlockResponseDto[];
+
+  @ApiProperty({
+    description: 'The timestamp in milliseconds of the portfolio',
+    example: '1716153600000',
+  })
+  @IsOptional()
+  @IsString()
+  timestampMs?: string;
 }
 
 export class UserPortfoliosResponseDto {

@@ -73,3 +73,11 @@ export const VENUS_V4_COMPTROLLER_ADDRESS: Record<
 export const VENUS_V4_LENS_ADDRESS: Record<NetworkDto, string | undefined> = {
   [NetworkDto.Base]: undefined,
 };
+
+export const COMPOUND_V3_COMET_ADDRESS: Record<NetworkDto, string> = {
+  [NetworkDto.Base]: '0xb125E6687d4313864e53df431d5425969c15Eb2F',
+};
+
+export const MORPHO_ADDRESS: Record<NetworkDto, string> = {
+  [NetworkDto.Base]: '0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb',
+};

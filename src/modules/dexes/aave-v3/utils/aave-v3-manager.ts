@@ -37,8 +37,8 @@ type ReserveData = ContractFunctionReturnType<
 >;
 
 export class AaveV3Manager {
-  aavePoolAddress: string;
-  aaveDataProviderAddress: string;
+  public readonly aavePoolAddress: string;
+  public readonly aaveDataProviderAddress: string;
 
   private readonly client: PublicClient;
   private readonly logger: Logger = new Logger(AaveV3Manager.name);

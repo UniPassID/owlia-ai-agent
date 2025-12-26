@@ -9,6 +9,8 @@ import { OwliaGuardController } from './owlia-guard.controller';
 import { UserModule } from '../user/user.module';
 import { ConfigModule } from '@nestjs/config';
 import { TrackerModule } from '../tracker/tracker.module';
+import { CompoundV3Module } from '../dexes/compound-v3/compound-v3.module';
+import { MorphoModule } from '../dexes/morpho/morpho.module';
 
 @Module({
   providers: [OwliaGuardService],
@@ -21,6 +23,8 @@ import { TrackerModule } from '../tracker/tracker.module';
     UserModule,
     ConfigModule,
     TrackerModule,
+    CompoundV3Module,
+    MorphoModule,
   ],
   controllers: [OwliaGuardController],
   exports: [OwliaGuardService],

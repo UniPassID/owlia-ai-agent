@@ -31,6 +31,8 @@ import {
   ProtocolType,
   TargetLiquidityPosition,
 } from '../agent/types/mcp.types';
+import { CompoundV3Service } from '../dexes/compound-v3/compound-v3.service';
+import { MorphoService } from '../dexes/morpho/morpho.service';
 
 @Injectable()
 export class OwliaGuardService {
@@ -47,6 +49,8 @@ export class OwliaGuardService {
     private readonly eulerV2Service: EulerV2Service,
     private readonly venusV4Service: VenusV4Service,
     private readonly uniswapV3Service: UniswapV3Service,
+    private readonly compoundV3Service: CompoundV3Service,
+    private readonly morphoService: MorphoService,
     private readonly trackerService: TrackerService,
     @Inject(privateConfig.KEY)
     _privateConfig: ConfigType<typeof privateConfig>,
@@ -61,6 +65,8 @@ export class OwliaGuardService {
         this.eulerV2Service,
         this.venusV4Service,
         this.uniswapV3Service,
+        this.compoundV3Service,
+        this.morphoService,
         this.kyberSwapClient,
         this.userService,
         _privateConfig.privateKey,

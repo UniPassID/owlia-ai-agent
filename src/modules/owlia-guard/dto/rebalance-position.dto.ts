@@ -9,6 +9,17 @@ export enum LendingProtocolDto {
   Aave = 'aave',
   Euler = 'euler',
   Venus = 'venus',
+  Compound = 'compound',
+  Morpho = 'morpho',
+  Moonwell = 'moonwell',
+}
+
+export class MarketParamsDto {
+  loanToken: string;
+  collateralToken: string;
+  oracle: string;
+  irm: string;
+  lltv: number;
 }
 
 export class RebalancePositionDto {
@@ -24,6 +35,7 @@ export class RebalancePositionDto {
     protocol: LendingProtocolDto;
     token: string;
     vToken?: string | null;
+    marketParams?: MarketParamsDto | null;
     amount: string;
   }[];
   currentLiquidityPositions: {
@@ -43,6 +55,7 @@ export class RebalancePositionDto {
     protocol: LendingProtocolDto;
     token: string;
     vToken?: string | null;
+    marketParams?: MarketParamsDto | null;
     amount: string;
   }[];
 }

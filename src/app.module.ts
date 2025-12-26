@@ -19,6 +19,10 @@ import { TrackerModule } from './modules/tracker/tracker.module';
 import privateConfig from './config/private.config';
 import { MonitorModule } from './modules/monitor/monitor.module';
 import { AgentModule } from './modules/agent/agent.module';
+import { CompoundV3Module } from './modules/dexes/compound-v3/compound-v3.module';
+import { MorphoModule } from './modules/dexes/morpho/morpho.module';
+import { MoonwellService } from './modules/dexes/moonwell/moonwell.service';
+import { MoonwellModule } from './modules/dexes/moonwell/moonwell.module';
 import protocolConfig from './config/protocol.config';
 
 @Module({
@@ -62,8 +66,11 @@ import protocolConfig from './config/protocol.config';
     TrackerModule,
     AgentModule,
     MonitorModule,
+    CompoundV3Module,
+    MorphoModule,
+    MoonwellModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, MoonwellService],
 })
 export class AppModule {}

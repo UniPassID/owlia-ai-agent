@@ -4,7 +4,7 @@ import {
   AddressOptional,
 } from '../../../common/decorators/address.decorator';
 import { Type } from 'class-transformer';
-import { LendingProtocolDto } from './rebalance-position.dto';
+import { LendingProtocolDto, MarketParamsDto } from './rebalance-position.dto';
 
 export enum ActionTypeDto {
   Swap = 'Swap',
@@ -67,6 +67,18 @@ export class RebalanceActionDto {
   })
   @AddressOptional()
   tokenApprovalAddress?: string;
+
+  @ApiProperty({
+    description: 'The market params',
+    example: {
+      loanToken: '0x1234567890123456789012345678901234567890',
+      collateralToken: '0x1234567890123456789012345678901234567890',
+      oracle: '0x1234567890123456789012345678901234567890',
+      irm: '0x1234567890123456789012345678901234567890',
+      lltv: 2,
+    },
+  })
+  marketParams?: MarketParamsDto;
 }
 
 export enum BurnActionTypeDto {

@@ -2,13 +2,11 @@ import {
   Address,
   Chain,
   createWalletClient,
-  encodeAbiParameters,
   encodeFunctionData,
   getAddress,
   http,
   maxUint128,
   maxUint256,
-  parseAbiParameters,
   WalletClient,
 } from 'viem';
 import { Logger } from '@nestjs/common';
@@ -57,6 +55,11 @@ import { VENUS_V4_VTOKEN_ABI } from '../../../abis/venus-v4-vtoken.abi';
 import { VENUS_V4_COMPTROLLER_ABI } from '../../../abis/venus-v4-comptroller.abi';
 import { UNISWAP_V3_NONFUNGIBLE_POSITION_MANAGER_ABI } from '../../../abis/uniswap-v3-nonfungible-position-manager.abi';
 import { AERODROME_CL_NONFUNGIBLE_POSITION_MANAGER_ABI } from '../../../abis/aerodrome-cl-nonfungible-position-manager.abi';
+import { CompoundV3Service } from '../../dexes/compound-v3/compound-v3.service';
+import { COMPOUND_V3_COMET_ABI } from '../../../abis/compound-v3-comet.abi';
+import { MorphoService } from '../../dexes/morpho/morpho.service';
+import { MORPHO_ABI } from '../../../abis/morpho.abi';
+import { MOONWELL_MTOKEN_ABI } from '../../../abis/moonwell-mtoken.abi';
 
 export class OwliaGuardManager {
   logger = new Logger(OwliaGuardManager.name);
@@ -72,6 +75,8 @@ export class OwliaGuardManager {
     private readonly eulerV2Service: EulerV2Service,
     private readonly venusV4Service: VenusV4Service,
     private readonly uniswapV3Service: UniswapV3Service,
+    private readonly compoundV3Service: CompoundV3Service,
+    private readonly morphoService: MorphoService,
     private readonly kyberSwapClient: KyberSwapClient,
     private readonly userService: UserService,
     privateKey: string,
@@ -140,6 +145,26 @@ export class OwliaGuardManager {
       throw new Error(
         `Aerodrome CL non-fungible position manager address not found for network: ${this.network}`,
       );
+    }
+    return address;
+  }
+
+  getCompoundV3CometAddress(): string {
+    const address = this.compoundV3Service.getCompoundV3CometAddress(
+      this.network,
+    );
+    if (!address) {
+      throw new Error(
+        `Compound V3 comet address not found for network: ${this.network}`,
+      );
+    }
+    return address;
+  }
+
+  getMorphoAddress(): string {
+    const address = this.morphoService.getMorphoAddress(this.network);
+    if (!address) {
+      throw new Error(`Morpho address not found for network: ${this.network}`);
     }
     return address;
   }
@@ -285,6 +310,103 @@ export class OwliaGuardManager {
                   txs.push(batchTx);
                   return txs;
                 }
+                case LendingProtocolDto.Compound: {
+                  const txs: MetaTransactionData[] = [];
+                  const amount = BigInt(route.amount);
+                  const cometAddress = this.getCompoundV3CometAddress();
+                  const approveTxData = encodeFunctionData({
+                    abi: ERC20_ABI,
+                    functionName: 'approve',
+                    args: [cometAddress, amount],
+                  });
+                  txs.push({
+                    data: approveTxData,
+                    to: route.tokenA,
+                    value: '0',
+                  });
+                  const depositTxData = encodeFunctionData({
+                    abi: COMPOUND_V3_COMET_ABI,
+                    functionName: 'supply',
+                    args: [route.tokenA, amount],
+                  });
+                  txs.push({
+                    data: depositTxData,
+                    to: cometAddress,
+                    value: '0',
+                  });
+                  return txs;
+                }
+                case LendingProtocolDto.Morpho: {
+                  const txs: MetaTransactionData[] = [];
+                  const amount = BigInt(route.amount);
+
+                  const approveTxData = encodeFunctionData({
+                    abi: ERC20_ABI,
+                    functionName: 'approve',
+                    args: [this.getMorphoAddress(), amount],
+                  });
+
+                  txs.push({
+                    data: approveTxData,
+                    to: route.tokenA,
+                    value: '0',
+                  });
+
+                  if (!route.marketParams) {
+                    throw new Error(
+                      `Market params not found for protocol: ${route.protocol}`,
+                    );
+                  }
+
+                  const supplyTxData = encodeFunctionData({
+                    abi: MORPHO_ABI,
+                    functionName: 'supply',
+                    args: [
+                      {
+                        loanToken: route.marketParams.loanToken,
+                        collateralToken: route.tokenB,
+                        oracle: route.marketParams.oracle,
+                        irm: route.marketParams.irm,
+                        lltv: BigInt(route.marketParams.lltv),
+                      },
+                      amount,
+                      0n,
+                      address,
+                      '0x',
+                    ],
+                  });
+                  txs.push({
+                    data: supplyTxData,
+                    to: this.getMorphoAddress(),
+                    value: '0',
+                  });
+                  return txs;
+                }
+                case LendingProtocolDto.Moonwell: {
+                  const txs: MetaTransactionData[] = [];
+                  const amount = BigInt(route.amount);
+                  const approveTxData = encodeFunctionData({
+                    abi: ERC20_ABI,
+                    functionName: 'approve',
+                    args: [route.tokenB, amount],
+                  });
+                  txs.push({
+                    data: approveTxData,
+                    to: route.tokenA,
+                    value: '0',
+                  });
+                  const supplyTxData = encodeFunctionData({
+                    abi: MOONWELL_MTOKEN_ABI,
+                    functionName: 'mint',
+                    args: [amount],
+                  });
+                  txs.push({
+                    data: supplyTxData,
+                    to: route.tokenB,
+                    value: '0',
+                  });
+                  return txs;
+                }
               }
             }
             case ActionTypeDto.Withdraw: {
@@ -350,6 +472,68 @@ export class OwliaGuardManager {
                   };
 
                   txs.push(withdrawTx);
+                  return txs;
+                }
+                case LendingProtocolDto.Compound: {
+                  const txs: MetaTransactionData[] = [];
+                  const amount = BigInt(route.amount);
+                  const withdrawTxData = encodeFunctionData({
+                    abi: COMPOUND_V3_COMET_ABI,
+                    functionName: 'withdraw',
+                    args: [route.tokenA, amount],
+                  });
+                  txs.push({
+                    data: withdrawTxData,
+                    to: this.getCompoundV3CometAddress(),
+                    value: '0',
+                  });
+                  return txs;
+                }
+                case LendingProtocolDto.Morpho: {
+                  const txs: MetaTransactionData[] = [];
+                  const amount = BigInt(route.amount);
+                  if (!route.marketParams) {
+                    throw new Error(
+                      `Market params not found for protocol: ${route.protocol}`,
+                    );
+                  }
+                  const withdrawTxData = encodeFunctionData({
+                    abi: MORPHO_ABI,
+                    functionName: 'withdraw',
+                    args: [
+                      {
+                        loanToken: route.marketParams.loanToken,
+                        collateralToken: route.tokenB,
+                        oracle: route.marketParams.oracle,
+                        irm: route.marketParams.irm,
+                        lltv: BigInt(route.marketParams.lltv),
+                      },
+                      amount,
+                      0n,
+                      address,
+                      address,
+                    ],
+                  });
+                  txs.push({
+                    data: withdrawTxData,
+                    to: this.getMorphoAddress(),
+                    value: '0',
+                  });
+                  return txs;
+                }
+                case LendingProtocolDto.Moonwell: {
+                  const txs: MetaTransactionData[] = [];
+                  const amount = BigInt(route.amount);
+                  const withdrawTxData = encodeFunctionData({
+                    abi: MOONWELL_MTOKEN_ABI,
+                    functionName: 'redeemUnderlying',
+                    args: [amount],
+                  });
+                  txs.push({
+                    data: withdrawTxData,
+                    to: route.tokenB,
+                    value: '0',
+                  });
                   return txs;
                 }
               }
@@ -837,6 +1021,7 @@ export class OwliaGuardManager {
 
         let tokenA: Address;
         let tokenB: Address;
+
         switch (pos.protocol) {
           case LendingProtocolDto.Aave: {
             if (new Decimal(routeWithdrawAmount).div(currentAmt).gt(0.99)) {
@@ -846,12 +1031,15 @@ export class OwliaGuardManager {
             tokenB = '0x0000000000000000000000000000000000000000' as Address;
             break;
           }
-          case LendingProtocolDto.Venus: {
+          case LendingProtocolDto.Venus:
+          case LendingProtocolDto.Compound:
+          case LendingProtocolDto.Morpho: {
             tokenA = token as Address;
             tokenB = '0x0000000000000000000000000000000000000000' as Address;
             break;
           }
-          case LendingProtocolDto.Euler: {
+          case LendingProtocolDto.Euler:
+          case LendingProtocolDto.Moonwell: {
             tokenA = token as Address;
             if (!pos.vToken) {
               throw new Error(`Euler vToken not found for token: ${token}`);
@@ -1130,6 +1318,8 @@ export class OwliaGuardManager {
         switch (pos.protocol) {
           case LendingProtocolDto.Aave:
           case LendingProtocolDto.Venus:
+          case LendingProtocolDto.Compound:
+          case LendingProtocolDto.Morpho:
             tokenA = token as Address;
             tokenB = '0x0000000000000000000000000000000000000000' as Address;
             break;
@@ -1140,6 +1330,13 @@ export class OwliaGuardManager {
             }
             tokenB = pos.vToken as Address;
             break;
+          case LendingProtocolDto.Moonwell:
+            tokenA = token as Address;
+            if (!pos.vToken) {
+              throw new Error(`Moonwell vToken not found for token: ${token}`);
+            }
+            tokenB = pos.vToken as Address;
+            break;
         }
 
         routes.push({
@@ -1147,7 +1344,7 @@ export class OwliaGuardManager {
           tokenA,
           tokenB,
           amount: supplyAmount.toString(),
-          data: encodeAbiParameters(parseAbiParameters('uint256'), [2n]),
+          data: '0x',
           protocol: pos.protocol,
         });
         availableByToken.set(
